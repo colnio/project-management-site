@@ -1,0 +1,442 @@
+package auth_test
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/colnio/project-management-site/internal/audit"
+	"github.com/colnio/project-management-site/internal/auth"
+	"github.com/colnio/project-management-site/internal/config"
+	"github.com/colnio/project-management-site/internal/testsupport"
+
+	"log/slog"
+	"os"
+)
+
+var testTables = []string{
+	"internal_ai_tokens",
+	"personal_access_tokens",
+	"refresh_sessions",
+	"local_credentials",
+	"users",
+}
+
+func newTestService(t *testing.T) (*auth.Service, context.Context) {
+	t.Helper()
+	pool := testsupport.NewPool(t)
+	testsupport.Truncate(t, pool, testTables...)
+
+	cfg := &config.Config{
+		OIDCIssuer:      "http://localhost:19100/nonexistent", // intentionally unreachable
+		OIDCClientID:    "test",
+		OIDCClientSecret: "test",
+		OIDCRedirectURL: "http://localhost/callback",
+		JWTSigningKey:   "test-signing-key-32-bytes-padding",
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 24 * time.Hour,
+		CookieDomain:    "localhost",
+		CookieSecure:    false,
+		AllowedEmailDomains: []string{"halide-lab.org"},
+		WebOrigin:       "http://localhost:5173",
+	}
+
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	ctx := context.Background()
+
+	svc, err := auth.NewService(ctx, pool, cfg, audit.Nop{}, log)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	return svc, ctx
+}
+
+// ─── Password ────────────────────────────────────────────────────────────────
+
+func TestPasswordRoundTrip(t *testing.T) {
+	hash, err := auth.HashPassword("correct-horse-battery-staple")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if !strings.HasPrefix(hash, "$argon2id$") {
+		t.Fatalf("expected PHC string, got %q", hash)
+	}
+
+	ok, err := auth.VerifyPassword(hash, "correct-horse-battery-staple")
+	if err != nil {
+		t.Fatalf("VerifyPassword: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected VerifyPassword to return true")
+	}
+}
+
+func TestPasswordWrongPassword(t *testing.T) {
+	hash, _ := auth.HashPassword("correct")
+	ok, err := auth.VerifyPassword(hash, "wrong")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected false for wrong password")
+	}
+}
+
+func TestPasswordTamperedHash(t *testing.T) {
+	_, err := auth.VerifyPassword("not-a-valid-hash", "anything")
+	if err == nil {
+		t.Fatal("expected error for tampered/invalid hash")
+	}
+}
+
+func TestPasswordEmptyPassword(t *testing.T) {
+	hash, err := auth.HashPassword("")
+	if err != nil {
+		t.Fatalf("HashPassword empty: %v", err)
+	}
+	ok, _ := auth.VerifyPassword(hash, "")
+	if !ok {
+		t.Fatal("empty password should verify against its own hash")
+	}
+	ok2, _ := auth.VerifyPassword(hash, "non-empty")
+	if ok2 {
+		t.Fatal("non-empty should not match empty hash")
+	}
+}
+
+// ─── User CRUD ───────────────────────────────────────────────────────────────
+
+func TestCreateAndGetUser(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	u, err := svc.CreateUser(ctx, "Alice@Halide-Lab.Org", "Alice")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if u.Email != "alice@halide-lab.org" {
+		t.Errorf("expected lowercased email, got %q", u.Email)
+	}
+	if u.DisplayName != "Alice" {
+		t.Errorf("expected display name Alice, got %q", u.DisplayName)
+	}
+
+	// GetUserByEmail
+	u2, err := svc.GetUserByEmail(ctx, "alice@halide-lab.org")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	if u2.ID != u.ID {
+		t.Errorf("IDs differ: %v vs %v", u2.ID, u.ID)
+	}
+
+	// GetUserByID
+	u3, err := svc.GetUserByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if u3.Email != u.Email {
+		t.Errorf("email mismatch")
+	}
+}
+
+func TestCreateUserDuplicateConflict(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	_, err := svc.CreateUser(ctx, "dup@halide-lab.org", "First")
+	if err != nil {
+		t.Fatalf("first CreateUser: %v", err)
+	}
+	_, err = svc.CreateUser(ctx, "dup@halide-lab.org", "Second")
+	if err == nil {
+		t.Fatal("expected conflict error on duplicate email")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' in error, got: %v", err)
+	}
+}
+
+func TestGetUserByEmailNotFound(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	_, err := svc.GetUserByEmail(ctx, "nobody@halide-lab.org")
+	if err == nil {
+		t.Fatal("expected not-found error")
+	}
+}
+
+func TestGetUserByIDNotFound(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	_, err := svc.GetUserByID(ctx, uuid.New())
+	if err == nil {
+		t.Fatal("expected not-found error")
+	}
+}
+
+// ─── Access JWT ──────────────────────────────────────────────────────────────
+
+func TestAccessTokenRoundTrip(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	u, err := svc.CreateUser(ctx, "jwt@halide-lab.org", "JWT User")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	rawToken := auth.ExportIssueAccessToken(t, svc, u)
+
+	p, err := svc.VerifyAccessToken(ctx, rawToken)
+	if err != nil {
+		t.Fatalf("VerifyAccessToken: %v", err)
+	}
+	if p.UserID != u.ID {
+		t.Errorf("UserID mismatch: got %v, want %v", p.UserID, u.ID)
+	}
+	if p.Email != u.Email {
+		t.Errorf("Email mismatch")
+	}
+	if p.ViaTokenID != nil || p.ViaAIConversationID != nil {
+		t.Error("expected nil Via* fields for first-party session")
+	}
+}
+
+func TestAccessTokenExpired(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	// Craft a config with negative TTL to immediately expire.
+	pool := testsupport.NewPool(t)
+	cfg := &config.Config{
+		OIDCIssuer:      "http://localhost:19100/none",
+		JWTSigningKey:   "test-key",
+		AccessTokenTTL:  -1 * time.Second, // already expired
+		RefreshTokenTTL: 24 * time.Hour,
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	svc2, _ := auth.NewService(ctx, pool, cfg, audit.Nop{}, log)
+
+	u, _ := svc.CreateUser(ctx, "exp@halide-lab.org", "Expired")
+	rawToken := auth.ExportIssueAccessToken(t, svc2, u)
+
+	_, err := svc2.VerifyAccessToken(ctx, rawToken)
+	if err == nil {
+		t.Fatal("expected error for expired token")
+	}
+}
+
+func TestAccessTokenInvalidSignature(t *testing.T) {
+	svc, ctx := newTestService(t)
+	u, _ := svc.CreateUser(ctx, "badsig@halide-lab.org", "Bad Sig")
+	rawToken := auth.ExportIssueAccessToken(t, svc, u)
+
+	// Tamper the token.
+	parts := strings.Split(rawToken, ".")
+	if len(parts) == 3 {
+		parts[2] = "invalidsignature"
+		rawToken = strings.Join(parts, ".")
+	}
+
+	_, err := svc.VerifyAccessToken(ctx, rawToken)
+	if err == nil {
+		t.Fatal("expected error for invalid signature")
+	}
+}
+
+// ─── PAT ─────────────────────────────────────────────────────────────────────
+
+func TestPATFullLifecycle(t *testing.T) {
+	svc, ctx := newTestService(t)
+	u, _ := svc.CreateUser(ctx, "pat@halide-lab.org", "PAT User")
+
+	// Create PAT.
+	id, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "test-token", []string{"read", "write"}, nil)
+	if err != nil {
+		t.Fatalf("createPAT: %v", err)
+	}
+	if !strings.HasPrefix(raw, "pat_") {
+		t.Errorf("expected pat_ prefix, got %q", raw[:8])
+	}
+
+	// Verify success.
+	p, err := svc.VerifyPAT(ctx, raw)
+	if err != nil {
+		t.Fatalf("VerifyPAT: %v", err)
+	}
+	if p.UserID != u.ID {
+		t.Errorf("UserID mismatch")
+	}
+	if p.ViaTokenID == nil || *p.ViaTokenID != id {
+		t.Errorf("ViaTokenID not set correctly: got %v, want %v", p.ViaTokenID, id)
+	}
+	if len(p.Scopes) != 2 {
+		t.Errorf("expected 2 scopes, got %d", len(p.Scopes))
+	}
+
+	// Revoke.
+	if err := auth.ExportRevokePAT(t, svc, ctx, u.ID, id); err != nil {
+		t.Fatalf("revokePAT: %v", err)
+	}
+
+	// Verify revoked token is rejected.
+	_, err = svc.VerifyPAT(ctx, raw)
+	if err == nil {
+		t.Fatal("expected error for revoked token")
+	}
+}
+
+func TestPATExpired(t *testing.T) {
+	svc, ctx := newTestService(t)
+	u, _ := svc.CreateUser(ctx, "patexp@halide-lab.org", "PAT Exp")
+
+	exp := time.Now().Add(-1 * time.Hour) // already expired
+	_, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "expired", []string{}, &exp)
+	if err != nil {
+		t.Fatalf("createPAT: %v", err)
+	}
+
+	_, err = svc.VerifyPAT(ctx, raw)
+	if err == nil {
+		t.Fatal("expected error for expired token")
+	}
+}
+
+func TestPATUnknownPrefix(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	_, err := svc.VerifyPAT(ctx, "pat_unknownprefixXXXXXXXXXXXX")
+	if err == nil {
+		t.Fatal("expected error for unknown prefix")
+	}
+}
+
+func TestPATScopesOnPrincipal(t *testing.T) {
+	svc, ctx := newTestService(t)
+	u, _ := svc.CreateUser(ctx, "patscopes@halide-lab.org", "Scopes User")
+
+	scopes := []string{"samples:read", "projects:write"}
+	_, raw, _ := auth.ExportCreatePAT(t, svc, ctx, u.ID, "scoped", scopes, nil)
+
+	p, err := svc.VerifyPAT(ctx, raw)
+	if err != nil {
+		t.Fatalf("VerifyPAT: %v", err)
+	}
+	if !p.HasScope("samples:read") {
+		t.Error("expected HasScope('samples:read') = true")
+	}
+	if !p.HasScope("projects:write") {
+		t.Error("expected HasScope('projects:write') = true")
+	}
+	if p.HasScope("admin") {
+		t.Error("expected HasScope('admin') = false")
+	}
+}
+
+// ─── Internal AI Token ───────────────────────────────────────────────────────
+
+func TestInternalAITokenLifecycle(t *testing.T) {
+	svc, ctx := newTestService(t)
+	u, _ := svc.CreateUser(ctx, "iai@halide-lab.org", "AI User")
+	convID := uuid.New()
+
+	raw, err := svc.MintInternalAIToken(ctx, u.ID, convID, []string{"read"}, json.RawMessage(`{"k":"v"}`))
+	if err != nil {
+		t.Fatalf("MintInternalAIToken: %v", err)
+	}
+	if !strings.HasPrefix(raw, "iai_") {
+		t.Errorf("expected iai_ prefix")
+	}
+
+	// Verify.
+	p, err := svc.VerifyInternalAIToken(ctx, raw)
+	if err != nil {
+		t.Fatalf("VerifyInternalAIToken: %v", err)
+	}
+	if p.UserID != u.ID {
+		t.Errorf("UserID mismatch")
+	}
+	if p.ViaAIConversationID == nil || *p.ViaAIConversationID != convID {
+		t.Errorf("ViaAIConversationID mismatch: got %v, want %v", p.ViaAIConversationID, convID)
+	}
+
+	// Revoke.
+	if err := svc.RevokeInternalAITokens(ctx, convID); err != nil {
+		t.Fatalf("RevokeInternalAITokens: %v", err)
+	}
+
+	// After revoke, token should be rejected.
+	_, err = svc.VerifyInternalAIToken(ctx, raw)
+	if err == nil {
+		t.Fatal("expected error after revoke")
+	}
+}
+
+func TestInternalAITokenUnknownPrefix(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	_, err := svc.VerifyInternalAIToken(ctx, "iai_unknownprefixXXXXXXXXXXXX")
+	if err == nil {
+		t.Fatal("expected error for unknown prefix")
+	}
+}
+
+// ─── emailDomainAllowed ──────────────────────────────────────────────────────
+
+func TestEmailDomainAllowed(t *testing.T) {
+	tests := []struct {
+		email   string
+		allowed []string
+		want    bool
+	}{
+		{"user@halide-lab.org", []string{"halide-lab.org"}, true},
+		{"user@HALIDE-LAB.ORG", []string{"halide-lab.org"}, true},
+		{"user@other.org", []string{"halide-lab.org"}, false},
+		{"user@anything.com", []string{}, true},  // empty = allow all
+		{"notanemail", []string{"halide-lab.org"}, false},
+		{"user@corp.com", []string{"halide-lab.org", "corp.com"}, true},
+	}
+	for _, tc := range tests {
+		got := auth.ExportEmailDomainAllowed(tc.email, tc.allowed)
+		if got != tc.want {
+			t.Errorf("emailDomainAllowed(%q, %v) = %v, want %v", tc.email, tc.allowed, got, tc.want)
+		}
+	}
+}
+
+// ─── SeedDevUser ─────────────────────────────────────────────────────────────
+
+func TestSeedDevUser(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	// Should be idempotent — call twice.
+	if err := svc.SeedDevUser(ctx); err != nil {
+		t.Fatalf("SeedDevUser first call: %v", err)
+	}
+	if err := svc.SeedDevUser(ctx); err != nil {
+		t.Fatalf("SeedDevUser second call: %v", err)
+	}
+
+	u, err := svc.GetUserByEmail(ctx, "dev@halide-lab.org")
+	if err != nil {
+		t.Fatalf("GetUserByEmail after seed: %v", err)
+	}
+	if !u.IsSystemAdmin {
+		t.Error("expected dev user to be system admin")
+	}
+	if u.DisplayName != "Dev User" {
+		t.Errorf("expected 'Dev User', got %q", u.DisplayName)
+	}
+}
+
+// ─── OIDC (skip if provider unreachable) ─────────────────────────────────────
+
+func TestOIDCLoginUnavailable(t *testing.T) {
+	svc, _ := newTestService(t)
+	if svc.OIDCAvailable() {
+		t.Skip("OIDC provider is reachable; skipping unavailable test")
+	}
+	// svc.oidc == nil; the HTTP handler should return 503.
+	// We test this indirectly by confirming OIDCAvailable() is false.
+}

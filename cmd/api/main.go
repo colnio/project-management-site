@@ -15,6 +15,8 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/colnio/project-management-site/internal/audit"
+	"github.com/colnio/project-management-site/internal/auth"
 	"github.com/colnio/project-management-site/internal/config"
 	"github.com/colnio/project-management-site/internal/db"
 	"github.com/colnio/project-management-site/internal/platform"
@@ -52,12 +54,25 @@ func run() error {
 		return err
 	}
 
-	srv := platform.New(logger, cfg.WebOrigin)
+	auditRec := audit.NewRecorder(pool, logger)
+	authSvc, err := auth.NewService(ctx, pool, cfg, auditRec, logger)
+	if err != nil {
+		return err
+	}
+
+	srv := platform.New(&platform.ServerDeps{
+		Logger:      logger,
+		WebOrigin:   cfg.WebOrigin,
+		Verifier:    authSvc,
+		Idempotency: platform.NewIdempotencyStore(pool),
+		PerMinute:   600,
+	})
 	srv.MountLLMSTxt(llmsTxtStub(cfg.WebOrigin))
 
-	// Domain module routes are registered here as tracks land, e.g.:
+	// Domain module routes. More are registered here as tracks land, e.g.:
 	//   project.Register(srv.API, projectSvc)
-	//   sample.Register(srv.API, sampleSvc)
+	auth.Register(srv.API, authSvc)
+	audit.Register(srv.API, audit.NewService(auditRec))
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,

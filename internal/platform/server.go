@@ -21,9 +21,12 @@ type Server struct {
 	Logger *slog.Logger
 }
 
-// New constructs the server with the base middleware chain and a huma API that
-// emits OpenAPI 3.1 and uses the structured error envelope.
-func New(logger *slog.Logger, webOrigin string) *Server {
+// New constructs the server with the full middleware chain and a huma API that
+// emits OpenAPI 3.1 and uses the structured error envelope. Middleware is
+// installed here (before huma mounts routes) in the order:
+// requestID → logging → recover → CORS → auth → rate-limit → idempotency.
+func New(deps *ServerDeps) *Server {
+	logger := deps.Logger
 	// Route framework errors through our envelope.
 	huma.NewError = humaNewError
 
@@ -31,7 +34,10 @@ func New(logger *slog.Logger, webOrigin string) *Server {
 	r.Use(middleware.RequestID)
 	r.Use(RequestLogger(logger))
 	r.Use(middleware.Recoverer)
-	r.Use(CORS(webOrigin))
+	r.Use(CORS(deps.WebOrigin))
+	r.Use(AuthResolver(deps.Verifier))
+	r.Use(NewRateLimiter(deps.PerMinute).Middleware())
+	r.Use(Idempotency(deps.Idempotency))
 
 	config := huma.DefaultConfig("Lab Project Management API", "1.0.0")
 	config.DocsPath = "/docs"
