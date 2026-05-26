@@ -242,10 +242,10 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
   `AIUsageRecord` (use Ollama's `prompt_eval_count`/`eval_count`; `usdCost = 0` locally).
 - [x] **G2 Tool gating** — read tools always on; write tools gated by `AutonomyConfig`. The AI
   calls the **public REST API** with its internal token (same path as external agents).
-- [ ] **G3 Workflow engine** — JSON loader; step runner (`gather_context` → DB, `ai_question` →
+- [x] **G3 Workflow engine** — JSON loader; step runner (`gather_context` → DB, `ai_question` →
   Ollama, `ai_synthesis` → markdown + schema-validated JSON); PI flag if
   `flagged_for_PI_review == true` OR `overall_rating >= 4` → Mailpit email + in-app notice.
-- [ ] **G4 Workflow library** — `battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1`.
+- [x] **G4 Workflow library** — `battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1`.
 - [x] **G5 Conversation service** — project-scoped message store, audited.
 - [ ] **G6 AI chat UI** — `design/ai-panel.jsx`: streaming, citations, tool-call approval dialogs.
 - [ ] **G7 Workflow runner UI** — `design/risk.jsx` + `design/create-flows.jsx` walkthroughs.

@@ -41,8 +41,8 @@ conventions live in [`AGENTS.md`](AGENTS.md).
 | F3 | MCP server (in-binary SSE at `/mcp`, PAT auth) | ✅ done |
 | F4 | `/llms.txt` generated from OpenAPI | ✅ done |
 | G1, G2, G5 | AI chat backend: orchestrator (OpenAI-compatible client), tool gating by autonomy, conversation store + metering | ✅ done |
-| G3, G4 | Risk-workflow engine + library | ⛔ in progress |
-| G6, G7, G8 | AI chat UI, workflow runner UI, autonomy config UI | ⛔ pending |
+| G3, G4 | Risk-workflow engine + library (battery/experimental/project) | ✅ done |
+| G6, G7, G8 | AI chat UI, workflow runner UI, autonomy config UI | ⛔ pending (frontend) |
 
 > **AI provider:** the orchestrator reads `aiconf.local.json` (gitignored) for an
 > OpenAI-compatible endpoint. Currently a LiteLLM proxy with `gpt-4.1-mini`;
@@ -58,9 +58,9 @@ suite green. The frontend covers the shell, projects, iterations, samples
 (+lineage), experiments, artifacts (upload/viewers), the BlockNote page editor
 (reference blocks, auto-save, conflict UI, history/restore, presence), and a
 settings page (PATs + calendar), and the calendar/Gantt views. **All non-AI
-tracks (A–F) are complete.** Track G (AI) is now in progress: the agentic-chat
-backend (G1/G2/G5) is live; the workflow engine (G3/G4) and AI frontend
-(G6/G7/G8) are next.
+tracks (A–F) are complete.** Track G (AI) backend is complete — the agentic-chat
+orchestrator (G1/G2/G5) and the risk-workflow engine + library (G3/G4) are live
+and tested; only the AI frontend (G6/G7/G8) remains.
 
 ---
 

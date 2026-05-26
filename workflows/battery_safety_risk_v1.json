@@ -1,0 +1,66 @@
+{
+  "key": "battery_safety_risk_v1",
+  "title": "Battery Safety Risk Assessment",
+  "description": "Assesses safety risks for battery/electrochemical samples: thermal runaway, electrolyte handling, voltage/overcharge, and storage hazards.",
+  "scope": "system",
+  "steps": [
+    {
+      "id": "gather",
+      "type": "gather_context",
+      "sources": [
+        "sample",
+        "sample_lineage",
+        "recent_experiments",
+        "related_artifacts",
+        "recent_iteration_pages"
+      ]
+    },
+    {
+      "id": "thermal_runaway",
+      "type": "ai_question",
+      "prompt": "Based on the sample data and experimental context, assess the thermal runaway risk. Consider battery chemistry, electrode materials, electrolyte composition, and any prior thermal events. Rate the risk from 1 (low) to 5 (high) and list concrete mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "electrolyte_handling",
+      "type": "ai_question",
+      "prompt": "Evaluate electrolyte handling risks, including chemical toxicity, flammability, volatility, and safe disposal. Rate from 1 to 5 and provide specific handling and storage mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "voltage_overcharge",
+      "type": "ai_question",
+      "prompt": "Assess voltage and overcharge risks for this sample/cell. Consider maximum safe voltage, BMS requirements, short-circuit potential, and overcharge failure modes. Rate from 1 to 5 with mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "storage",
+      "type": "ai_question",
+      "prompt": "Evaluate storage and transport safety risks: temperature requirements, state of charge for storage, incompatible materials, shelf life concerns, and labeling requirements. Rate from 1 to 5 with mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "synthesis",
+      "type": "ai_synthesis",
+      "output_format": "markdown"
+    }
+  ],
+  "outputSchema": {
+    "overall_rating": "int",
+    "category_ratings": "object",
+    "mitigations": "list[string]",
+    "flagged_for_PI_review": "boolean"
+  }
+}

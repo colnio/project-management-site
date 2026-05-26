@@ -148,6 +148,13 @@ func run() error {
 	}
 	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, projectSvc, auditRec, logger)
 
+	// Load workflow definitions from the embedded workflows/ directory.
+	workflows, wfErr := ai.LoadWorkflows()
+	if wfErr != nil {
+		return fmt.Errorf("load workflows: %w", wfErr)
+	}
+	logger.Info("ai: workflows loaded", "count", len(workflows))
+
 	auth.Register(srv.API, authSvc)
 	audit.Register(srv.API, audit.NewService(auditRec))
 	org.Register(srv.API, orgSvc)
@@ -159,6 +166,7 @@ func run() error {
 	artifact.Register(srv.API, artifactSvc)
 	calendar.Register(srv.API, calendarSvc)
 	ai.Register(srv.API, aiSvc)
+	ai.RegisterWorkflows(srv.API, aiSvc, workflows)
 	// SSE streaming chat — chi route (not huma) because it's Server-Sent Events.
 	srv.Router.Post("/v1/ai/conversations/{id}/messages", aiSvc.HandleMessageStream)
 	// Public per-user calendar feed (token in URL, no auth middleware); the
