@@ -1,0 +1,21 @@
+version: "2"
+# Modules own their tables and write hand-rolled pgx queries inside their own
+# package to keep table ownership isolated and avoid a single global codegen
+# chokepoint. This config is provided for modules that opt into sqlc codegen;
+# point `queries` at the module's queries dir and regenerate locally.
+sql:
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/db/queries"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "internal/db/sqlcgen"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
