@@ -21,6 +21,7 @@ import (
 	"github.com/colnio/project-management-site/internal/db"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
+	"github.com/colnio/project-management-site/internal/project"
 )
 
 func main() {
@@ -73,10 +74,12 @@ func run() error {
 	// Domain module routes. More are registered here as tracks land, e.g.:
 	//   project.Register(srv.API, projectSvc)
 	orgSvc := org.NewService(pool, cfg, auditRec, authSvc, logger)
+	projectSvc := project.NewService(pool, orgSvc, authSvc, auditRec, logger)
 
 	auth.Register(srv.API, authSvc)
 	audit.Register(srv.API, audit.NewService(auditRec))
 	org.Register(srv.API, orgSvc)
+	project.Register(srv.API, projectSvc)
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,
