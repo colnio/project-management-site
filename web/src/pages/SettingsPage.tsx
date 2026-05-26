@@ -16,6 +16,8 @@ import {
   usePatchCalSubscription,
 } from '@/hooks/useArtifactQueries';
 import type { PATInfo, CreateTokenOutput } from '@/hooks/useArtifactQueries';
+import { useWorkspaces } from '@/hooks/useQueries';
+import { WorkspaceAutonomySection } from '@/components/AutonomyConfig';
 
 // ─── Known scopes ─────────────────────────────────────────────────────────────
 
@@ -414,6 +416,18 @@ function CalendarSection() {
   );
 }
 
+// ─── Workspace Autonomy wrapper ───────────────────────────────────────────────
+
+function WorkspaceAutonomyWrapper() {
+  const { data: workspaces = [], isLoading } = useWorkspaces();
+  const ws = workspaces[0];
+
+  if (isLoading) return <LoadingState message="Loading workspace…" />;
+  if (!ws) return <ErrorState message="No workspace found." />;
+
+  return <WorkspaceAutonomySection workspaceId={ws.id} />;
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
@@ -432,6 +446,14 @@ export function SettingsPage() {
 
         <SectionCard title="Calendar Subscription">
           <CalendarSection />
+        </SectionCard>
+
+        <SectionCard title="AI Autonomy (Workspace)">
+          <div style={{ marginBottom: 10, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+            These settings control how AI behaves across all projects in this workspace.
+            Individual projects can use a more restrictive setting, but cannot exceed the workspace cap.
+          </div>
+          <WorkspaceAutonomyWrapper />
         </SectionCard>
       </div>
     </AppShell>

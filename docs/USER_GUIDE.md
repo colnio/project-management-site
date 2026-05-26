@@ -100,8 +100,33 @@ land in **Mailpit** at <http://localhost:8025>.
 - **MCP**: an MCP server is mounted at `http://localhost:8080/mcp` (SSE). Point an
   MCP client at it with `Authorization: Bearer pat_...`; it exposes read-only
   tools (list/read projects, samples, lineage, experiments, pages, artifacts) that
-  wrap the same REST API with the same auth, scopes, and audit. _Write tools are
-  reserved for the AI assistant track and are intentionally not exposed yet._
+  wrap the same REST API with the same auth, scopes, and audit. (Write tools are
+  reserved for the in-app AI assistant, gated by autonomy config.)
+
+## AI assistant
+
+The platform includes an AI assistant (configured via `aiconf.local.json` — an
+OpenAI-compatible endpoint; if it's not configured the AI features show "not
+configured" and everything else still works).
+
+- **Chat** — open **Ask AI** from a project to chat with an assistant scoped to
+  that project. Replies **stream** in live. The assistant can call read tools
+  (search the project, read samples/experiments/pages/artifacts, trace lineage)
+  and shows what it used as citations. Whether it can make *changes* (draft a
+  page, set an iteration status, create a reminder, flag for review) depends on
+  the project's **autonomy mode** — in `suggest_writes` it proposes a change and
+  you **approve or reject** it inline.
+- **Risk-assessment workflows** — the **AI Workflows** tab runs a guided
+  assessment (`battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1`)
+  against a project/sample/experiment. The result shows an overall rating,
+  per-category ratings, and mitigations, and is saved as a page on the entity. If
+  the rating is high (≥4) or the AI flags it, the **PI is emailed** for review.
+- **Autonomy & cost** — set the AI's autonomy `mode`
+  (`read_only` / `suggest_writes` / `auto_routine` / `full`) and allowed write
+  tools per workspace (Settings) and per project (a project can't exceed its
+  workspace). Every AI request is metered against a monthly spend cap (it refuses
+  at the cap and warns at 80%), and the assistant acts as *you* — all its API
+  calls are permission-checked and audited under your identity.
 
 ## Accounts & auth notes
 
@@ -109,8 +134,3 @@ land in **Mailpit** at <http://localhost:8025>.
   app refreshes silently. Local-account passwords are hashed with Argon2id.
 - Admins/PIs can be granted override visibility into a workspace's content; every
   such access is recorded in the audit log.
-
-## Not yet available
-
-- AI assistant chat and AI-assisted risk-assessment workflows (Track G) are
-  intentionally not built yet.

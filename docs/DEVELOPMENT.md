@@ -247,9 +247,9 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
   `flagged_for_PI_review == true` OR `overall_rating >= 4` → Mailpit email + in-app notice.
 - [x] **G4 Workflow library** — `battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1`.
 - [x] **G5 Conversation service** — project-scoped message store, audited.
-- [ ] **G6 AI chat UI** — `design/ai-panel.jsx`: streaming, citations, tool-call approval dialogs.
-- [ ] **G7 Workflow runner UI** — `design/risk.jsx` + `design/create-flows.jsx` walkthroughs.
-- [ ] **G8 Autonomy config UI** — workspace + project settings.
+- [x] **G6 AI chat UI** — `design/ai-panel.jsx`: streaming, citations, tool-call approval dialogs.
+- [x] **G7 Workflow runner UI** — `design/risk.jsx` + `design/create-flows.jsx` walkthroughs.
+- [x] **G8 Autonomy config UI** — workspace + project settings.
 
 ---
 

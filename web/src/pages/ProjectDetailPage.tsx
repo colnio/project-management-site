@@ -18,9 +18,12 @@ import {
 import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import { PagesPanel } from '@/components/PagesPanel';
 import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
+import { AIChatPanel } from '@/components/AIChatPanel';
+import { WorkflowRunner } from '@/components/WorkflowRunner';
+import { ProjectAutonomySection } from '@/components/AutonomyConfig';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
-type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline';
+type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows';
 
 // ─── Tab Bar ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +41,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'experiments', label: 'Experiments' },
   { id: 'artifacts', label: 'Artifacts' },
   { id: 'pages', label: 'Notes / Pages' },
+  { id: 'workflows', label: 'AI Workflows' },
+  { id: 'ai', label: 'AI Settings' },
 ];
 
 function TabBar({ active, onChange, counts }: TabBarProps) {
@@ -712,6 +717,7 @@ export function ProjectDetailPage() {
   const { data: experiments = [] } = useProjectExperiments(projectId);
   const { data: iterations = [] } = useProjectIterations(projectId);
   const { data: artifacts = [] } = useProjectArtifacts(projectId);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   const activeTab: Tab = search.tab ?? 'overview';
   const [_tab, setTab] = useState<Tab>(activeTab);
@@ -729,10 +735,31 @@ export function ProjectDetailPage() {
     artifacts: artifacts.length || undefined,
   };
 
+  const topBarActions = (
+    <button
+      className="top-btn primary"
+      style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+      onClick={() => setAiPanelOpen(o => !o)}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: '#fff',
+          opacity: 0.85,
+          flexShrink: 0,
+        }}
+      />
+      Ask AI
+    </button>
+  );
+
   return (
     <AppShell
       activeProjectId={projectId}
       topBarCrumbs={crumbs}
+      topBarActions={topBarActions}
     >
       {isLoading ? (
         <LoadingState />
@@ -766,8 +793,53 @@ export function ProjectDetailPage() {
                 />
               </div>
             )}
+            {currentTab === 'workflows' && (
+              <div className="page-wrap">
+                <WorkflowRunner projectId={projectId} />
+              </div>
+            )}
+            {currentTab === 'ai' && (
+              <div className="page-wrap">
+                <div
+                  style={{
+                    border: '1px solid var(--line)',
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    marginBottom: 24,
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '14px 20px',
+                      borderBottom: '1px solid var(--line)',
+                      background: 'var(--paper-2)',
+                      fontFamily: 'var(--sans)',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color: 'var(--ink-2)',
+                    }}
+                  >
+                    Project AI Settings
+                  </div>
+                  <div style={{ padding: '20px 20px', background: 'var(--surface)' }}>
+                    <ProjectAutonomySection
+                      projectId={projectId}
+                      workspaceId={project?.workspace_id ?? ''}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </>
+      )}
+      {aiPanelOpen && (
+        <AIChatPanel
+          projectId={projectId}
+          onClose={() => setAiPanelOpen(false)}
+        />
       )}
     </AppShell>
   );

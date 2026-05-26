@@ -594,6 +594,171 @@ export const handlers = [
   http.post('/v1/experiments/:id/samples', () => HttpResponse.json({ ok: true })),
   http.delete('/v1/experiments/:id/samples/:sampleId', () => HttpResponse.json({ ok: true })),
 
+  // ── AI: Conversations ─────────────────────────────────────────────────────
+
+  http.get('/v1/projects/:id/ai/conversations', () =>
+    HttpResponse.json([
+      {
+        id: 'conv_1',
+        project_id: 'proj_nmc',
+        started_by: 'usr_dev',
+        title: 'General',
+        created_at: '2025-05-01T09:00:00Z',
+      },
+    ])
+  ),
+
+  http.post('/v1/projects/:id/ai/conversations', async ({ request }) => {
+    const body = await request.json() as { title: string };
+    return HttpResponse.json({
+      id: `conv_${Date.now()}`,
+      project_id: 'proj_nmc',
+      started_by: 'usr_dev',
+      title: body.title,
+      created_at: new Date().toISOString(),
+    }, { status: 201 });
+  }),
+
+  http.get('/v1/ai/conversations/:id', ({ params }) => {
+    if (params.id === 'conv_1') {
+      return HttpResponse.json([
+        {
+          role: 'assistant',
+          content: 'Hello! I can help you analyze this project. What would you like to know?',
+          seq: 0,
+          created_at: '2025-05-01T09:01:00Z',
+        },
+      ]);
+    }
+    return HttpResponse.json([]);
+  }),
+
+  // SSE streaming endpoint — returns a simple stubbed SSE response
+  http.post('/v1/ai/conversations/:id/messages', async ({ request }) => {
+    const body = await request.json() as { content: string };
+    const content = body.content ?? '';
+    const sseBody =
+      `event: token\ndata: {"delta":"I received: "}\n\n` +
+      `event: token\ndata: {"delta":"${content.slice(0, 40).replace(/"/g, '\\"')}"}\n\n` +
+      `event: done\ndata: {"conversation_id":"${(request as Request & { params?: Record<string,string> }).url}"}\n\n`;
+    return new HttpResponse(sseBody, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  }),
+
+  // Tool-call approval/rejection
+  http.post('/v1/ai/conversations/:id/tool-calls/:tcid/approve', () =>
+    HttpResponse.json({ ok: true })
+  ),
+  http.post('/v1/ai/conversations/:id/tool-calls/:tcid/reject', () =>
+    HttpResponse.json({ ok: true })
+  ),
+
+  // ── AI: Autonomy ──────────────────────────────────────────────────────────
+
+  http.get('/v1/workspaces/:id/autonomy', () =>
+    HttpResponse.json({
+      scope: 'workspace',
+      scope_id: 'ws_halide',
+      mode: 'suggest_writes',
+      allowed_tools: ['draft_page', 'create_reminder'],
+    })
+  ),
+
+  http.patch('/v1/workspaces/:id/autonomy', async ({ request }) => {
+    const body = await request.json() as { mode: string; allowed_tools: string[] };
+    return HttpResponse.json({
+      scope: 'workspace',
+      scope_id: 'ws_halide',
+      mode: body.mode,
+      allowed_tools: body.allowed_tools,
+    });
+  }),
+
+  http.get('/v1/projects/:id/autonomy', () =>
+    HttpResponse.json({
+      scope: 'project',
+      scope_id: 'proj_nmc',
+      mode: 'suggest_writes',
+      allowed_tools: ['draft_page'],
+    })
+  ),
+
+  http.patch('/v1/projects/:id/autonomy', async ({ request }) => {
+    const body = await request.json() as { mode: string; allowed_tools: string[] };
+    return HttpResponse.json({
+      scope: 'project',
+      scope_id: 'proj_nmc',
+      mode: body.mode,
+      allowed_tools: body.allowed_tools,
+    });
+  }),
+
+  // ── AI: Workflows ─────────────────────────────────────────────────────────
+
+  http.get('/v1/ai/workflows', () =>
+    HttpResponse.json([
+      {
+        key: 'battery_safety_risk_v1',
+        title: 'Battery Safety Risk Assessment',
+        description: 'Analyzes project data for safety risks and generates a structured risk register.',
+        scope: 'project',
+      },
+      {
+        key: 'iteration_summary_v1',
+        title: 'Iteration Summary',
+        description: 'Summarizes findings and progress for the current iteration.',
+        scope: 'project',
+      },
+    ])
+  ),
+
+  http.post('/v1/ai/workflows/:key/run', async ({ params }) => {
+    return HttpResponse.json({
+      id: `run_${Date.now()}`,
+      workflow_key: params.key as string,
+      status: 'completed',
+      output: {
+        overall_rating: 'medium',
+        category_ratings: {
+          'Thermal': 'low',
+          'Mechanical': 'medium',
+          'Chemical': 'high',
+        },
+        mitigations: [
+          'Implement thermal runaway detection on all cycling cells.',
+          'Review electrolyte formulation to reduce reactivity.',
+          'Maintain strict formation protocol for new batches.',
+        ],
+        flagged_for_PI_review: false,
+        summary: 'Risk profile is medium. One chemical risk category is high and warrants attention before the next iteration.',
+      },
+      result_page_id: undefined,
+      step_results: {},
+    });
+  }),
+
+  http.get('/v1/ai/runs/:id', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id as string,
+      workflow_key: 'battery_safety_risk_v1',
+      status: 'completed',
+      output: {
+        overall_rating: 'medium',
+        summary: 'Risk profile is medium.',
+        mitigations: ['Implement thermal runaway detection.'],
+        flagged_for_PI_review: false,
+      },
+      result_page_id: undefined,
+      step_results: {},
+    });
+  }),
+
   // Calendar subscription
   http.get('/v1/cal/me/subscription', () => HttpResponse.json({
     token: 'cal_token_abc',
