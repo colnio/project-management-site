@@ -205,12 +205,12 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 ### Track C — Research data frontend *(parallel to B via MSW)*
 
 - [x] **C1** Project list & detail (3 overview layouts from `design/project-overview.jsx`).
-- [ ] **C2** Iteration UI + sample-link picker.
+- [x] **C2** Iteration UI + sample-link picker.
 - [ ] **C3** Page UI: BlockNote with lab reference blocks (`@sample`/`@experiment`/`@artifact`,
   `createBlockSpec`, server-resolved), debounced auto-save (§7.1.4), presence indicator, history
   panel + diff/restore, ETag-aware save with 412 conflict UI.
-- [ ] **C4** Sample UI: cards/list, JSONB property editor, lineage graph (React Flow).
-- [ ] **C5** Experiment UI: method-specific parameter forms, sample+artifact pickers.
+- [x] **C4** Sample UI: cards/list, JSONB property editor, lineage graph (React Flow).
+- [x] **C5** Experiment UI: method-specific parameter forms, sample+artifact pickers.
 - [ ] **C6** Artifact UI: upload (presigned → MinIO), PDF.js, sandboxed ipynb iframe, image lightbox.
 
 ### Track D — Artifact workers *(deps B6)*
@@ -231,9 +231,9 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 
 - [ ] **F1** PAT lifecycle UI (Settings → API Tokens) from `design/settings.jsx`.
 - [ ] **F2** OpenAPI polish: examples, descriptions, schema completeness, public `/docs`.
-- [ ] **F3** MCP server wrapping REST (SSE in-binary, same PAT auth/scopes). Test with an MCP
+- [x] **F3** MCP server wrapping REST (SSE in-binary, same PAT auth/scopes). Test with an MCP
   client pointed at `http://localhost:8080/mcp`.
-- [ ] **F4** `/llms.txt` generated from OpenAPI.
+- [x] **F4** `/llms.txt` generated from OpenAPI.
 
 ### Track G — AI (local Ollama) *(deps A1, A4, F1)*
 

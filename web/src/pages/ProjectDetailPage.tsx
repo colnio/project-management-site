@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useSearch } from '@tanstack/react-router';
+import { useParams, useSearch, useRouter } from '@tanstack/react-router';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import { StatusPill } from '@/components/StatusPill';
@@ -9,6 +9,9 @@ import {
   useProjectExperiments,
   useProjectIterations,
   useProjectArtifacts,
+  useCreateIteration,
+  useCreateSample,
+  useCreateExperiment,
 } from '@/hooks/useQueries';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
@@ -201,11 +204,70 @@ function OverviewTab({ projectId }: { projectId: string }) {
   );
 }
 
+// ─── Create Sample Dialog ─────────────────────────────────────────────────────
+
+function CreateSampleDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const [identifier, setIdentifier] = useState('');
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState('other');
+  const createSample = useCreateSample(projectId);
+
+  const handleCreate = async () => {
+    if (!identifier.trim()) return;
+    await createSample.mutateAsync({ identifier: identifier.trim(), name, kind });
+    onClose();
+  };
+
+  const KINDS = ['precursor', 'electrode', 'cell', 'module', 'derivative', 'other'];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <span className="modal-title">New Sample</span>
+          <button className="icon-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Identifier</div>
+            <input className="field-input" value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="e.g. NMC-001" autoFocus />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Name</div>
+            <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="Descriptive name" />
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Kind</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {KINDS.map(k => (
+                <button key={k} onClick={() => setKind(k)} className={`status-opt${kind === k ? ' sel' : ''}`}>
+                  <span className={`pill k-${k}`}>{k}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button className="top-btn" onClick={onClose}>Cancel</button>
+          <button className="top-btn primary" onClick={handleCreate} disabled={!identifier.trim() || createSample.isPending}>
+            {createSample.isPending ? 'Creating…' : 'Create sample'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Samples Tab ─────────────────────────────────────────────────────────────
 
 function SampleCard({ sample: s }: { sample: Sample }) {
+  const router = useRouter();
   return (
-    <div className="rec">
+    <div
+      className="rec"
+      style={{ cursor: 'pointer' }}
+      onClick={() => void router.navigate({ to: '/samples/$sampleId', params: { sampleId: s.id } })}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="id">{s.identifier}</span>
         <span style={{ marginLeft: 'auto' }}>
@@ -248,18 +310,91 @@ function SampleCard({ sample: s }: { sample: Sample }) {
 
 function SamplesTab({ projectId }: { projectId: string }) {
   const { data: samples = [], isLoading, isError } = useProjectSamples(projectId);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [filterKind, setFilterKind] = useState('');
+
   if (isLoading) return <LoadingState message="Loading samples…" />;
   if (isError) return <ErrorState message="Failed to load samples." />;
-  if (samples.length === 0) return <EmptyState message="No samples yet." />;
+
+  const KINDS = ['precursor', 'electrode', 'cell', 'module', 'derivative', 'other'];
+  const filtered = filterKind ? samples.filter((s: Sample) => s.kind === filterKind) : samples;
 
   return (
     <div className="page-wrap wide">
-      <div className="section-h" style={{ marginBottom: 18 }}>
+      {createOpen && <CreateSampleDialog projectId={projectId} onClose={() => setCreateOpen(false)} />}
+      <div className="section-h" style={{ marginBottom: 14 }}>
         <h2>Samples</h2>
         <span className="meta">{samples.length} total</span>
+        <div className="right">
+          <button className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New sample</button>
+        </div>
       </div>
-      <div className="records three">
-        {samples.map(s => <SampleCard key={s.id} sample={s} />)}
+      {/* Kind filter */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        <button onClick={() => setFilterKind('')} className={`status-opt${filterKind === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
+        {KINDS.map(k => (
+          <button key={k} onClick={() => setFilterKind(filterKind === k ? '' : k)} className={`status-opt${filterKind === k ? ' sel' : ''}`}>
+            <span className={`pill k-${k}`}>{k}</span>
+          </button>
+        ))}
+      </div>
+      {filtered.length === 0 ? <EmptyState message="No samples." /> : (
+        <div className="records three">
+          {filtered.map((s: Sample) => <SampleCard key={s.id} sample={s} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Create Experiment Dialog ─────────────────────────────────────────────────
+
+function CreateExperimentDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const [method, setMethod] = useState('cycling');
+  const [status, setStatus] = useState('planned');
+  const createExp = useCreateExperiment(projectId);
+  const METHODS = ['cycling', 'synthesis', 'SEM', 'XRD', 'EIS', 'weighing', 'drying', 'custom'];
+
+  const handleCreate = async () => {
+    await createExp.mutateAsync({ method, status });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <span className="modal-title">New Experiment</span>
+          <button className="icon-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Method</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {METHODS.map(m => (
+                <button key={m} onClick={() => setMethod(m)} className={`status-opt${method === m ? ' sel' : ''}`}>
+                  <span className="pill">{m}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Initial status</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['planned', 'in_progress', 'completed', 'failed'].map(s => (
+                <button key={s} onClick={() => setStatus(s)} className={`status-opt${status === s ? ' sel' : ''}`}>
+                  <StatusPill status={s} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button className="top-btn" onClick={onClose}>Cancel</button>
+          <button className="top-btn primary" onClick={handleCreate} disabled={createExp.isPending}>
+            {createExp.isPending ? 'Creating…' : 'Create experiment'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -268,8 +403,13 @@ function SamplesTab({ projectId }: { projectId: string }) {
 // ─── Experiments Tab ─────────────────────────────────────────────────────────
 
 function ExperimentCard({ experiment: e }: { experiment: Experiment }) {
+  const router = useRouter();
   return (
-    <div className="rec">
+    <div
+      className="rec"
+      style={{ cursor: 'pointer' }}
+      onClick={() => void router.navigate({ to: '/experiments/$experimentId', params: { experimentId: e.id } })}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="id" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)' }}>
           {e.id.slice(0, 8)}…
@@ -300,18 +440,90 @@ function ExperimentCard({ experiment: e }: { experiment: Experiment }) {
 
 function ExperimentsTab({ projectId }: { projectId: string }) {
   const { data: experiments = [], isLoading, isError } = useProjectExperiments(projectId);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [filterMethod, setFilterMethod] = useState('');
+
   if (isLoading) return <LoadingState message="Loading experiments…" />;
   if (isError) return <ErrorState message="Failed to load experiments." />;
-  if (experiments.length === 0) return <EmptyState message="No experiments yet." />;
+
+  const METHODS = ['cycling', 'synthesis', 'SEM', 'XRD', 'EIS', 'weighing', 'drying', 'custom'];
+  const filtered = filterMethod ? experiments.filter((e: Experiment) => e.method === filterMethod) : experiments;
 
   return (
     <div className="page-wrap wide">
-      <div className="section-h" style={{ marginBottom: 18 }}>
+      {createOpen && <CreateExperimentDialog projectId={projectId} onClose={() => setCreateOpen(false)} />}
+      <div className="section-h" style={{ marginBottom: 14 }}>
         <h2>Experiments</h2>
         <span className="meta">{experiments.length} total</span>
+        <div className="right">
+          <button className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New experiment</button>
+        </div>
       </div>
-      <div className="records three">
-        {experiments.map(e => <ExperimentCard key={e.id} experiment={e} />)}
+      {/* Method filter */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        <button onClick={() => setFilterMethod('')} className={`status-opt${filterMethod === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
+        {METHODS.map(m => (
+          <button key={m} onClick={() => setFilterMethod(filterMethod === m ? '' : m)} className={`status-opt${filterMethod === m ? ' sel' : ''}`}>
+            <span className="pill">{m}</span>
+          </button>
+        ))}
+      </div>
+      {filtered.length === 0 ? <EmptyState message="No experiments." /> : (
+        <div className="records three">
+          {filtered.map((e: Experiment) => <ExperimentCard key={e.id} experiment={e} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Create Iteration Dialog ──────────────────────────────────────────────────
+
+function CreateIterationDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [status, setStatus] = useState('planned');
+  const createIter = useCreateIteration(projectId);
+
+  const handleCreate = async () => {
+    if (!title.trim()) return;
+    await createIter.mutateAsync({ title: title.trim(), description, status });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <span className="modal-title">New Iteration</span>
+          <button className="icon-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Title</div>
+            <input className="field-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Formation cycle batch" autoFocus />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Description</div>
+            <textarea className="field-textarea" value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What does this iteration cover?" />
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Initial status</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['planned', 'active', 'done', 'blocked'].map(s => (
+                <button key={s} onClick={() => setStatus(s)} className={`status-opt${status === s ? ' sel' : ''}`}>
+                  <StatusPill status={s} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button className="top-btn" onClick={onClose}>Cancel</button>
+          <button className="top-btn primary" onClick={handleCreate} disabled={!title.trim() || createIter.isPending}>
+            {createIter.isPending ? 'Creating…' : 'Create iteration'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -320,8 +532,13 @@ function ExperimentsTab({ projectId }: { projectId: string }) {
 // ─── Iterations Tab ──────────────────────────────────────────────────────────
 
 function IterationRow({ iteration: it }: { iteration: Iteration }) {
+  const router = useRouter();
   return (
-    <div className="iter-row">
+    <div
+      className="iter-row"
+      style={{ cursor: 'pointer' }}
+      onClick={() => void router.navigate({ to: '/iterations/$iterationId', params: { iterationId: it.id } })}
+    >
       <div className="num" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)' }}>
         {it.position}
       </div>
@@ -346,19 +563,28 @@ function IterationRow({ iteration: it }: { iteration: Iteration }) {
 
 function IterationsTab({ projectId }: { projectId: string }) {
   const { data: iterations = [], isLoading, isError } = useProjectIterations(projectId);
+  const [createOpen, setCreateOpen] = useState(false);
+
   if (isLoading) return <LoadingState message="Loading iterations…" />;
   if (isError) return <ErrorState message="Failed to load iterations." />;
-  if (iterations.length === 0) return <EmptyState message="No iterations yet." />;
+
+  const sorted = [...iterations].sort((a, b) => a.position - b.position);
 
   return (
     <div className="page-wrap">
+      {createOpen && <CreateIterationDialog projectId={projectId} onClose={() => setCreateOpen(false)} />}
       <div className="section-h" style={{ marginBottom: 4 }}>
         <h2>Iterations</h2>
         <span className="meta">{iterations.length} total</span>
+        <div className="right">
+          <button className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New iteration</button>
+        </div>
       </div>
-      <div className="iter-list">
-        {iterations.map(it => <IterationRow key={it.id} iteration={it} />)}
-      </div>
+      {sorted.length === 0 ? <EmptyState message="No iterations yet." /> : (
+        <div className="iter-list">
+          {sorted.map(it => <IterationRow key={it.id} iteration={it} />)}
+        </div>
+      )}
     </div>
   );
 }

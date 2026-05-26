@@ -9,6 +9,9 @@ import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { WorkspacesPage } from './pages/WorkspacesPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import { IterationDetailPage } from './pages/IterationDetailPage';
+import { SampleDetailPage } from './pages/SampleDetailPage';
+import { ExperimentDetailPage } from './pages/ExperimentDetailPage';
 
 // Token accessor injected at auth setup — used by guards
 let isAuthenticated: () => boolean = () => false;
@@ -58,11 +61,36 @@ const projectRoute = createRoute({
   component: ProjectDetailPage,
 });
 
+const iterationRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/iterations/$iterationId',
+  component: IterationDetailPage,
+});
+
+const sampleRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/samples/$sampleId',
+  component: SampleDetailPage,
+});
+
+const experimentRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/experiments/$experimentId',
+  component: ExperimentDetailPage,
+});
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  authGuardRoute.addChildren([homeRoute, workspacesRoute, projectRoute]),
+  authGuardRoute.addChildren([
+    homeRoute,
+    workspacesRoute,
+    projectRoute,
+    iterationRoute,
+    sampleRoute,
+    experimentRoute,
+  ]),
 ]);
 
 export const router = createRouter({

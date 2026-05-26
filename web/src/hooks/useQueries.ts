@@ -8,6 +8,13 @@ import type {
   Iteration,
   Artifact,
 } from '@/api/types';
+import type { components } from '@/api/schema.d.ts';
+
+// ─── Extra types (not in re-exports yet) ─────────────────────────────────────
+
+export type LineageGraph = components['schemas']['LineageGraph'];
+export type IterationSample = components['schemas']['IterationSample'];
+export type ExperimentSample = components['schemas']['ExperimentSample'];
 
 // ─── Query Keys ──────────────────────────────────────────────────────────────
 
@@ -20,6 +27,13 @@ export const keys = {
   projectExperiments: (id: string) => ['projects', id, 'experiments'] as const,
   projectIterations: (id: string) => ['projects', id, 'iterations'] as const,
   projectArtifacts: (id: string) => ['projects', id, 'artifacts'] as const,
+  // ── detail keys ──
+  iteration: (id: string) => ['iterations', id] as const,
+  iterationSamples: (id: string) => ['iterations', id, 'samples'] as const,
+  sample: (id: string) => ['samples', id] as const,
+  sampleLineage: (id: string) => ['samples', id, 'lineage'] as const,
+  experiment: (id: string) => ['experiments', id] as const,
+  experimentSamples: (id: string) => ['experiments', id, 'samples'] as const,
 };
 
 // ─── Workspaces ──────────────────────────────────────────────────────────────
@@ -112,5 +126,212 @@ export function useProjectArtifacts(projectId: string | undefined) {
         .get<Artifact[] | null>(`/v1/projects/${projectId}/artifacts`)
         .then(r => r ?? []),
     enabled: !!projectId,
+  });
+}
+
+// ─── Iteration detail ────────────────────────────────────────────────────────
+
+export function useIteration(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? keys.iteration(id) : ['iterations', 'none'],
+    queryFn: () => api.get<Iteration>(`/v1/iterations/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateIteration(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      title: string;
+      description?: string;
+      status?: string;
+      start_at?: string;
+      end_at?: string;
+    }) => api.post<Iteration>(`/v1/projects/${projectId}/iterations`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectIterations(projectId) }),
+  });
+}
+
+export function useUpdateIteration(iterationId: string, projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      title?: string;
+      description?: string;
+      status?: string;
+      start_at?: string;
+      end_at?: string;
+      position?: number;
+    }) => api.patch<Iteration>(`/v1/iterations/${iterationId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.iteration(iterationId) });
+      void qc.invalidateQueries({ queryKey: keys.projectIterations(projectId) });
+    },
+  });
+}
+
+export function useDeleteIteration(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (iterationId: string) => api.delete<{ ok: boolean }>(`/v1/iterations/${iterationId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectIterations(projectId) }),
+  });
+}
+
+export function useIterationSamples(iterationId: string | undefined) {
+  return useQuery({
+    queryKey: iterationId ? keys.iterationSamples(iterationId) : ['iterations', 'none', 'samples'],
+    queryFn: () =>
+      api.get<IterationSample[] | null>(`/v1/iterations/${iterationId}/samples`).then(r => r ?? []),
+    enabled: !!iterationId,
+  });
+}
+
+export function useLinkIterationSample(iterationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { sample_id: string; role?: string; note?: string }) =>
+      api.post<{ ok: boolean }>(`/v1/iterations/${iterationId}/samples`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.iterationSamples(iterationId) }),
+  });
+}
+
+export function useUnlinkIterationSample(iterationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sampleId: string) =>
+      api.delete<{ ok: boolean }>(`/v1/iterations/${iterationId}/samples/${sampleId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.iterationSamples(iterationId) }),
+  });
+}
+
+// ─── Sample detail ────────────────────────────────────────────────────────────
+
+export function useSample(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? keys.sample(id) : ['samples', 'none'],
+    queryFn: () => api.get<Sample>(`/v1/samples/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateSample(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      identifier: string;
+      name?: string;
+      description?: string;
+      kind?: string;
+      status?: string;
+      properties?: Record<string, unknown>;
+    }) => api.post<Sample>(`/v1/projects/${projectId}/samples`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectSamples(projectId) }),
+  });
+}
+
+export function useUpdateSample(sampleId: string, projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      identifier?: string;
+      name?: string;
+      description?: string;
+      kind?: string;
+      status?: string;
+      properties?: Record<string, unknown>;
+    }) => api.patch<Sample>(`/v1/samples/${sampleId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.sample(sampleId) });
+      void qc.invalidateQueries({ queryKey: keys.projectSamples(projectId) });
+    },
+  });
+}
+
+export function useSampleLineage(sampleId: string | undefined) {
+  return useQuery({
+    queryKey: sampleId ? keys.sampleLineage(sampleId) : ['samples', 'none', 'lineage'],
+    queryFn: () => api.get<LineageGraph>(`/v1/samples/${sampleId}/lineage`),
+    enabled: !!sampleId,
+  });
+}
+
+export function useAddSampleRelation(sampleId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { child_sample_id: string; relation_type: string; notes?: string }) =>
+      api.post<{ ok: boolean }>(`/v1/samples/${sampleId}/relations`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.sampleLineage(sampleId) }),
+  });
+}
+
+// ─── Experiment detail ────────────────────────────────────────────────────────
+
+export function useExperiment(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? keys.experiment(id) : ['experiments', 'none'],
+    queryFn: () => api.get<Experiment>(`/v1/experiments/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateExperiment(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      method?: string;
+      iteration_id?: string;
+      status?: string;
+      parameters?: Record<string, unknown>;
+      result_summary?: string;
+      performed_at?: string;
+    }) => api.post<Experiment>(`/v1/projects/${projectId}/experiments`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectExperiments(projectId) }),
+  });
+}
+
+export function useUpdateExperiment(experimentId: string, projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      method?: string;
+      iteration_id?: string;
+      status?: string;
+      parameters?: Record<string, unknown>;
+      result_summary?: string;
+      performed_at?: string;
+    }) => api.patch<Experiment>(`/v1/experiments/${experimentId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.experiment(experimentId) });
+      void qc.invalidateQueries({ queryKey: keys.projectExperiments(projectId) });
+    },
+  });
+}
+
+export function useExperimentSamples(experimentId: string | undefined) {
+  return useQuery({
+    queryKey: experimentId ? keys.experimentSamples(experimentId) : ['experiments', 'none', 'samples'],
+    queryFn: () =>
+      api.get<ExperimentSample[] | null>(`/v1/experiments/${experimentId}/samples`).then(r => r ?? []),
+    enabled: !!experimentId,
+  });
+}
+
+export function useLinkExperimentSample(experimentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { sample_id: string; role?: string; note?: string }) =>
+      api.post<{ ok: boolean }>(`/v1/experiments/${experimentId}/samples`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.experimentSamples(experimentId) }),
+  });
+}
+
+export function useUnlinkExperimentSample(experimentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sampleId: string) =>
+      api.delete<{ ok: boolean }>(`/v1/experiments/${experimentId}/samples/${sampleId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.experimentSamples(experimentId) }),
   });
 }

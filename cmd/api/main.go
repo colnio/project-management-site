@@ -23,6 +23,7 @@ import (
 	"github.com/colnio/project-management-site/internal/db"
 	"github.com/colnio/project-management-site/internal/experiment"
 	"github.com/colnio/project-management-site/internal/iteration"
+	labmcp "github.com/colnio/project-management-site/internal/mcp"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/page"
 	"github.com/colnio/project-management-site/internal/platform"
@@ -75,7 +76,6 @@ func run() error {
 		Idempotency: platform.NewIdempotencyStore(pool),
 		PerMinute:   600,
 	})
-	srv.MountLLMSTxt(llmsTxtStub(cfg.WebOrigin))
 
 	// Domain module routes. More are registered here as tracks land, e.g.:
 	//   project.Register(srv.API, projectSvc)
@@ -105,6 +105,14 @@ func run() error {
 	// .ics suffix is captured into {token} and stripped by the handler.
 	srv.Router.Get("/v1/cal/{user_id}/{token}", calendarSvc.ICSHandler)
 
+	// F4: generate /llms.txt from the live OpenAPI spec (reflects all registered endpoints).
+	srv.MountLLMSTxt(labmcp.LLMSText(srv.API.OpenAPI()))
+
+	// F3: MCP server over SSE at /mcp — wraps the REST API, same PAT auth.
+	restBase := "http://127.0.0.1:" + cfg.Port
+	mcpSrv := labmcp.NewServer(restBase, logger)
+	srv.Router.Mount("/mcp", mcpSrv.Handler())
+
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           srv.Router,
@@ -126,13 +134,3 @@ func run() error {
 	return httpSrv.Shutdown(shutdownCtx)
 }
 
-func llmsTxtStub(webOrigin string) string {
-	return "# Lab Project Management Platform\n\n" +
-		"> Agent-friendly research data API. OpenAPI spec: /openapi.json. Interactive docs: /docs.\n\n" +
-		"## Auth\n" +
-		"Use a Personal Access Token: `Authorization: Bearer pat_...`.\n\n" +
-		"## Discovery\n" +
-		"- OpenAPI 3.1: /openapi.json\n" +
-		"- Docs: /docs\n" +
-		"- Web app: " + webOrigin + "\n"
-}

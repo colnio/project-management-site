@@ -34,15 +34,19 @@ land in **Mailpit** at <http://localhost:8025>.
 
 - **Samples** — physical specimens (precursor, electrode, cell, module,
   derivative). Each has a lab identifier, a `kind`, a free-form properties record,
-  and a status. Samples have **lineage**: record relations like _derived_from_,
-  _split_from_, _assembled_into_, _tested_as_, _duplicate_of_, and view the full
-  ancestor/descendant graph.
+  and a status. The sample detail page has a key→value **property editor** for the
+  free-form data and a **lineage graph** (interactive React Flow diagram): record
+  relations like _derived_from_, _split_from_, _assembled_into_, _tested_as_,
+  _duplicate_of_, and see the full ancestor/descendant graph.
 - **Iterations** — ordered phases of a project (planned/active/done/blocked) with
-  start/end dates. Link the samples an iteration touches.
+  start/end dates. The iteration detail page lets you edit fields and link the
+  samples an iteration touches (with role input/output/passthrough).
 - **Experiments** — a structured record of what was actually done: a method
-  (cycling, synthesis, SEM, XRD, EIS, weighing, drying, custom), free-form
-  parameters, a result summary, the samples involved (subject/reference/control/
-  byproduct), and an optional link to an iteration.
+  (cycling, synthesis, SEM, XRD, EIS, weighing, drying, custom). The experiment
+  detail page shows **method-specific parameter forms** (e.g. cycling rate / cycles
+  / voltage window), a result summary, status, and a **sample picker** to link the
+  samples involved (subject/reference/control/byproduct), plus an optional link to
+  an iteration.
 - **Pages** — block-editor documents attached to a project, iteration, sample, or
   experiment. Every save creates an immutable revision; you can view history,
   diff two revisions, and restore any revision (non-destructively). Concurrent
@@ -80,8 +84,13 @@ land in **Mailpit** at <http://localhost:8025>.
   UI is coming soon (F1); the API works today._
 - Writes accept an `Idempotency-Key` header (24h replay window). Resources that
   support optimistic concurrency emit an `ETag`; send it back in `If-Match`.
-- An MCP server and a generated `/llms.txt` for agent discovery are _coming soon_
-  (Track F).
+- **Agent discovery**: `GET /llms.txt` lists every endpoint (generated from the
+  live spec) plus auth instructions.
+- **MCP**: an MCP server is mounted at `http://localhost:8080/mcp` (SSE). Point an
+  MCP client at it with `Authorization: Bearer pat_...`; it exposes read-only
+  tools (list/read projects, samples, lineage, experiments, pages, artifacts) that
+  wrap the same REST API with the same auth, scopes, and audit. _Write tools are
+  reserved for the AI assistant track and are intentionally not exposed yet._
 
 ## Accounts & auth notes
 

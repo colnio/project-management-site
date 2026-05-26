@@ -28,16 +28,23 @@ conventions live in [`AGENTS.md`](AGENTS.md).
 | A5 | Frontend shell (Vite/React/TanStack, auth gate, ⌘K) | ✅ done |
 | B1–B6 | Projects, iterations, samples+lineage, experiments, pages, artifacts | ✅ done |
 | C1 | Project list & detail UI | ✅ done |
-| C2–C6 | Iteration / page-editor / sample / experiment / artifact UIs | ⛔ pending |
+| C2 | Iteration UI (+ sample-link picker) | ✅ done |
+| C4 | Sample UI (JSONB property editor + React Flow lineage) | ✅ done |
+| C5 | Experiment UI (method param forms + sample picker) | ✅ done |
+| C3, C6 | Page editor (BlockNote), artifact upload/viewers | ⛔ pending |
 | D1–D3 | Artifact workers (PDF, ipynb, image) — needs River | ⛔ pending |
 | E1–E2 | Calendar events + signed `.ics` feed | ✅ done |
 | E3–E4 | In-app calendar + Gantt UI | ⛔ pending |
-| F1–F4 | PAT UI, OpenAPI polish, MCP server, `/llms.txt` | ⛔ pending |
+| F3 | MCP server (in-binary SSE at `/mcp`, PAT auth) | ✅ done |
+| F4 | `/llms.txt` generated from OpenAPI | ✅ done |
+| F1, F2 | PAT settings UI, OpenAPI examples polish | ⛔ pending |
 | G1–G8 | AI orchestrator, workflows, chat (Ollama) | ⛔ deferred (not started by design) |
 
-The entire **non-AI backend** (Tracks A + B + E backend) is implemented, wired,
-and integration-tested: **51 REST endpoints**, server-side permissions and audit
-on every mutation, full Go test suite green.
+The entire **non-AI backend** (Tracks A + B + E backend + F MCP/llms.txt) is
+implemented, wired, and integration-tested: **51 REST endpoints**, an MCP server
+wrapping them, server-side permissions and audit on every mutation, full Go test
+suite green. The frontend covers the shell + project/iteration/sample/experiment
+UIs.
 
 ---
 
@@ -94,6 +101,7 @@ internal/
   page/             B3 — content-addressable PageBlob/PageRevision, presence, GC
   artifact/         B6 — presigned MinIO upload + typed attachment joins
   calendar/         E — ProjectEvent + signed per-user .ics feed
+  mcp/              F — MCP server (SSE at /mcp) + /llms.txt generator
   testsupport/      real-Postgres test pool (isolated DB per TEST_DATABASE_URL)
 migrations/         goose *.sql (embedded; run on boot)
 web/                React SPA (Vite + TanStack Router/Query)
