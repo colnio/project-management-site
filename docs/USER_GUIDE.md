@@ -1,0 +1,96 @@
+# User Guide
+
+How to use the Lab Project Management Platform. This reflects the features
+available today; sections marked _(coming soon)_ are planned but not yet built.
+
+## Getting in
+
+1. Start the stack (see the [README](../README.md) quickstart): `make up`,
+   `go run ./cmd/seed`, `go run ./cmd/api`, and `cd web && pnpm dev`.
+2. Open <http://localhost:5173>.
+3. Sign in with the seeded developer account:
+   - **Email:** `dev@halide-lab.org`
+   - **Password:** `devpassword`
+
+University users will sign in via Microsoft SSO and external collaborators via an
+emailed invite link; locally, SSO is backed by a mock provider and invite emails
+land in **Mailpit** at <http://localhost:8025>.
+
+## Workspaces and projects
+
+- A **workspace** is your lab or collaboration group. Create one from the
+  workspace switcher in the sidebar; you become its owner.
+- A **project** lives inside a workspace and can be **workspace-visible** (any
+  member can see it) or **private** (only invited collaborators). Create projects
+  from the workspace view.
+- **Roles**: workspace owner/admin/member; per-project owner/editor/viewer. Your
+  effective permission on a project is the highest of your workspace role, any
+  explicit project collaboration, and admin override. Editors and owners can
+  change content; viewers are read-only.
+- Add collaborators to a project by email (they must already have an account /
+  have accepted an invite).
+
+## The research data model
+
+- **Samples** — physical specimens (precursor, electrode, cell, module,
+  derivative). Each has a lab identifier, a `kind`, a free-form properties record,
+  and a status. Samples have **lineage**: record relations like _derived_from_,
+  _split_from_, _assembled_into_, _tested_as_, _duplicate_of_, and view the full
+  ancestor/descendant graph.
+- **Iterations** — ordered phases of a project (planned/active/done/blocked) with
+  start/end dates. Link the samples an iteration touches.
+- **Experiments** — a structured record of what was actually done: a method
+  (cycling, synthesis, SEM, XRD, EIS, weighing, drying, custom), free-form
+  parameters, a result summary, the samples involved (subject/reference/control/
+  byproduct), and an optional link to an iteration.
+- **Pages** — block-editor documents attached to a project, iteration, sample, or
+  experiment. Every save creates an immutable revision; you can view history,
+  diff two revisions, and restore any revision (non-destructively). Concurrent
+  edits are guarded by optimistic locking (you'll be told to reload if the page
+  changed under you) and a presence indicator. _The rich BlockNote editor with
+  `@sample`/`@experiment`/`@artifact` reference blocks is coming soon; the API and
+  revision model are already in place._
+- **Artifacts** — files (PDF, Jupyter notebook, image, other) scoped to a project.
+  Upload goes directly to object storage via a presigned URL, then you mark it
+  complete. Attach artifacts to samples or experiments with a typed role.
+  _Automatic thumbnails / notebook rendering (workers) are coming soon._
+
+## Calendar
+
+- Each project has **events** (deadlines, milestone ends, meetings, reminders,
+  custom) with start/end times, all-day flag, and RFC 5545 recurrence rules.
+- **Subscribe from your own calendar app**: open your calendar subscription in
+  settings to get a personal signed URL of the form
+  `/v1/cal/{your_id}/{token}.ics`. Paste it into Google Calendar ("Add by URL"),
+  Apple Calendar ("Subscribe to Calendar…"), or Outlook ("Add calendar from
+  internet"). It includes every event in the projects you can see.
+- You can **rotate** the URL token at any time, which invalidates the old link.
+- Note: external calendars refresh on their own schedule (Google ~12h, Apple
+  5–60 min), so a brand-new event may not appear instantly. _The in-app calendar
+  and Gantt timeline views are coming soon._
+
+## For developers and agents (API access)
+
+- Every action in the UI is available through the REST API. The OpenAPI 3.1 spec
+  is at <http://localhost:8080/openapi.json> with interactive docs at `/docs`.
+- **Personal Access Tokens**: create a scoped token via `POST /v1/tokens`
+  (one-time secret returned, prefixed `pat_`). Send it as
+  `Authorization: Bearer pat_...`. Tokens are scoped (e.g. `read:projects`,
+  `write:samples`) and never grant more than you have. _A Settings → API Tokens
+  UI is coming soon (F1); the API works today._
+- Writes accept an `Idempotency-Key` header (24h replay window). Resources that
+  support optimistic concurrency emit an `ETag`; send it back in `If-Match`.
+- An MCP server and a generated `/llms.txt` for agent discovery are _coming soon_
+  (Track F).
+
+## Accounts & auth notes
+
+- Sessions use a short-lived access token plus an httpOnly refresh cookie; the
+  app refreshes silently. Local-account passwords are hashed with Argon2id.
+- Admins/PIs can be granted override visibility into a workspace's content; every
+  such access is recorded in the audit log.
+
+## Not yet available
+
+- AI assistant chat and AI-assisted risk-assessment workflows (Track G) are
+  intentionally not built yet.
