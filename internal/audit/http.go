@@ -59,6 +59,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/audit",
 		Summary:     "List audit log entries",
+		Description: "Returns a cursor-paginated list of immutable audit log entries. Supports filtering by `actor`, `resource_type`, and `resource_id`. Requires system-admin role; token-scoped callers must also carry the `read:audit` scope.",
 		Tags:        []string{"audit"},
 	}, svc.HandleListAudit)
 }

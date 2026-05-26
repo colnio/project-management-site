@@ -47,13 +47,16 @@ land in **Mailpit** at <http://localhost:8025>.
   / voltage window), a result summary, status, and a **sample picker** to link the
   samples involved (subject/reference/control/byproduct), plus an optional link to
   an iteration.
-- **Pages** — block-editor documents attached to a project, iteration, sample, or
-  experiment. Every save creates an immutable revision; you can view history,
-  diff two revisions, and restore any revision (non-destructively). Concurrent
-  edits are guarded by optimistic locking (you'll be told to reload if the page
-  changed under you) and a presence indicator. _The rich BlockNote editor with
-  `@sample`/`@experiment`/`@artifact` reference blocks is coming soon; the API and
-  revision model are already in place._
+- **Pages** — block-editor documents (BlockNote) attached to a project, iteration,
+  sample, or experiment. Create/open pages from a project's **Notes / Pages** tab.
+  The editor auto-saves (after ~10s idle, on blur, or Ctrl/Cmd-S) and supports
+  **lab reference blocks** — type `/` and insert a `@sample`/`@experiment`/
+  `@artifact` reference that renders a live card linking to the entity. Every save
+  is an immutable revision: open **History** to diff against any revision and
+  restore one (non-destructively). Concurrent edits are guarded by optimistic
+  locking — if the page changed under you, you get a conflict banner to reload or
+  overwrite rather than silently clobbering — and a presence indicator shows who
+  else is editing.
 - **Artifacts** — files (PDF, Jupyter notebook, image, other) scoped to a project.
   Upload from the project's Artifacts tab: the file goes directly to object
   storage via a presigned URL and is then processed in the background — PDFs get a

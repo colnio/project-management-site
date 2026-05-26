@@ -16,9 +16,10 @@ import {
   useCreateExperiment,
 } from '@/hooks/useQueries';
 import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
+import { PagesPanel } from '@/components/PagesPanel';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
-type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts';
+type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages';
 
 // ─── Tab Bar ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'samples', label: 'Samples' },
   { id: 'experiments', label: 'Experiments' },
   { id: 'artifacts', label: 'Artifacts' },
+  { id: 'pages', label: 'Notes / Pages' },
 ];
 
 function TabBar({ active, onChange, counts }: TabBarProps) {
@@ -747,6 +749,15 @@ export function ProjectDetailPage() {
             {currentTab === 'experiments' && <ExperimentsTab projectId={projectId} />}
             {currentTab === 'iterations' && <IterationsTab projectId={projectId} />}
             {currentTab === 'artifacts' && <ArtifactsTab projectId={projectId} />}
+            {currentTab === 'pages' && (
+              <div className="page-wrap">
+                <PagesPanel
+                  projectId={projectId}
+                  parentType="project"
+                  parentId={projectId}
+                />
+              </div>
+            )}
           </div>
         </>
       )}

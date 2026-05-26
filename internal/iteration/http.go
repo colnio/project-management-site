@@ -20,6 +20,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/iterations",
 		Summary:     "Create an iteration",
+		Description: "Creates a new iteration (sprint / experimental batch) within a project. Optional start/end dates and a status control the iteration lifecycle. Requires editor role on the project.",
 		Tags:        []string{"iterations"},
 	}, svc.handleCreateIteration)
 
@@ -28,6 +29,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/iterations",
 		Summary:     "List iterations in a project",
+		Description: "Returns all iterations for a project ordered by position. Requires viewer role on the project.",
 		Tags:        []string{"iterations"},
 	}, svc.handleListIterations)
 
@@ -37,6 +39,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/iterations/{id}",
 		Summary:     "Get an iteration",
+		Description: "Returns a single iteration by ID. Requires viewer role on the iteration's project.",
 		Tags:        []string{"iterations"},
 	}, svc.handleGetIteration)
 
@@ -45,6 +48,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPatch,
 		Path:        "/v1/iterations/{id}",
 		Summary:     "Update an iteration",
+		Description: "Applies a partial update to an iteration (title, status, dates, position). Requires editor role on the iteration's project.",
 		Tags:        []string{"iterations"},
 	}, svc.handleUpdateIteration)
 
@@ -53,6 +57,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodDelete,
 		Path:        "/v1/iterations/{id}",
 		Summary:     "Delete an iteration",
+		Description: "Permanently deletes an iteration and its sample associations. Requires editor role on the iteration's project.",
 		Tags:        []string{"iterations"},
 	}, svc.handleDeleteIteration)
 
@@ -62,6 +67,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/iterations/{id}/samples",
 		Summary:     "Link a sample to an iteration",
+		Description: "Associates an existing sample with an iteration in a given role (input, output, passthrough). Requires editor role on the iteration's project.",
 		Tags:        []string{"iterations"},
 	}, svc.handleLinkSample)
 
@@ -70,6 +76,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodDelete,
 		Path:        "/v1/iterations/{id}/samples/{sid}",
 		Summary:     "Unlink a sample from an iteration",
+		Description: "Removes the association between a sample and an iteration. Requires editor role on the iteration's project.",
 		Tags:        []string{"iterations"},
 	}, svc.handleUnlinkSample)
 
@@ -78,6 +85,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/iterations/{id}/samples",
 		Summary:     "List samples linked to an iteration",
+		Description: "Returns all samples associated with an iteration including their roles and notes. Requires viewer role on the iteration's project.",
 		Tags:        []string{"iterations"},
 	}, svc.handleListSamples)
 }

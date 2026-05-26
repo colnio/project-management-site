@@ -321,9 +321,10 @@ function Sidebar({
 interface TopBarProps {
   title: string;
   crumbs?: Array<{ label: string; href?: string }>;
+  actions?: ReactNode;
 }
 
-function TopBar({ title, crumbs = [] }: TopBarProps) {
+function TopBar({ title, crumbs = [], actions }: TopBarProps) {
   void title; // used via crumbs
   return (
     <header className="top">
@@ -341,7 +342,7 @@ function TopBar({ title, crumbs = [] }: TopBarProps) {
           </span>
         ))}
       </div>
-      <div className="top-actions" />
+      <div className="top-actions">{actions}</div>
     </header>
   );
 }
@@ -352,9 +353,10 @@ interface AppShellProps {
   children: ReactNode;
   activeProjectId?: string;
   topBarCrumbs?: Array<{ label: string; href?: string }>;
+  topBarActions?: ReactNode;
 }
 
-export function AppShell({ children, activeProjectId, topBarCrumbs = [] }: AppShellProps) {
+export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarActions }: AppShellProps) {
   const router = useRouter();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { data: workspaces = [] } = useWorkspaces();
@@ -412,7 +414,7 @@ export function AppShell({ children, activeProjectId, topBarCrumbs = [] }: AppSh
       />
 
       <div className="main">
-        <TopBar title="" crumbs={topBarCrumbs} />
+        <TopBar title="" crumbs={topBarCrumbs} actions={topBarActions} />
         <div className="content">{children}</div>
       </div>
 

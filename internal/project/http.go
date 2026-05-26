@@ -20,6 +20,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/workspaces/{id}/projects",
 		Summary:     "Create a project",
+		Description: "Creates a new project inside the given workspace. Requires the caller to be a workspace member.",
 		Tags:        []string{"projects"},
 	}, svc.handleCreateProject)
 
@@ -28,6 +29,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/workspaces/{id}/projects",
 		Summary:     "List projects in a workspace",
+		Description: "Returns all projects the caller can access in the workspace. Pass `include_archived=true` to include archived projects. Requires workspace membership.",
 		Tags:        []string{"projects"},
 	}, svc.handleListProjects)
 
@@ -37,6 +39,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}",
 		Summary:     "Get a project",
+		Description: "Returns a single project by ID along with an ETag for optimistic-concurrency updates. Requires viewer role on the project.",
 		Tags:        []string{"projects"},
 	}, svc.handleGetProject)
 
@@ -45,6 +48,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPatch,
 		Path:        "/v1/projects/{id}",
 		Summary:     "Update a project",
+		Description: "Applies a partial update (name, description, visibility) to a project. Requires editor role on the project.",
 		Tags:        []string{"projects"},
 	}, svc.handleUpdateProject)
 
@@ -53,6 +57,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/archive",
 		Summary:     "Archive a project",
+		Description: "Marks a project as archived, hiding it from default list results. Requires owner role on the project.",
 		Tags:        []string{"projects"},
 	}, svc.handleArchiveProject)
 
@@ -62,6 +67,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/collaborators",
 		Summary:     "List project collaborators",
+		Description: "Returns the list of per-project collaborators (role overrides beyond workspace membership). Requires viewer role on the project.",
 		Tags:        []string{"projects"},
 	}, svc.handleListCollaborators)
 
@@ -70,6 +76,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/collaborators",
 		Summary:     "Add a project collaborator",
+		Description: "Grants a user a specific role on the project, looked up by email. Requires owner role on the project.",
 		Tags:        []string{"projects"},
 	}, svc.handleAddCollaborator)
 
@@ -78,6 +85,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodDelete,
 		Path:        "/v1/projects/{id}/collaborators/{user_id}",
 		Summary:     "Remove a project collaborator",
+		Description: "Removes a collaborator's per-project role, reverting them to their workspace-level access. Requires owner role on the project.",
 		Tags:        []string{"projects"},
 	}, svc.handleRemoveCollaborator)
 }
@@ -87,9 +95,9 @@ func Register(api huma.API, svc *Service) {
 type createProjectInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Name        string `json:"name" required:"true" minLength:"1"`
-		Description string `json:"description,omitempty"`
-		Visibility  string `json:"visibility,omitempty" enum:"workspace,private"`
+		Name        string `json:"name" required:"true" minLength:"1" example:"Solid-State Electrolyte Study"`
+		Description string `json:"description,omitempty" example:"Investigating ionic conductivity of LLZO at room temperature."`
+		Visibility  string `json:"visibility,omitempty" enum:"workspace,private" example:"workspace"`
 	}
 }
 

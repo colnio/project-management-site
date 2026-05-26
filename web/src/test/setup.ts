@@ -19,6 +19,31 @@ vi.mock('pdfjs-dist', () => ({
   })),
 }));
 
+// Mock BlockNote — it uses browser-only APIs (ProseMirror, ResizeObserver, etc.)
+// that are not available in jsdom. We mock the entire package.
+vi.mock('@blocknote/core', () => ({
+  BlockNoteSchema: {
+    create: vi.fn(() => ({ blockSpecs: {} })),
+  },
+  defaultBlockSpecs: {},
+  filterSuggestionItems: vi.fn((items: unknown[]) => items),
+  insertOrUpdateBlockForSlashMenu: vi.fn(),
+}));
+
+vi.mock('@blocknote/react', () => ({
+  useCreateBlockNote: vi.fn(() => ({
+    document: [],
+    replaceBlocks: vi.fn(),
+  })),
+  createReactBlockSpec: vi.fn(() => vi.fn(() => ({ config: {}, implementation: {} }))),
+  SuggestionMenuController: () => null,
+  getDefaultReactSlashMenuItems: vi.fn(() => []),
+}));
+
+vi.mock('@blocknote/mantine', () => ({
+  BlockNoteView: vi.fn(() => null),
+}));
+
 // Set up MSW server for all tests
 export const server = setupServer(...handlers);
 

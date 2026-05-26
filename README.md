@@ -32,22 +32,25 @@ conventions live in [`AGENTS.md`](AGENTS.md).
 | C4 | Sample UI (JSONB property editor + React Flow lineage) | ✅ done |
 | C5 | Experiment UI (method param forms + sample picker) | ✅ done |
 | C6 | Artifact UI (presigned upload, PDF.js, image lightbox, ipynb iframe) | ✅ done |
-| C3 | Page editor (BlockNote with reference blocks) | ⛔ pending |
+| C3 | Page editor (BlockNote + @sample/@experiment/@artifact reference blocks) | ✅ done |
 | D1–D3 | Artifact workers: PDF page count, ipynb render, image thumbnails (River) | ✅ done |
 | E1–E2 | Calendar events + signed `.ics` feed | ✅ done |
-| E3–E4 | In-app calendar + Gantt UI | ⛔ pending |
+| E3–E4 | In-app calendar + Gantt UI | ⛔ pending (only remaining non-AI track) |
 | F1 | PAT settings UI + calendar subscription | ✅ done |
+| F2 | OpenAPI descriptions + examples | ✅ done |
 | F3 | MCP server (in-binary SSE at `/mcp`, PAT auth) | ✅ done |
 | F4 | `/llms.txt` generated from OpenAPI | ✅ done |
-| F2 | OpenAPI examples/descriptions polish | ⛔ pending |
 | G1–G8 | AI orchestrator, workflows, chat (Ollama) | ⛔ deferred (not started by design) |
 
-The entire **non-AI backend** (Tracks A + B + D workers + E backend + F
-MCP/llms.txt) is implemented, wired, and integration-tested: **51 REST
-endpoints**, River-backed artifact processing, an MCP server wrapping the REST
-API, server-side permissions and audit on every mutation, full Go test suite
-green. The frontend covers the shell, projects, iterations, samples (+lineage),
-experiments, artifacts (upload/viewers), and a settings page (PATs + calendar).
+The entire **non-AI backend** (Tracks A + B + D workers + E backend + F) is
+implemented, wired, and integration-tested: **51 REST endpoints** (all
+described in OpenAPI), River-backed artifact processing, an MCP server wrapping
+the REST API, server-side permissions and audit on every mutation, full Go test
+suite green. The frontend covers the shell, projects, iterations, samples
+(+lineage), experiments, artifacts (upload/viewers), the BlockNote page editor
+(reference blocks, auto-save, conflict UI, history/restore, presence), and a
+settings page (PATs + calendar). **The only remaining non-AI work is the in-app
+calendar/Gantt UI (E3–E4);** the AI tracks (G) are deferred by design.
 
 ---
 

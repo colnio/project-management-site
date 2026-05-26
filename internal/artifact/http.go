@@ -19,6 +19,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/artifacts",
 		Summary:     "Create an artifact and get a presigned upload URL",
+		Description: "Registers a new artifact record and returns a presigned S3 PUT URL. Upload the file directly to the URL, then call the complete endpoint. Requires viewer role on the project (project auth is implicit via the service).",
 		Tags:        []string{"artifacts"},
 	}, svc.handleCreateArtifact)
 
@@ -27,6 +28,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/artifacts",
 		Summary:     "List artifacts in a project",
+		Description: "Returns all artifacts registered in a project, regardless of upload status. Requires viewer role on the project.",
 		Tags:        []string{"artifacts"},
 	}, svc.handleListArtifacts)
 
@@ -36,6 +38,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/artifacts/{id}",
 		Summary:     "Get an artifact",
+		Description: "Returns a single artifact by ID including its presigned download URL if the upload is complete. Requires viewer role on the artifact's project.",
 		Tags:        []string{"artifacts"},
 	}, svc.handleGetArtifact)
 
@@ -44,6 +47,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/artifacts/{id}/complete",
 		Summary:     "Mark artifact upload complete",
+		Description: "Transitions an artifact from `pending` to `ready` after the file has been uploaded to the presigned URL. Requires an authenticated session.",
 		Tags:        []string{"artifacts"},
 	}, svc.handleCompleteArtifact)
 
@@ -52,6 +56,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodDelete,
 		Path:        "/v1/artifacts/{id}",
 		Summary:     "Delete an artifact",
+		Description: "Deletes an artifact record and its associated S3 object. Requires an authenticated session (ownership is checked internally).",
 		Tags:        []string{"artifacts"},
 	}, svc.handleDeleteArtifact)
 
@@ -61,6 +66,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/samples/{sid}/artifacts",
 		Summary:     "Attach an artifact to a sample",
+		Description: "Links an existing artifact to a sample in a given role (specimen_image, datasheet, reference, other). Requires an authenticated session.",
 		Tags:        []string{"artifacts"},
 	}, svc.handleAttachSample)
 
@@ -69,6 +75,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/samples/{sid}/artifacts",
 		Summary:     "List artifacts for a sample",
+		Description: "Returns all artifacts attached to a sample. Requires an authenticated session.",
 		Tags:        []string{"artifacts"},
 	}, svc.handleListSampleArtifacts)
 
@@ -78,6 +85,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/experiments/{eid}/artifacts",
 		Summary:     "Attach an artifact to an experiment",
+		Description: "Links an existing artifact to an experiment in a given role (raw_data, analysis, report, calibration, photo, other). Requires an authenticated session.",
 		Tags:        []string{"artifacts"},
 	}, svc.handleAttachExperiment)
 
@@ -86,6 +94,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/experiments/{eid}/artifacts",
 		Summary:     "List artifacts for an experiment",
+		Description: "Returns all artifacts attached to an experiment. Requires an authenticated session.",
 		Tags:        []string{"artifacts"},
 	}, svc.handleListExperimentArtifacts)
 }

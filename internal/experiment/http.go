@@ -21,6 +21,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/experiments",
 		Summary:     "Create an experiment",
+		Description: "Creates a new experiment run (measurement, synthesis, etc.) within a project. Optionally associates the experiment with an iteration. Requires editor role on the project.",
 		Tags:        []string{"experiments"},
 	}, svc.handleCreateExperiment)
 
@@ -29,6 +30,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/experiments",
 		Summary:     "List experiments in a project",
+		Description: "Returns experiments in a project with optional filters: `iteration_id`, `method`, and `sample_id`. Requires viewer role on the project.",
 		Tags:        []string{"experiments"},
 	}, svc.handleListExperiments)
 
@@ -38,6 +40,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/experiments/{id}",
 		Summary:     "Get an experiment",
+		Description: "Returns a single experiment by ID including its method, parameters, and result summary. Requires viewer role on the experiment's project.",
 		Tags:        []string{"experiments"},
 	}, svc.handleGetExperiment)
 
@@ -46,6 +49,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPatch,
 		Path:        "/v1/experiments/{id}",
 		Summary:     "Update an experiment",
+		Description: "Applies a partial update to an experiment (method, parameters, result_summary, status, etc.). Requires editor role on the experiment's project.",
 		Tags:        []string{"experiments"},
 	}, svc.handleUpdateExperiment)
 
@@ -55,6 +59,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/experiments/{id}/samples",
 		Summary:     "Link a sample to an experiment",
+		Description: "Associates an existing sample with an experiment in a given role (subject, reference, control, byproduct). Requires editor role on the experiment's project.",
 		Tags:        []string{"experiments"},
 	}, svc.handleLinkSample)
 
@@ -63,6 +68,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodDelete,
 		Path:        "/v1/experiments/{id}/samples/{sid}",
 		Summary:     "Unlink a sample from an experiment",
+		Description: "Removes the association between a sample and an experiment. Requires editor role on the experiment's project.",
 		Tags:        []string{"experiments"},
 	}, svc.handleUnlinkSample)
 
@@ -71,6 +77,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/experiments/{id}/samples",
 		Summary:     "List samples linked to an experiment",
+		Description: "Returns all samples associated with an experiment including their roles and notes. Requires viewer role on the experiment's project.",
 		Tags:        []string{"experiments"},
 	}, svc.handleListSamples)
 }
@@ -80,11 +87,11 @@ func Register(api huma.API, svc *Service) {
 type createExperimentInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Method        string          `json:"method,omitempty" enum:"cycling,synthesis,SEM,XRD,EIS,weighing,drying,custom"`
+		Method        string          `json:"method,omitempty" enum:"cycling,synthesis,SEM,XRD,EIS,weighing,drying,custom" example:"EIS"`
 		Parameters    json.RawMessage `json:"parameters,omitempty"`
-		ResultSummary string          `json:"result_summary,omitempty"`
+		ResultSummary string          `json:"result_summary,omitempty" example:"Impedance at 1 kHz: 42 Ω·cm²"`
 		IterationID   *uuid.UUID      `json:"iteration_id,omitempty"`
-		Status        string          `json:"status,omitempty" enum:"planned,in_progress,completed,failed"`
+		Status        string          `json:"status,omitempty" enum:"planned,in_progress,completed,failed" example:"completed"`
 		PerformedAt   *time.Time      `json:"performed_at,omitempty"`
 	}
 }

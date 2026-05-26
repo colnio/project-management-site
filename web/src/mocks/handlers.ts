@@ -216,6 +216,242 @@ export const handlers = [
   }),
   http.delete('/v1/tokens/:id', () => HttpResponse.json({ ok: true })),
 
+  // ── Page endpoints ────────────────────────────────────────────────────────
+
+  // Create page
+  http.post('/v1/projects/:id/pages', async ({ request, params }) => {
+    const body = await request.json() as { parent_type: string; parent_id: string; blocks: unknown };
+    const page = {
+      id: `page_${Date.now()}`,
+      project_id: params.id as string,
+      parent_type: body.parent_type,
+      parent_id: body.parent_id,
+      current_revision_id: undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    return new HttpResponse(
+      JSON.stringify({ page, blocks: body.blocks }),
+      {
+        status: 201,
+        headers: {
+          'Content-Type': 'application/json',
+          'ETag': `"etag-${page.id}"`,
+        },
+      }
+    );
+  }),
+
+  // Get page
+  http.get('/v1/pages/:id', ({ params }) => {
+    const pageId = params.id as string;
+    return new HttpResponse(
+      JSON.stringify({
+        id: pageId,
+        project_id: 'proj_nmc',
+        parent_type: 'project',
+        parent_id: 'proj_nmc',
+        blocks: [],
+        markdown_export: '',
+        current_revision_id: `rev_initial`,
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'ETag': `"etag-${pageId}-1"`,
+        },
+      }
+    );
+  }),
+
+  // Update page (PUT)
+  http.put('/v1/pages/:id', async ({ request, params }) => {
+    const pageId = params.id as string;
+    const ifMatch = request.headers.get('If-Match');
+    const body = await request.json() as { blocks: unknown; source: string };
+
+    // Simulate 412 if If-Match is "stale-etag"
+    if (ifMatch === '"stale-etag"') {
+      return HttpResponse.json(
+        {
+          code: 'precondition_failed',
+          message: 'ETag mismatch',
+          details: {
+            current: {
+              id: pageId,
+              project_id: 'proj_nmc',
+              parent_type: 'project',
+              parent_id: 'proj_nmc',
+              blocks: [],
+              markdown_export: '',
+              current_revision_id: 'rev_server',
+              _etag: `"etag-${pageId}-server"`,
+            },
+          },
+        },
+        { status: 412 }
+      );
+    }
+
+    const rev = {
+      id: `rev_${Date.now()}`,
+      page_id: pageId,
+      source: body.source,
+      status: 'current',
+      author: 'dev@halide-lab.org',
+      label: undefined,
+      blob_hash: 'abc123',
+      markdown_export: '',
+      retention_class: 'standard',
+      parent_revision_id: undefined,
+      created_at: new Date().toISOString(),
+    };
+    const page = {
+      id: pageId,
+      project_id: 'proj_nmc',
+      parent_type: 'project',
+      parent_id: 'proj_nmc',
+      current_revision_id: rev.id,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    return new HttpResponse(
+      JSON.stringify({ page, revision: rev, blocks: body.blocks }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'ETag': `"etag-${pageId}-${rev.id}"`,
+        },
+      }
+    );
+  }),
+
+  // List revisions
+  http.get('/v1/pages/:id/revisions', ({ params }) => {
+    return HttpResponse.json({
+      revisions: [
+        {
+          id: 'rev_initial',
+          page_id: params.id,
+          source: 'human',
+          status: 'current',
+          author: 'dev@halide-lab.org',
+          label: 'Initial',
+          blob_hash: 'abc123',
+          markdown_export: '',
+          retention_class: 'standard',
+          parent_revision_id: undefined,
+          created_at: '2025-01-01T00:00:00Z',
+        },
+      ],
+    });
+  }),
+
+  // Get revision
+  http.get('/v1/revisions/:id', ({ params }) => {
+    return HttpResponse.json({
+      revision: {
+        id: params.id,
+        page_id: 'page_1',
+        source: 'human',
+        status: 'current',
+        author: 'dev@halide-lab.org',
+        label: 'Test revision',
+        blob_hash: 'abc123',
+        markdown_export: '# Test\n\nContent here.',
+        retention_class: 'standard',
+        parent_revision_id: undefined,
+        created_at: '2025-01-01T00:00:00Z',
+      },
+      blocks: [],
+    });
+  }),
+
+  // Diff revisions
+  http.get('/v1/revisions/:id/diff', () => {
+    return HttpResponse.json({
+      lines: [
+        { op: ' ', text: '# Notes' },
+        { op: '-', text: 'Old content' },
+        { op: '+', text: 'New content' },
+      ],
+    });
+  }),
+
+  // Presence
+  http.get('/v1/pages/:id/presence', () => {
+    return HttpResponse.json({ present: [] });
+  }),
+
+  http.post('/v1/pages/:id/presence/heartbeat', () => {
+    return HttpResponse.json({ ok: true });
+  }),
+
+  // Restore
+  http.post('/v1/pages/:id/restore', async ({ request, params }) => {
+    const body = await request.json() as { revision_id: string };
+    return HttpResponse.json({
+      page: {
+        id: params.id,
+        project_id: 'proj_nmc',
+        parent_type: 'project',
+        parent_id: 'proj_nmc',
+        current_revision_id: body.revision_id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      revision: {
+        id: body.revision_id,
+        page_id: params.id,
+        source: 'human',
+        status: 'current',
+        author: 'dev@halide-lab.org',
+        blob_hash: 'abc123',
+        markdown_export: '',
+        retention_class: 'standard',
+        created_at: new Date().toISOString(),
+      },
+    });
+  }),
+
+  // ── Samples/Experiments (needed by ref blocks) ────────────────────────────
+
+  http.get('/v1/samples/:id', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      identifier: `${params.id as string}`,
+      name: 'Test Sample',
+      description: '',
+      kind: 'cell',
+      status: 'active',
+      project_id: 'proj_nmc',
+      properties: {},
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-01-01T00:00:00Z',
+      created_by: 'usr_dev',
+      description_page_id: undefined,
+    });
+  }),
+
+  http.get('/v1/experiments/:id', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      method: 'cycling',
+      status: 'in_progress',
+      project_id: 'proj_nmc',
+      result_summary: '',
+      parameters: {},
+      notes_page_id: undefined,
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-01-01T00:00:00Z',
+      created_by: 'usr_dev',
+    });
+  }),
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Calendar subscription
   http.get('/v1/cal/me/subscription', () => HttpResponse.json({
     token: 'cal_token_abc',

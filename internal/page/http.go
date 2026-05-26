@@ -32,6 +32,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/pages",
 		Summary:     "Create a page",
+		Description: "Creates a new content-addressable page attached to a parent entity (project, iteration, sample, or experiment). Returns the page and its initial blocks along with an ETag. Requires editor role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleCreatePage)
 
@@ -41,6 +42,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/pages/{id}",
 		Summary:     "Get a page with current blocks",
+		Description: "Returns the page metadata, the current revision's blocks (JSON array), and a markdown export. The ETag in the response must be sent as `If-Match` on subsequent writes. Requires viewer role on the page's project.",
 		Tags:        []string{"pages"},
 	}, svc.handleGetPage)
 
@@ -49,6 +51,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPut,
 		Path:        "/v1/pages/{id}",
 		Summary:     "Update page blocks (requires If-Match)",
+		Description: "Writes a new revision for the page. Send the ETag from a prior GET as the `If-Match` header; a mismatch returns 412. Set `candidate=true` to stage an AI-generated draft for approval instead of advancing the current revision. Requires editor role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleUpdatePage)
 
@@ -58,6 +61,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/pages/{id}/revisions",
 		Summary:     "List page revisions (newest-first)",
+		Description: "Returns a cursor-paginated list of revisions for a page, newest first. Pass `before=<revision_id>` and `limit` (default 50, max 100) to paginate. Requires viewer role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleListRevisions)
 
@@ -66,6 +70,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/revisions/{id}",
 		Summary:     "Get a revision with full content",
+		Description: "Returns a specific revision including its content blocks and markdown export. Requires viewer role on the revision's page's project.",
 		Tags:        []string{"pages"},
 	}, svc.handleGetRevision)
 
@@ -74,6 +79,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/revisions/{id}/diff",
 		Summary:     "Line diff between two revisions' markdown exports",
+		Description: "Returns a line-based LCS diff between the markdown exports of two revisions on the same page. Pass the other revision's ID as `against`. Requires viewer role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleDiffRevisions)
 
@@ -83,6 +89,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/pages/{id}/restore",
 		Summary:     "Restore a page to a previous revision",
+		Description: "Creates a new revision whose content matches a previous one, advancing `current_revision_id` to the restored snapshot. Requires editor role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleRestore)
 
@@ -92,6 +99,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/pages/{id}/candidates/{cand_id}/approve",
 		Summary:     "Approve a candidate revision",
+		Description: "Promotes a candidate revision to the current revision, superseding the previous current. Used in the AI-assisted editing workflow. Requires editor role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleApproveCandidate)
 
@@ -100,6 +108,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/pages/{id}/candidates/{cand_id}/reject",
 		Summary:     "Reject a candidate revision",
+		Description: "Marks a candidate revision as rejected without changing the current revision. Requires editor role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleRejectCandidate)
 
@@ -109,6 +118,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/pages/{id}/presence/heartbeat",
 		Summary:     "Update presence heartbeat",
+		Description: "Records or refreshes a client's active editing presence for a page. Presence entries expire after 30 seconds without a heartbeat. Requires viewer role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handlePresenceHeartbeat)
 
@@ -117,6 +127,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/pages/{id}/presence",
 		Summary:     "List active page presence (within 30 s)",
+		Description: "Returns users who have sent a heartbeat for this page in the last 30 seconds, useful for showing concurrent editors. Requires viewer role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handlePresenceList)
 }

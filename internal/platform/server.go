@@ -47,7 +47,29 @@ func New(deps *ServerDeps) *Server {
 	config.OpenAPIPath = "/openapi"
 	config.Info.Description = "REST API for the lab project-management platform. " +
 		"Every action available in the UI is available here; the in-app AI assistant " +
-		"uses the same surface. See /llms.txt for an agent-oriented summary."
+		"uses the same surface. See /llms.txt for an agent-oriented summary.\n\n" +
+		"## Authentication\n\n" +
+		"Most endpoints require a JWT access token issued by `POST /v1/auth/login` (local) " +
+		"or the OIDC flow (`GET /v1/auth/oidc/login`). Pass it as `Authorization: Bearer <token>`. " +
+		"Tokens expire after a short window; use `POST /v1/auth/refresh` (reads the `refresh_token` " +
+		"HttpOnly cookie) to obtain a fresh access token without re-authenticating. " +
+		"Long-lived integrations should use a Personal Access Token (PAT) created via `POST /v1/tokens`.\n\n" +
+		"## Authorization\n\n" +
+		"Access is role-based. Workspace roles: `owner`, `admin`, `member`. " +
+		"Project roles (collaborator overrides): `owner`, `editor`, `viewer`. " +
+		"Effective project role = max(workspace-derived, collaborator override). " +
+		"System admins bypass workspace membership checks. " +
+		"All mutations are recorded in the immutable audit log (`GET /v1/audit`).\n\n" +
+		"## Pagination\n\n" +
+		"List endpoints that support pagination use an opaque cursor scheme: the response " +
+		"includes a `next_cursor` field (empty string when no further pages exist). " +
+		"Pass `cursor=<value>` on the next request to advance the page. " +
+		"The `limit` parameter controls page size (defaults vary per endpoint; max 200).\n\n" +
+		"## Error envelope\n\n" +
+		"All error responses share the shape `{\"code\": \"...\", \"message\": \"...\", " +
+		"\"details\": {...}}`. `code` is a stable machine-readable string " +
+		"(e.g. `project.not_found`, `precondition_failed`), `message` is human-readable, " +
+		"and `details` is optional structured context. The HTTP status carries the class."
 	config.Servers = []*huma.Server{{URL: "/"}}
 
 	// Modules are authored independently and frequently reuse generic input

@@ -238,3 +238,84 @@ select.field-input { cursor: default; }
 /* ── Pill extras ── */
 .pill.s-in-progress, .pill.s-in_progress { background: #eff4f8; color: #2c5b8a; border-color: #c4d8e8; }
 .dot-s.in-progress, .dot-s.in_progress { background: #4a84b5; }
+
+/* ── Reference blocks (page editor) ── */
+.ref-card-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-family: var(--sans);
+  margin: 4px 0;
+  cursor: default;
+  user-select: none;
+  min-width: 0;
+}
+
+.ref-glyph {
+  font-family: var(--serif);
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.ref-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.ref-label {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Reference picker items ── */
+.ref-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  width: 100%;
+  font-size: 13px;
+  color: var(--ink);
+  border: 1px solid transparent;
+  text-align: left;
+}
+.ref-picker-item:hover {
+  background: var(--paper-2);
+  border-color: var(--line);
+}
+
+/* ── BlockNote overrides ── */
+.bn-container {
+  font-family: var(--sans) !important;
+  color: var(--ink) !important;
+  background: transparent !important;
+}
+
+.bn-editor {
+  background: transparent !important;
+  font-size: 15px !important;
+  line-height: 1.7 !important;
+}
+
+/* ── Page metadata strip ── */
+.page-meta-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--paper-2);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  margin-bottom: 24px;
+}

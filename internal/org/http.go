@@ -18,6 +18,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/workspaces",
 		Summary:     "Create a workspace",
+		Description: "Creates a new workspace. The authenticated user becomes the workspace owner automatically.",
 		Tags:        []string{"org"},
 	}, svc.handleCreateWorkspace)
 
@@ -26,6 +27,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/workspaces",
 		Summary:     "List workspaces the caller is a member of",
+		Description: "Returns all workspaces the authenticated user belongs to. System admins see all workspaces.",
 		Tags:        []string{"org"},
 	}, svc.handleListWorkspaces)
 
@@ -34,6 +36,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/workspaces/{id}",
 		Summary:     "Get a workspace",
+		Description: "Returns a single workspace by ID. Requires workspace membership or system-admin role.",
 		Tags:        []string{"org"},
 	}, svc.handleGetWorkspace)
 
@@ -43,6 +46,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/workspaces/{id}/members",
 		Summary:     "List workspace members",
+		Description: "Returns all members and their workspace roles. Requires workspace membership or system-admin role.",
 		Tags:        []string{"org"},
 	}, svc.handleListMembers)
 
@@ -51,6 +55,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/workspaces/{id}/members",
 		Summary:     "Add or update a workspace member",
+		Description: "Grants an existing user a role in the workspace, or updates their role if already a member. Requires workspace owner or admin role. To invite a new user first use the invite endpoint.",
 		Tags:        []string{"org"},
 	}, svc.handleAddMember)
 
@@ -59,6 +64,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodDelete,
 		Path:        "/v1/workspaces/{id}/members/{user_id}",
 		Summary:     "Remove a workspace member",
+		Description: "Removes a user from the workspace, revoking access to all workspace-visible projects. Requires workspace owner or admin role.",
 		Tags:        []string{"org"},
 	}, svc.handleRemoveMember)
 
@@ -68,6 +74,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/workspaces/{id}/invites",
 		Summary:     "Invite a user to a workspace",
+		Description: "Generates an invite token for a given email address and desired role. Send the token to the recipient; they use the accept endpoint to join. Requires workspace owner or admin role.",
 		Tags:        []string{"org"},
 	}, svc.handleCreateInvite)
 
@@ -76,6 +83,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/invites/accept",
 		Summary:     "Accept a workspace invite",
+		Description: "Accepts a workspace invite by token, creating an account for the user if they don't exist yet. No authentication required — the invite token acts as a one-time credential.",
 		Tags:        []string{"org"},
 	}, svc.handleAcceptInvite)
 }

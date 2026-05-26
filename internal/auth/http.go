@@ -22,6 +22,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/auth/oidc/login",
 		Summary:     "Begin OIDC login flow",
+		Description: "Returns an authorization URL and state token to start an OIDC login. Redirect the user's browser to the returned `authorization_url`.",
 		Tags:        []string{"auth"},
 	}, svc.handleOIDCLogin)
 
@@ -31,6 +32,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/auth/oidc/callback",
 		Summary:     "OIDC callback — exchange code for session",
+		Description: "Handled by the OIDC provider redirect. Exchanges the authorization code for a session, sets a `refresh_token` HttpOnly cookie, and redirects to the web origin.",
 		Tags:        []string{"auth"},
 	}, svc.handleOIDCCallback)
 
@@ -40,6 +42,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/auth/login",
 		Summary:     "Local email+password login",
+		Description: "Authenticates a user with an email and password. Returns a short-lived `access_token` (JWT) in the body and sets a `refresh_token` HttpOnly cookie.",
 		Tags:        []string{"auth"},
 	}, svc.handleLogin)
 
@@ -49,6 +52,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/auth/refresh",
 		Summary:     "Rotate refresh token and issue a new access token",
+		Description: "Rotates the `refresh_token` cookie (single-use) and returns a fresh `access_token`. The frontend retries any 401 automatically via this endpoint.",
 		Tags:        []string{"auth"},
 	}, svc.handleRefresh)
 
@@ -58,9 +62,9 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/auth/logout",
 		Summary:     "Revoke refresh session (logout)",
+		Description: "Revokes the caller's current refresh session and clears the `refresh_token` cookie. Subsequent refresh attempts will fail.",
 		Tags:        []string{"auth"},
 	}, svc.handleLogout)
-
 
 	// Current user.
 	huma.Register(api, huma.Operation{
@@ -68,6 +72,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/me",
 		Summary:     "Get current authenticated user",
+		Description: "Returns the authenticated user's profile (ID, email, display name, admin flag). Requires a valid `Authorization: Bearer <access_token>` header.",
 		Tags:        []string{"auth"},
 	}, svc.handleMe)
 
@@ -77,6 +82,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/tokens",
 		Summary:     "Create a personal access token",
+		Description: "Creates a new long-lived personal access token (PAT) scoped to specific operations. The raw token is returned only once — store it securely. Requires an authenticated session.",
 		Tags:        []string{"tokens"},
 	}, svc.handleCreateToken)
 
@@ -85,6 +91,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/tokens",
 		Summary:     "List personal access tokens",
+		Description: "Returns metadata for all personal access tokens owned by the caller (raw token values are never returned). Requires an authenticated session.",
 		Tags:        []string{"tokens"},
 	}, svc.handleListTokens)
 
@@ -93,6 +100,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodDelete,
 		Path:        "/v1/tokens/{id}",
 		Summary:     "Revoke a personal access token",
+		Description: "Permanently revokes a personal access token. The caller must own the token. Requires an authenticated session.",
 		Tags:        []string{"tokens"},
 	}, svc.handleRevokeToken)
 }

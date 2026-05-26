@@ -23,6 +23,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/events",
 		Summary:     "Create a project event",
+		Description: "Creates a calendar event (deadline, milestone, meeting, reminder, or custom) within a project. Supports recurring events via an RFC 5545 recurrence rule. Requires editor role on the project.",
 		Tags:        []string{"calendar"},
 	}, svc.handleCreateEvent)
 
@@ -31,6 +32,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/events",
 		Summary:     "List project events",
+		Description: "Returns events for a project, optionally bounded by `from` and `to` timestamps (RFC 3339). Requires viewer role on the project.",
 		Tags:        []string{"calendar"},
 	}, svc.handleListEvents)
 
@@ -40,6 +42,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/events/{id}",
 		Summary:     "Get an event",
+		Description: "Returns a single calendar event by ID. Requires viewer role on the event's project.",
 		Tags:        []string{"calendar"},
 	}, svc.handleGetEvent)
 
@@ -48,6 +51,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPatch,
 		Path:        "/v1/events/{id}",
 		Summary:     "Update an event",
+		Description: "Applies a partial update to a calendar event. All fields are optional; omit to keep existing values. Requires editor role on the event's project.",
 		Tags:        []string{"calendar"},
 	}, svc.handleUpdateEvent)
 
@@ -56,6 +60,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodDelete,
 		Path:        "/v1/events/{id}",
 		Summary:     "Delete an event",
+		Description: "Permanently deletes a calendar event. Requires editor role on the event's project.",
 		Tags:        []string{"calendar"},
 	}, svc.handleDeleteEvent)
 
@@ -65,6 +70,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/cal/me/subscription",
 		Summary:     "Get or lazily create the caller's iCal subscription",
+		Description: "Returns the caller's iCal subscription details including the feed URL (`ics_url`). A subscription is created automatically on first call. Requires an authenticated session.",
 		Tags:        []string{"calendar"},
 	}, svc.handleGetSubscription)
 
@@ -73,6 +79,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/cal/me/subscription/rotate",
 		Summary:     "Rotate the caller's iCal subscription token",
+		Description: "Invalidates the current iCal token and generates a new one. The old feed URL stops working immediately. Requires an authenticated session.",
 		Tags:        []string{"calendar"},
 	}, svc.handleRotateToken)
 
@@ -81,6 +88,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPatch,
 		Path:        "/v1/cal/me/subscription",
 		Summary:     "Update the caller's iCal subscription scope",
+		Description: "Changes the iCal feed scope to `all_visible_projects` or `per_project` (with an explicit `project_ids` list). Requires an authenticated session.",
 		Tags:        []string{"calendar"},
 	}, svc.handleUpdateSubscription)
 }

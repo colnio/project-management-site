@@ -21,6 +21,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/samples",
 		Summary:     "Create a sample",
+		Description: "Creates a new physical or virtual sample within a project. Supports freeform JSON properties for domain-specific metadata. Requires editor role on the project.",
 		Tags:        []string{"samples"},
 	}, svc.handleCreateSample)
 
@@ -29,6 +30,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/samples",
 		Summary:     "List samples in a project",
+		Description: "Returns all samples in a project, optionally filtered by `kind`. Requires viewer role on the project.",
 		Tags:        []string{"samples"},
 	}, svc.handleListSamples)
 
@@ -38,6 +40,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/samples/{id}",
 		Summary:     "Get a sample",
+		Description: "Returns a single sample by ID including its properties and current status. Requires viewer role on the sample's project.",
 		Tags:        []string{"samples"},
 	}, svc.handleGetSample)
 
@@ -46,6 +49,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPatch,
 		Path:        "/v1/samples/{id}",
 		Summary:     "Update a sample",
+		Description: "Applies a partial update to a sample's fields (name, status, properties, etc.). Requires editor role on the sample's project.",
 		Tags:        []string{"samples"},
 	}, svc.handlePatchSample)
 
@@ -54,6 +58,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/samples/{id}/relations",
 		Summary:     "Add a sample relation",
+		Description: "Records a directed relationship (e.g. derived_from, split_from) between two samples for lineage tracking. Requires editor role on the parent sample's project.",
 		Tags:        []string{"samples"},
 	}, svc.handleAddRelation)
 
@@ -62,6 +67,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/samples/{id}/lineage",
 		Summary:     "Get sample lineage graph",
+		Description: "Returns the full ancestor/descendant graph of a sample as a set of nodes and directed edges. Requires viewer role on the sample's project.",
 		Tags:        []string{"samples"},
 	}, svc.handleGetLineage)
 }
@@ -71,12 +77,12 @@ func Register(api huma.API, svc *Service) {
 type createSampleInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Identifier  string          `json:"identifier" required:"true" minLength:"1"`
-		Name        string          `json:"name,omitempty"`
-		Description string          `json:"description,omitempty"`
-		Kind        string          `json:"kind,omitempty" enum:"precursor,electrode,cell,module,derivative,other"`
+		Identifier  string          `json:"identifier" required:"true" minLength:"1" example:"EL-2024-042"`
+		Name        string          `json:"name,omitempty" example:"LLZO Pellet A"`
+		Description string          `json:"description,omitempty" example:"Sintered at 1150 °C for 12 h in O2 atmosphere."`
+		Kind        string          `json:"kind,omitempty" enum:"precursor,electrode,cell,module,derivative,other" example:"electrode"`
 		Properties  json.RawMessage `json:"properties,omitempty"`
-		Status      string          `json:"status,omitempty" enum:"active,consumed,archived,failed"`
+		Status      string          `json:"status,omitempty" enum:"active,consumed,archived,failed" example:"active"`
 	}
 }
 
