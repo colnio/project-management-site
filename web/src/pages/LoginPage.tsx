@@ -58,7 +58,7 @@ export function LoginPage() {
               letterSpacing: '-0.02em',
             }}
           >
-            H
+            G
           </div>
           <div
             style={{

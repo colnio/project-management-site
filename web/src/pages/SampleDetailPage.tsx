@@ -4,7 +4,7 @@
  * Shows editable fields, a freeform JSONB property editor, and a React Flow
  * lineage graph from /v1/samples/{id}/lineage.
  */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams } from '@tanstack/react-router';
 import ReactFlow, {
   addEdge,
@@ -278,10 +278,6 @@ function lineageToFlow(graph: LineageGraph, focusId: string): { nodes: Node[]; e
   const sampleNodes = graph.nodes ?? [];
   const graphEdges = graph.edges ?? [];
 
-  // Layout: arrange nodes in a rough DAG — focus node in center, parents above, children below
-  const parents = new Set(graphEdges.map(e => e.parent_sample_id));
-  const children = new Set(graphEdges.map(e => e.child_sample_id));
-
   const kindColor: Record<string, string> = {
     precursor: '#f0eadc',
     electrode: '#e6eef0',
@@ -291,14 +287,51 @@ function lineageToFlow(graph: LineageGraph, focusId: string): { nodes: Node[]; e
     other: '#f3f1eb',
   };
 
-  const nodes: Node[] = sampleNodes.map((s, i) => {
-    let y = 300;
-    if (s.id === focusId) y = 300;
-    else if (parents.has(s.id) && !children.has(s.id)) y = 80;
-    else if (children.has(s.id) && !parents.has(s.id)) y = 520;
+  // ─── Deterministic layered layout ────────────────────────────────────────────
+  // Assign each node a "depth" (row) relative to the focus node by walking the
+  // parent→child edges, then index siblings within a depth into columns. This
+  // guarantees every node gets a distinct, on-screen position so the graph is
+  // visible (the previous logic collapsed many nodes to the same point).
+  const childrenOf = new Map<string, string[]>();
+  const parentOf = new Map<string, string[]>();
+  for (const e of graphEdges) {
+    if (!childrenOf.has(e.parent_sample_id)) childrenOf.set(e.parent_sample_id, []);
+    childrenOf.get(e.parent_sample_id)!.push(e.child_sample_id);
+    if (!parentOf.has(e.child_sample_id)) parentOf.set(e.child_sample_id, []);
+    parentOf.get(e.child_sample_id)!.push(e.parent_sample_id);
+  }
 
-    const cols = sampleNodes.length;
-    const x = cols <= 1 ? 300 : (i / (cols - 1)) * 600;
+  const depth = new Map<string, number>();
+  const queue: string[] = [focusId];
+  depth.set(focusId, 0);
+  while (queue.length) {
+    const id = queue.shift()!;
+    const d = depth.get(id)!;
+    for (const c of childrenOf.get(id) ?? []) {
+      if (!depth.has(c)) { depth.set(c, d + 1); queue.push(c); }
+    }
+    for (const p of parentOf.get(id) ?? []) {
+      if (!depth.has(p)) { depth.set(p, d - 1); queue.push(p); }
+    }
+  }
+
+  // Any node not reachable from focus (disconnected) gets stacked below.
+  let orphanDepth = Math.max(0, ...depth.values()) + 1;
+  for (const s of sampleNodes) {
+    if (!depth.has(s.id)) depth.set(s.id, orphanDepth++);
+  }
+
+  // Group by depth (row), index within each row (column).
+  const rowCounts = new Map<number, number>();
+  const minDepth = Math.min(0, ...depth.values());
+
+  const nodes: Node[] = sampleNodes.map(s => {
+    const d = depth.get(s.id) ?? 0;
+    const col = rowCounts.get(d) ?? 0;
+    rowCounts.set(d, col + 1);
+    const row = d - minDepth;
+    const x = col * 220;
+    const y = row * 120;
 
     return {
       id: s.id,
@@ -352,9 +385,18 @@ function LineageFlow({ sampleId }: LineageFlowProps) {
     ? lineageToFlow(lineage, sampleId)
     : { nodes: [], edges: [] };
 
-  const [nodes, _setNodes, onNodesChange] = useNodesState(initNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
   const onConnect = useCallback((params: Connection) => setEdges(eds => addEdge(params, eds)), [setEdges]);
+
+  // Lineage loads asynchronously, so useNodesState's initial value is empty on
+  // first render. Re-sync the flow state once the lineage data arrives/changes.
+  useEffect(() => {
+    if (!lineage) return;
+    const { nodes: n, edges: e } = lineageToFlow(lineage, sampleId);
+    setNodes(n);
+    setEdges(e);
+  }, [lineage, sampleId, setNodes, setEdges]);
 
   if (isLoading) return <LoadingState message="Loading lineage…" />;
   if (isError) return <ErrorState message="Could not load lineage." />;
@@ -415,7 +457,8 @@ function LineageFlow({ sampleId }: LineageFlowProps) {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             fitView
-            fitViewOptions={{ padding: 0.3 }}
+            fitViewOptions={{ padding: 0.2 }}
+            nodesDraggable
             attributionPosition="bottom-right"
           >
             <Background color="var(--line)" gap={16} />

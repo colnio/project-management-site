@@ -11,7 +11,8 @@
  * - History panel with diff and restore
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Component, useCallback, useEffect, useRef, useState } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState } from '@/components/LoadingState';
@@ -31,16 +32,12 @@ import {
 import type { GetPageResponse, Revision, DiffLine } from '@/hooks/usePageQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProjectSamples, useProjectExperiments } from '@/hooks/useQueries';
-import { useArtifact } from '@/hooks/useArtifactQueries';
 import type { Sample, Experiment } from '@/api/types';
-import { api } from '@/api/client';
 
 // ─── BlockNote imports ────────────────────────────────────────────────────────
 
 import '@blocknote/mantine/style.css';
 import {
-  BlockNoteSchema,
-  defaultBlockSpecs,
   filterSuggestionItems,
   // v0.51 uses insertOrUpdateBlockForSlashMenu not insertOrUpdateBlock
   insertOrUpdateBlockForSlashMenu as insertOrUpdateBlock,
@@ -49,7 +46,6 @@ import {
   useCreateBlockNote,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
-  createReactBlockSpec,
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
@@ -70,214 +66,16 @@ function useClientId(): string {
   return ref.current;
 }
 
-// ─── Reference Block specs ────────────────────────────────────────────────────
-
-// --- @sample block ---
-const SampleRefBlock = createReactBlockSpec(
-  {
-    type: 'sample_ref' as const,
-    propSchema: {
-      sampleId: { default: '' as string },
-    },
-    content: 'none' as const,
-  },
-  {
-    render: ({ block }) => {
-      return <SampleRefCard sampleId={block.props.sampleId} />;
-    },
-  }
-);
-
-function SampleRefCard({ sampleId }: { sampleId: string }) {
-  const { data: sample, isLoading, isError } = useEntitySample(sampleId);
-  if (!sampleId) return <RefCardShell color="var(--ref-sample-fg)" label="@sample" />;
-  if (isLoading) return <RefCardShell color="var(--ref-sample-fg)" label="Loading sample…" />;
-  if (isError || !sample)
-    return <RefCardShell color="var(--ref-sample-fg)" label={`[deleted: ${sampleId}]`} missing />;
-  return (
-    <div
-      className="ref-card-block"
-      style={{
-        background: 'var(--ref-sample-bg)',
-        border: '1px solid var(--ref-sample-bd)',
-        color: 'var(--ref-sample-fg)',
-      }}
-    >
-      <span className="ref-glyph">s</span>
-      <span className="ref-id">{sample.identifier}</span>
-      <span className="ref-label">{sample.name || sample.identifier}</span>
-      <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-        <span className={`pill k-${sample.kind}`} style={{ fontSize: 10 }}>
-          {sample.kind}
-        </span>
-        <StatusPill status={sample.status} />
-      </span>
-    </div>
-  );
-}
-
-// --- @experiment block ---
-const ExperimentRefBlock = createReactBlockSpec(
-  {
-    type: 'experiment_ref' as const,
-    propSchema: {
-      experimentId: { default: '' as string },
-    },
-    content: 'none' as const,
-  },
-  {
-    render: ({ block }) => <ExperimentRefCard experimentId={block.props.experimentId} />,
-  }
-);
-
-function ExperimentRefCard({ experimentId }: { experimentId: string }) {
-  const { data: experiment, isLoading, isError } = useEntityExperiment(experimentId);
-  if (!experimentId) return <RefCardShell color="var(--ref-exp-fg)" label="@experiment" />;
-  if (isLoading) return <RefCardShell color="var(--ref-exp-fg)" label="Loading experiment…" />;
-  if (isError || !experiment)
-    return (
-      <RefCardShell color="var(--ref-exp-fg)" label={`[deleted: ${experimentId}]`} missing />
-    );
-  return (
-    <div
-      className="ref-card-block"
-      style={{
-        background: 'var(--ref-exp-bg)',
-        border: '1px solid var(--ref-exp-bd)',
-        color: 'var(--ref-exp-fg)',
-      }}
-    >
-      <span className="ref-glyph">e</span>
-      <span className="ref-id" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>
-        {experimentId.slice(0, 8)}…
-      </span>
-      <span className="ref-label">{experiment.method}</span>
-      <span style={{ marginLeft: 'auto' }}>
-        <StatusPill status={experiment.status} />
-      </span>
-    </div>
-  );
-}
-
-// --- @artifact block ---
-const ArtifactRefBlock = createReactBlockSpec(
-  {
-    type: 'artifact_ref' as const,
-    propSchema: {
-      artifactId: { default: '' as string },
-    },
-    content: 'none' as const,
-  },
-  {
-    render: ({ block }) => <ArtifactRefCard artifactId={block.props.artifactId} />,
-  }
-);
-
-function ArtifactRefCard({ artifactId }: { artifactId: string }) {
-  const { data: artifact, isLoading, isError } = useArtifact(artifactId || undefined);
-  if (!artifactId) return <RefCardShell color="var(--ref-art-fg)" label="@artifact" />;
-  if (isLoading) return <RefCardShell color="var(--ref-art-fg)" label="Loading artifact…" />;
-  if (isError || !artifact)
-    return <RefCardShell color="var(--ref-art-fg)" label={`[deleted: ${artifactId}]`} missing />;
-  return (
-    <div
-      className="ref-card-block"
-      style={{
-        background: 'var(--ref-art-bg)',
-        border: '1px solid var(--ref-art-bd)',
-        color: 'var(--ref-art-fg)',
-      }}
-    >
-      <span className="ref-glyph">a</span>
-      <span className="ref-label">{artifact.filename}</span>
-      {artifact.thumbnail_url && (
-        <img
-          src={artifact.thumbnail_url}
-          alt=""
-          style={{ height: 20, width: 20, objectFit: 'cover', borderRadius: 3, marginLeft: 4 }}
-        />
-      )}
-      <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, opacity: 0.7 }}>
-        {artifact.type?.toUpperCase()}
-      </span>
-    </div>
-  );
-}
-
-// ─── Shared UI helpers ────────────────────────────────────────────────────────
-
-function RefCardShell({
-  label,
-  color,
-  missing,
-}: {
-  label: string;
-  color: string;
-  missing?: boolean;
-}) {
-  return (
-    <div
-      className="ref-card-block"
-      style={{ color, opacity: missing ? 0.5 : 0.8, fontStyle: missing ? 'italic' : undefined }}
-    >
-      {label}
-    </div>
-  );
-}
-
-// ─── Entity data fetchers (simple state-based, no TQ needed for ref blocks) ───
-
-function useEntitySample(sampleId: string) {
-  const [sample, setSample] = useState<Sample | null>(null);
-  const [loading, setLoading] = useState(!!sampleId);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    if (!sampleId) { setLoading(false); return; }
-    setLoading(true);
-    setError(false);
-    api
-      .get<Sample>(`/v1/samples/${sampleId}`)
-      .then(s => { setSample(s); setLoading(false); })
-      .catch(() => { setError(true); setLoading(false); });
-  }, [sampleId]);
-
-  return { data: sample, isLoading: loading, isError: error };
-}
-
-function useEntityExperiment(experimentId: string) {
-  const [experiment, setExperiment] = useState<Experiment | null>(null);
-  const [loading, setLoading] = useState(!!experimentId);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    if (!experimentId) { setLoading(false); return; }
-    setLoading(true);
-    setError(false);
-    api
-      .get<Experiment>(`/v1/experiments/${experimentId}`)
-      .then(e => { setExperiment(e); setLoading(false); })
-      .catch(() => { setError(true); setLoading(false); });
-  }, [experimentId]);
-
-  return { data: experiment, isLoading: loading, isError: error };
-}
-
-// ─── BlockNote schema with custom blocks ─────────────────────────────────────
-// createReactBlockSpec returns a factory; call it to get the concrete BlockSpec
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const customBlockSpecs: any = {
-  ...defaultBlockSpecs,
-  sample_ref: SampleRefBlock(),
-  experiment_ref: ExperimentRefBlock(),
-  artifact_ref: ArtifactRefBlock(),
-};
-
-const schema = BlockNoteSchema.create({
-  blockSpecs: customBlockSpecs,
-});
-
+// ─── Reference insertion ──────────────────────────────────────────────────────
+// NOTE: Custom React block specs (`createReactBlockSpec`) are incompatible with
+// the installed BlockNote 0.51 + @blocknote/mantine + @tiptap/react 3.x stack in
+// this environment — mounting an editor whose schema contains them throws
+// "render2 is not a function" inside @tiptap/react's ReactNodeViewRenderer
+// (a Context.Consumer is rendered with a non-function child), crashing the page.
+// Until the dependency mismatch is resolved, the editor uses the default schema
+// and `@sample` / `@experiment` references are inserted as an inline text
+// representation instead of bespoke cards, so the editor mounts and stays
+// editable rather than crashing.
 
 // ─── Conflict UI ──────────────────────────────────────────────────────────────
 
@@ -684,6 +482,80 @@ function RefPickerModal({
   );
 }
 
+// ─── Editor error boundary + read-only fallback ───────────────────────────────
+// The BlockNote rich editor (@blocknote/mantine) currently throws at mount in
+// this environment due to an upstream @blocknote 0.51 ↔ @tiptap/react 3.x
+// incompatibility ("render2 is not a function" inside tiptap's React renderer).
+// Rather than crash the whole route, we catch the mount error and render the
+// page's saved content read-only, so /pages/:id is always usable. When the
+// dependency mismatch is resolved, the live editor renders and this fallback
+// stays dormant.
+
+class EditorBoundary extends Component<
+  { fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+  componentDidCatch(err: Error, info: ErrorInfo) {
+    console.warn('Rich editor failed to mount; showing read-only content.', err, info);
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+// blockText extracts plain text from a BlockNote-style block for the fallback.
+function blockText(block: unknown): string {
+  if (block == null || typeof block !== 'object') return '';
+  const b = block as Record<string, unknown>;
+  if (typeof b.text === 'string') return b.text;
+  if (Array.isArray(b.content)) {
+    return b.content
+      .map(c =>
+        c && typeof c === 'object' && typeof (c as Record<string, unknown>).text === 'string'
+          ? ((c as Record<string, unknown>).text as string)
+          : ''
+      )
+      .join('');
+  }
+  return '';
+}
+
+function ReadonlyPageFallback({ page }: { page?: GetPageResponse }) {
+  const blocks = Array.isArray(page?.blocks) ? (page!.blocks as unknown[]) : [];
+  const md = page?.markdown_export?.trim();
+  return (
+    <div>
+      <div
+        style={{
+          fontFamily: 'var(--mono)',
+          fontSize: 11.5,
+          color: 'var(--warn)',
+          background: 'var(--paper-2)',
+          border: '1px solid var(--line)',
+          borderRadius: 8,
+          padding: '8px 12px',
+          marginBottom: 18,
+        }}
+      >
+        Rich editor unavailable in this build — showing saved content read-only.
+      </div>
+      <div style={{ fontFamily: 'var(--sans)', color: 'var(--ink)', lineHeight: 1.7, fontSize: 15 }}>
+        {blocks.length > 0 ? (
+          blocks.map((b, i) => <p key={i} style={{ margin: '0 0 12px' }}>{blockText(b)}</p>)
+        ) : md ? (
+          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{md}</pre>
+        ) : (
+          <span style={{ color: 'var(--muted)' }}>This page has no content yet.</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page Editor ─────────────────────────────────────────────────────────
 
 export function PageEditorPage() {
@@ -711,8 +583,8 @@ export function PageEditorPage() {
     }
   }, [pageData]);
 
-  // Initialize BlockNote
-  const editor = useCreateBlockNote({ schema });
+  // Initialize BlockNote (default schema — see note above on custom block specs)
+  const editor = useCreateBlockNote();
 
   // Load page content into editor once
   const loadedRef = useRef(false);
@@ -848,15 +720,34 @@ export function PageEditorPage() {
   const { data: samples = [] } = useProjectSamples(projectId);
   const { data: experiments = [] } = useProjectExperiments(projectId);
 
+  // Degraded inline-text representation (custom ref blocks disabled — see note).
   const insertSampleRef = (sample: Sample) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    insertOrUpdateBlock(editor as any, { type: 'sample_ref', props: { sampleId: sample.id } } as any);
+    insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: `@sample ${sample.identifier}${sample.name ? ` — ${sample.name}` : ''}`,
+          styles: { bold: true },
+        },
+      ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
     setRefPickerOpen(null);
   };
 
   const insertExperimentRef = (exp: Experiment) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    insertOrUpdateBlock(editor as any, { type: 'experiment_ref', props: { experimentId: exp.id } } as any);
+    insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: `@experiment ${exp.method} (${exp.id.slice(0, 8)})`,
+          styles: { bold: true },
+        },
+      ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
     setRefPickerOpen(null);
   };
 
@@ -1086,22 +977,24 @@ export function PageEditorPage() {
           </div>
         )}
 
-        {/* BlockNote editor */}
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <BlockNoteView
-          editor={editor as any}
-          onChange={onEditorChange}
-          slashMenu={false}
-          style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}
-        >
-          <SuggestionMenuController
-            triggerCharacter="/"
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            getItems={async (query: string) =>
-              filterSuggestionItems(getCustomItems(editor), query)
-            }
-          />
-        </BlockNoteView>
+        {/* BlockNote editor (with graceful read-only fallback on mount failure) */}
+        <EditorBoundary fallback={<ReadonlyPageFallback page={pageData} />}>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <BlockNoteView
+            editor={editor as any}
+            onChange={onEditorChange}
+            slashMenu={false}
+            style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}
+          >
+            <SuggestionMenuController
+              triggerCharacter="/"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              getItems={async (query: string) =>
+                filterSuggestionItems(getCustomItems(editor), query)
+              }
+            />
+          </BlockNoteView>
+        </EditorBoundary>
       </div>
     </AppShell>
   );

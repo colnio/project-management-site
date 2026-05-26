@@ -82,7 +82,7 @@ export function useConversations(projectId: string | undefined) {
   return useQuery({
     queryKey: projectId ? aiKeys.conversations(projectId) : ['ai', 'conversations', 'none'],
     queryFn: () =>
-      api.get<AIConversation[] | null>(`/v1/projects/${projectId}/ai/conversations`).then(r => r ?? []),
+      api.get<{ items: AIConversation[] } | null>(`/v1/projects/${projectId}/ai/conversations`).then(r => r?.items ?? []),
     enabled: !!projectId,
   });
 }
@@ -100,7 +100,7 @@ export function useConversationMessages(convId: string | undefined) {
   return useQuery({
     queryKey: convId ? aiKeys.conversationMessages(convId) : ['ai', 'conversations', 'none', 'messages'],
     queryFn: () =>
-      api.get<AIMessage[] | null>(`/v1/ai/conversations/${convId}`).then(r => r ?? []),
+      api.get<{ items: AIMessage[] } | null>(`/v1/ai/conversations/${convId}`).then(r => r?.items ?? []),
     enabled: !!convId,
   });
 }
@@ -170,7 +170,7 @@ export function useUpdateProjectAutonomy(projectId: string) {
 export function useWorkflows() {
   return useQuery({
     queryKey: aiKeys.workflows,
-    queryFn: () => api.get<AIWorkflow[] | null>('/v1/ai/workflows').then(r => r ?? []),
+    queryFn: () => api.get<{ items: AIWorkflow[] } | null>('/v1/ai/workflows').then(r => r?.items ?? []),
   });
 }
 

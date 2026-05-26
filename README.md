@@ -49,6 +49,15 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 | G3, G4 | Risk-workflow engine + library (battery/experimental/project) | ✅ done |
 | G6, G7, G8 | AI chat UI (streaming), workflow runner UI, autonomy config UI | ✅ done |
 
+> **Known issue (page editor):** the BlockNote rich text editor (`/pages/:id`)
+> currently fails to mount in this environment due to an upstream
+> `@blocknote 0.51 ↔ @tiptap/react 3.x` incompatibility (`render2 is not a
+> function`). The route degrades gracefully — an error boundary catches the mount
+> failure and renders the page's saved content **read-only** with a notice, so
+> nothing crashes. Auto-save, history/diff/restore, presence, ETag-conflict, and
+> the page revision model on the backend are all intact; only in-browser rich
+> editing is affected, pending a dependency pin.
+
 > **AI provider:** the orchestrator reads `aiconf.local.json` (gitignored) for an
 > OpenAI-compatible endpoint. Currently a LiteLLM proxy with `gpt-4.1-mini`;
 > verified end-to-end (streaming chat + tool-calling + token metering). The client

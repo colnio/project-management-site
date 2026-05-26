@@ -50,7 +50,9 @@ export async function apiFetch<T>(
 ): Promise<T> {
   let response = await doFetch(url, init);
 
-  if (response.status === 401) {
+  // Do NOT run the refresh-retry for the refresh endpoint itself, otherwise
+  // a failing refresh re-enters attemptRefresh and deadlocks on its own promise.
+  if (response.status === 401 && !url.includes('/v1/auth/refresh')) {
     // Attempt a single refresh
     if (!refreshingPromise) {
       refreshingPromise = authCallbacks.onRefresh().finally(() => {
