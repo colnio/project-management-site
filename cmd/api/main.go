@@ -18,6 +18,7 @@ import (
 	"github.com/colnio/project-management-site/internal/artifact"
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
+	"github.com/colnio/project-management-site/internal/calendar"
 	"github.com/colnio/project-management-site/internal/config"
 	"github.com/colnio/project-management-site/internal/db"
 	"github.com/colnio/project-management-site/internal/experiment"
@@ -88,6 +89,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
 
 	auth.Register(srv.API, authSvc)
 	audit.Register(srv.API, audit.NewService(auditRec))
@@ -98,6 +100,10 @@ func run() error {
 	experiment.Register(srv.API, experimentSvc)
 	page.Register(srv.API, pageSvc)
 	artifact.Register(srv.API, artifactSvc)
+	calendar.Register(srv.API, calendarSvc)
+	// Public per-user calendar feed (token in URL, no auth middleware); the
+	// .ics suffix is captured into {token} and stripped by the handler.
+	srv.Router.Get("/v1/cal/{user_id}/{token}", calendarSvc.ICSHandler)
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,
