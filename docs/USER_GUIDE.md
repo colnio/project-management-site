@@ -55,9 +55,12 @@ land in **Mailpit** at <http://localhost:8025>.
   `@sample`/`@experiment`/`@artifact` reference blocks is coming soon; the API and
   revision model are already in place._
 - **Artifacts** — files (PDF, Jupyter notebook, image, other) scoped to a project.
-  Upload goes directly to object storage via a presigned URL, then you mark it
-  complete. Attach artifacts to samples or experiments with a typed role.
-  _Automatic thumbnails / notebook rendering (workers) are coming soon._
+  Upload from the project's Artifacts tab: the file goes directly to object
+  storage via a presigned URL and is then processed in the background — PDFs get a
+  page count, notebooks are rendered to HTML, and images get thumbnails. View PDFs
+  inline (PDF.js), images in a lightbox, and rendered notebooks in a sandboxed
+  frame. Attach artifacts to samples or experiments with a typed role from those
+  detail pages.
 
 ## Calendar
 
@@ -77,11 +80,11 @@ land in **Mailpit** at <http://localhost:8025>.
 
 - Every action in the UI is available through the REST API. The OpenAPI 3.1 spec
   is at <http://localhost:8080/openapi.json> with interactive docs at `/docs`.
-- **Personal Access Tokens**: create a scoped token via `POST /v1/tokens`
-  (one-time secret returned, prefixed `pat_`). Send it as
-  `Authorization: Bearer pat_...`. Tokens are scoped (e.g. `read:projects`,
-  `write:samples`) and never grant more than you have. _A Settings → API Tokens
-  UI is coming soon (F1); the API works today._
+- **Personal Access Tokens**: manage these on the **Settings** page (gear icon in
+  the sidebar) — create a named, scoped token (the secret, prefixed `pat_`, is
+  shown once), see last-used, and revoke. Send it as `Authorization: Bearer pat_...`.
+  Tokens are scoped (e.g. `read:projects`, `write:samples`) and never grant more
+  than you have.
 - Writes accept an `Idempotency-Key` header (24h replay window). Resources that
   support optimistic concurrency emit an `ETag`; send it back in `If-Match`.
 - **Agent discovery**: `GET /llms.txt` lists every endpoint (generated from the

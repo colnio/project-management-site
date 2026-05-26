@@ -74,7 +74,13 @@ type Service struct {
 	presign  *s3.PresignClient
 	bucket   string
 	log      *slog.Logger
+	enqueuer Enqueuer // optional; nil means skip enqueueing (keeps old tests green)
 }
+
+// SetEnqueuer wires a background-job enqueuer into the service after construction.
+// This is called from cmd/api after both the artifact service and River client
+// are built, avoiding circular construction dependencies.
+func (s *Service) SetEnqueuer(e Enqueuer) { s.enqueuer = e }
 
 // NewService constructs a Service and builds an S3/MinIO presign client.
 // The presign client works offline — presigning is pure HMAC, no network call.
@@ -222,7 +228,6 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (*Artifact, 
 
 	originalURL := fmt.Sprintf("%s/%s/%s", s.cfg.S3PublicURLBase, s.bucket, art.StorageKey)
 
-	// TODO(track-D): enqueue processing job to generate rendered/thumbnail URLs and set processing_status='done'.
 	err = s.pool.QueryRow(ctx, `
 		UPDATE artifacts
 		SET original_url = $2
@@ -247,6 +252,15 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (*Artifact, 
 		ResourceType: "artifact",
 		ResourceID:   art.ID.String(),
 	})
+
+	// Enqueue background processing job (Track-D). nil-safe: if no enqueuer is
+	// wired (e.g. in unit tests), skip silently so existing tests stay green.
+	if s.enqueuer != nil {
+		if enqErr := s.enqueuer.EnqueueProcessArtifact(ctx, art.ID); enqErr != nil {
+			s.log.Error("artifact: enqueue processing job", "id", art.ID, "err", enqErr)
+			// Best-effort: do not fail the HTTP response because of a queue error.
+		}
+	}
 
 	return art, nil
 }

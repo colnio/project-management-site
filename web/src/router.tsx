@@ -12,6 +12,7 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { IterationDetailPage } from './pages/IterationDetailPage';
 import { SampleDetailPage } from './pages/SampleDetailPage';
 import { ExperimentDetailPage } from './pages/ExperimentDetailPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 // Token accessor injected at auth setup — used by guards
 let isAuthenticated: () => boolean = () => false;
@@ -79,6 +80,12 @@ const experimentRoute = createRoute({
   component: ExperimentDetailPage,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/settings',
+  component: SettingsPage,
+});
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -90,6 +97,7 @@ const routeTree = rootRoute.addChildren([
     iterationRoute,
     sampleRoute,
     experimentRoute,
+    settingsRoute,
   ]),
 ]);
 

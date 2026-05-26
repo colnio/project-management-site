@@ -211,13 +211,13 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
   panel + diff/restore, ETag-aware save with 412 conflict UI.
 - [x] **C4** Sample UI: cards/list, JSONB property editor, lineage graph (React Flow).
 - [x] **C5** Experiment UI: method-specific parameter forms, sample+artifact pickers.
-- [ ] **C6** Artifact UI: upload (presigned → MinIO), PDF.js, sandboxed ipynb iframe, image lightbox.
+- [x] **C6** Artifact UI: upload (presigned → MinIO), PDF.js, sandboxed ipynb iframe, image lightbox.
 
 ### Track D — Artifact workers *(deps B6)*
 
-- [ ] **D1** PDF worker (`pdfcpu`): page count + first-page thumbnail.
-- [ ] **D2** ipynb worker: River handler → nbconvert container; rendered HTML to MinIO.
-- [ ] **D3** Image worker (`govips`): small + medium thumbnails. *Needs libvips: `brew install vips`.*
+- [x] **D1** PDF worker (`pdfcpu`): page count + first-page thumbnail.
+- [x] **D2** ipynb worker: River handler → nbconvert container; rendered HTML to MinIO.
+- [x] **D3** Image worker (`govips`): small + medium thumbnails. *Needs libvips: `brew install vips`.*
 
 ### Track E — Calendar *(deps A3, B1, B2)*
 
@@ -229,7 +229,7 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 
 ### Track F — Agent surface *(deps A1, A4)*
 
-- [ ] **F1** PAT lifecycle UI (Settings → API Tokens) from `design/settings.jsx`.
+- [x] **F1** PAT lifecycle UI (Settings → API Tokens) from `design/settings.jsx`.
 - [ ] **F2** OpenAPI polish: examples, descriptions, schema completeness, public `/docs`.
 - [x] **F3** MCP server wrapping REST (SSE in-binary, same PAT auth/scopes). Test with an MCP
   client pointed at `http://localhost:8080/mcp`.

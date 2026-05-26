@@ -3,6 +3,8 @@ import { useParams, useSearch, useRouter } from '@tanstack/react-router';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import { StatusPill } from '@/components/StatusPill';
+import { ArtifactUpload } from '@/components/ArtifactUpload';
+import { ArtifactThumbnail, ArtifactDetailModal } from '@/components/ArtifactViewer';
 import {
   useProject,
   useProjectSamples,
@@ -13,6 +15,7 @@ import {
   useCreateSample,
   useCreateExperiment,
 } from '@/hooks/useQueries';
+import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
 type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts';
@@ -591,48 +594,102 @@ function IterationsTab({ projectId }: { projectId: string }) {
 
 // ─── Artifacts Tab ───────────────────────────────────────────────────────────
 
-function ArtifactCard({ artifact: a }: { artifact: Artifact }) {
-  return (
-    <div className="arti">
-      <div className="ahead">
-        <div className="ph-stripes" />
-        <span className="tt">{a.content_type?.split('/')[1]?.toUpperCase() ?? 'FILE'}</span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)', position: 'relative', zIndex: 1 }}>
-          {a.filename}
-        </span>
-      </div>
-      <div className="ameta">
-        <div className="aname">{a.filename}</div>
-        <div className="asub">
-          {a.content_type ?? 'unknown'}
-          {a.size_bytes != null && ` · ${formatBytes(a.size_bytes)}`}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function ArtifactCard({ artifact: a, onOpen }: { artifact: Artifact; onOpen: () => void }) {
+  const deleteArtifact = useDeleteArtifact(a.project_id);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  return (
+    <div className="arti" style={{ cursor: 'pointer' }}>
+      <div className="ahead" onClick={onOpen}>
+        <ArtifactThumbnail artifact={a} />
+        <span className="tt">{(a.content_type?.split('/')[1] ?? a.type ?? 'file').toUpperCase()}</span>
+        {a.processing_status !== 'done' && (
+          <span style={{ position: 'absolute', top: 6, right: 8, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--warn)', background: 'var(--surface)', padding: '1px 4px', borderRadius: 3, border: '1px solid var(--line)', textTransform: 'uppercase', zIndex: 2 }}>
+            {a.processing_status}
+          </span>
+        )}
+      </div>
+      <div className="ameta">
+        <div className="aname" onClick={onOpen}>{a.filename}</div>
+        <div className="asub">
+          {a.content_type ?? 'unknown'}
+          {a.size_bytes != null && ` · ${formatBytes(a.size_bytes)}`}
+        </div>
+        <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
+          {confirmDelete ? (
+            <>
+              <button
+                className="top-btn"
+                style={{ fontSize: 11, color: 'var(--bad)', padding: '2px 6px' }}
+                onClick={() => void deleteArtifact.mutate(a.id)}
+                disabled={deleteArtifact.isPending}
+              >
+                {deleteArtifact.isPending ? 'Deleting…' : 'Yes, delete'}
+              </button>
+              <button className="top-btn" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => setConfirmDelete(false)}>Cancel</button>
+            </>
+          ) : (
+            <button
+              className="icon-btn"
+              style={{ fontSize: 10, color: 'var(--muted-2)', padding: '2px 4px' }}
+              onClick={() => setConfirmDelete(true)}
+              title="Delete artifact"
+            >✕</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ArtifactsTab({ projectId }: { projectId: string }) {
   const { data: artifacts = [], isLoading, isError } = useProjectArtifacts(projectId);
+  const [selected, setSelected] = useState<Artifact | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+
   if (isLoading) return <LoadingState message="Loading artifacts…" />;
   if (isError) return <ErrorState message="Failed to load artifacts." />;
-  if (artifacts.length === 0) return <EmptyState message="No artifacts yet." />;
 
   return (
     <div className="page-wrap wide">
-      <div className="section-h" style={{ marginBottom: 18 }}>
+      {selected && (
+        <ArtifactDetailModal artifact={selected} onClose={() => setSelected(null)} />
+      )}
+
+      <div className="section-h" style={{ marginBottom: 14 }}>
         <h2>Artifacts</h2>
         <span className="meta">{artifacts.length} total</span>
+        <div className="right">
+          <button className="top-btn primary" onClick={() => setUploadOpen(o => !o)}>
+            {uploadOpen ? '− Close upload' : '+ Upload artifact'}
+          </button>
+        </div>
       </div>
-      <div className="arti-grid">
-        {artifacts.map(a => <ArtifactCard key={a.id} artifact={a} />)}
-      </div>
+
+      {uploadOpen && (
+        <div style={{ marginBottom: 20 }}>
+          <ArtifactUpload
+            projectId={projectId}
+            onDone={() => setUploadOpen(false)}
+          />
+        </div>
+      )}
+
+      {artifacts.length === 0 ? (
+        <EmptyState message="No artifacts yet. Upload one above." />
+      ) : (
+        <div className="arti-grid">
+          {artifacts.map(a => (
+            <ArtifactCard key={a.id} artifact={a} onOpen={() => setSelected(a)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

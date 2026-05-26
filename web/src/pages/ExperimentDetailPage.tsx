@@ -15,9 +15,124 @@ import {
   useLinkExperimentSample,
   useUnlinkExperimentSample,
   useProjectSamples,
+  useProjectArtifacts,
 } from '@/hooks/useQueries';
-import type { Sample } from '@/api/types';
+import {
+  useExperimentArtifacts,
+  useAttachArtifactToExperiment,
+  useArtifact,
+} from '@/hooks/useArtifactQueries';
+import { ArtifactDetailModal } from '@/components/ArtifactViewer';
+import type { Sample, Artifact } from '@/api/types';
 import type { ExperimentSample } from '@/hooks/useQueries';
+
+// ─── Experiment Artifact section ──────────────────────────────────────────────
+
+const EXP_ARTIFACT_ROLES = ['raw_data', 'analysis', 'report', 'calibration', 'photo', 'other'] as const;
+type ExpArtifactRole = typeof EXP_ARTIFACT_ROLES[number];
+
+function ExperimentArtifactsSection({ experimentId, projectId }: { experimentId: string; projectId: string }) {
+  const { data: attached = [], isLoading } = useExperimentArtifacts(experimentId);
+  const { data: projectArtifacts = [] } = useProjectArtifacts(projectId);
+  const attachMut = useAttachArtifactToExperiment(experimentId);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedArtifactId, setSelectedArtifactId] = useState('');
+  const [role, setRole] = useState<ExpArtifactRole>('other');
+  const [detailArtifact, setDetailArtifact] = useState<Artifact | null>(null);
+
+  const attachedIds = new Set(attached.map(a => a.artifact_id));
+  const available = projectArtifacts.filter(a => !attachedIds.has(a.id));
+
+  const handleAttach = async () => {
+    if (!selectedArtifactId) return;
+    await attachMut.mutateAsync({ artifact_id: selectedArtifactId, role });
+    setPickerOpen(false);
+    setSelectedArtifactId('');
+  };
+
+  if (isLoading) return null;
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      {detailArtifact && (
+        <ArtifactDetailModal artifact={detailArtifact} onClose={() => setDetailArtifact(null)} />
+      )}
+      {pickerOpen && (
+        <div className="modal-overlay" onClick={() => setPickerOpen(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <span className="modal-title">Attach Artifact</span>
+              <button className="icon-btn" onClick={() => setPickerOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Artifact</div>
+                {available.length === 0 ? (
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>All project artifacts already attached.</div>
+                ) : (
+                  <select className="field-input" value={selectedArtifactId} onChange={e => setSelectedArtifactId(e.target.value)}>
+                    <option value="">— select artifact —</option>
+                    {available.map(a => (
+                      <option key={a.id} value={a.id}>{a.filename} ({a.type})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Role</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {EXP_ARTIFACT_ROLES.map(r => (
+                    <button key={r} onClick={() => setRole(r)} className={`status-opt${role === r ? ' sel' : ''}`}>{r.replace('_', ' ')}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="top-btn" onClick={() => setPickerOpen(false)}>Cancel</button>
+              <button className="top-btn primary" disabled={!selectedArtifactId || attachMut.isPending} onClick={() => void handleAttach()}>
+                {attachMut.isPending ? 'Attaching…' : 'Attach'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="section-h" style={{ marginBottom: 14 }}>
+        <h2>Artifacts</h2>
+        <span className="meta">{attached.length}</span>
+        <div className="right">
+          <button className="top-btn primary" onClick={() => setPickerOpen(true)}>+ Attach</button>
+        </div>
+      </div>
+
+      {attached.length === 0 ? (
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted-2)', padding: '8px 0' }}>No artifacts attached.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
+          {attached.map(ea => (
+            <ExpAttachedArtifactRow key={ea.artifact_id} artifactId={ea.artifact_id} role={ea.role} onOpen={setDetailArtifact} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExpAttachedArtifactRow({ artifactId, role, onOpen }: { artifactId: string; role?: string; onOpen: (a: Artifact) => void }) {
+  const { data: artifact } = useArtifact(artifactId);
+  if (!artifact) return null;
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', borderBottom: '1px solid var(--line)', gap: 12, cursor: 'pointer' }}
+      onClick={() => onOpen(artifact)}
+    >
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)' }}>{artifact.type}</span>
+      <span style={{ fontSize: 13, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artifact.filename}</span>
+      {role && <span className="pill">{role.replace('_', ' ')}</span>}
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>{artifact.processing_status}</span>
+    </div>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -465,6 +580,9 @@ export function ExperimentDetailPage() {
                 ))}
               </div>
             )}
+
+            {/* Artifacts */}
+            <ExperimentArtifactsSection experimentId={experimentId} projectId={experiment.project_id} />
 
             {/* Meta */}
             <div className="section-h"><h2>Meta</h2></div>

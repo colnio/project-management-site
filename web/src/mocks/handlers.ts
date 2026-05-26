@@ -108,4 +108,134 @@ export const handlers = [
   http.get('/v1/projects/:id/experiments', () => HttpResponse.json([])),
   http.get('/v1/projects/:id/iterations', () => HttpResponse.json([])),
   http.get('/v1/projects/:id/artifacts', () => HttpResponse.json([])),
+
+  // Artifact endpoints
+  http.post('/v1/projects/:id/artifacts', async ({ request }) => {
+    const body = await request.json() as { filename: string; content_type: string; size_bytes: number; type?: string };
+    const artifact = {
+      id: `art_${Date.now()}`,
+      project_id: 'proj_nmc',
+      filename: body.filename,
+      content_type: body.content_type,
+      size_bytes: body.size_bytes,
+      type: body.type ?? 'other',
+      storage_key: `uploads/${body.filename}`,
+      original_url: '',
+      rendered_url: '',
+      thumbnail_url: '',
+      processing_status: 'pending',
+      uploaded_at: new Date().toISOString(),
+      uploaded_by: 'usr_dev',
+      metadata: null,
+    };
+    return HttpResponse.json({
+      artifact,
+      upload_url: 'http://localhost:9000/mock-presigned-url',
+      method: 'PUT',
+      headers: { 'Content-Type': body.content_type },
+    });
+  }),
+
+  http.post('/v1/artifacts/:id/complete', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      project_id: 'proj_nmc',
+      filename: 'test-file.pdf',
+      content_type: 'application/pdf',
+      size_bytes: 1024,
+      type: 'pdf',
+      storage_key: 'uploads/test-file.pdf',
+      original_url: 'http://localhost:9000/test-file.pdf',
+      rendered_url: '',
+      thumbnail_url: '',
+      processing_status: 'done',
+      uploaded_at: new Date().toISOString(),
+      uploaded_by: 'usr_dev',
+      metadata: null,
+    });
+  }),
+
+  http.delete('/v1/artifacts/:id', () => new HttpResponse(null, { status: 204 })),
+
+  http.get('/v1/samples/:id/artifacts', () => HttpResponse.json([])),
+  http.post('/v1/samples/:id/artifacts', async ({ request }) => {
+    const body = await request.json() as { artifact_id: string; role?: string };
+    return HttpResponse.json({
+      id: `sa_${Date.now()}`,
+      sample_id: 'samp_1',
+      artifact_id: body.artifact_id,
+      role: body.role,
+      attached_by: 'usr_dev',
+      created_at: new Date().toISOString(),
+    });
+  }),
+
+  http.get('/v1/experiments/:id/artifacts', () => HttpResponse.json([])),
+  http.post('/v1/experiments/:id/artifacts', async ({ request }) => {
+    const body = await request.json() as { artifact_id: string; role?: string };
+    return HttpResponse.json({
+      id: `ea_${Date.now()}`,
+      experiment_id: 'exp_1',
+      artifact_id: body.artifact_id,
+      role: body.role,
+      attached_by: 'usr_dev',
+      created_at: new Date().toISOString(),
+    });
+  }),
+
+  http.get('/v1/artifacts/:id', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      project_id: 'proj_nmc',
+      filename: 'test.pdf',
+      content_type: 'application/pdf',
+      size_bytes: 2048,
+      type: 'pdf',
+      storage_key: 'test.pdf',
+      original_url: '',
+      rendered_url: '',
+      thumbnail_url: '',
+      processing_status: 'done',
+      uploaded_at: new Date().toISOString(),
+      uploaded_by: 'usr_dev',
+      metadata: null,
+    });
+  }),
+
+  // PAT endpoints
+  http.get('/v1/tokens', () => HttpResponse.json([])),
+  http.post('/v1/tokens', async ({ request }) => {
+    const body = await request.json() as { name: string; scopes: string[]; expires_at?: string };
+    return HttpResponse.json({
+      id: `tok_${Date.now()}`,
+      name: body.name,
+      scopes: body.scopes,
+      token: 'hlp_mock_secret_token_xyz',
+      expires_at: body.expires_at,
+    });
+  }),
+  http.delete('/v1/tokens/:id', () => HttpResponse.json({ ok: true })),
+
+  // Calendar subscription
+  http.get('/v1/cal/me/subscription', () => HttpResponse.json({
+    token: 'cal_token_abc',
+    scope: 'all',
+    project_ids: [],
+    ics_url: '/v1/cal/me/calendar.ics?token=cal_token_abc',
+  })),
+  http.post('/v1/cal/me/subscription/rotate', () => HttpResponse.json({
+    token: 'cal_token_rotated',
+    scope: 'all',
+    project_ids: [],
+    ics_url: '/v1/cal/me/calendar.ics?token=cal_token_rotated',
+  })),
+  http.patch('/v1/cal/me/subscription', async ({ request }) => {
+    const body = await request.json() as { scope?: string; project_ids?: string[] };
+    return HttpResponse.json({
+      token: 'cal_token_abc',
+      scope: body.scope ?? 'all',
+      project_ids: body.project_ids ?? [],
+      ics_url: '/v1/cal/me/calendar.ics?token=cal_token_abc',
+    });
+  }),
 ];

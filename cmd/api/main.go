@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/colnio/project-management-site/internal/artifact"
 	"github.com/colnio/project-management-site/internal/audit"
@@ -23,6 +26,7 @@ import (
 	"github.com/colnio/project-management-site/internal/db"
 	"github.com/colnio/project-management-site/internal/experiment"
 	"github.com/colnio/project-management-site/internal/iteration"
+	"github.com/colnio/project-management-site/internal/jobs"
 	labmcp "github.com/colnio/project-management-site/internal/mcp"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/page"
@@ -63,6 +67,11 @@ func run() error {
 		return err
 	}
 
+	logger.Info("running River migrations")
+	if err := jobs.Migrate(ctx, pool); err != nil {
+		return err
+	}
+
 	auditRec := audit.NewRecorder(pool, logger)
 	authSvc, err := auth.NewService(ctx, pool, cfg, auditRec, logger)
 	if err != nil {
@@ -89,6 +98,39 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	// ── River job queue setup ─────────────────────────────────────────────────
+	objStore, err := artifact.NewS3Store(cfg)
+	if err != nil {
+		return fmt.Errorf("build object store: %w", err)
+	}
+
+	riverWorkers := river.NewWorkers()
+	artifact.RegisterWorkers(riverWorkers, artifact.WorkerDeps{
+		Pool:           pool,
+		Store:          objStore,
+		BucketOrig:     cfg.BucketOriginals,
+		BucketRendered: cfg.BucketRendered,
+		NBConvertURL:   cfg.NBConvertURL,
+		PublicURLBase:  cfg.S3PublicURLBase,
+	})
+
+	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
+		Workers: riverWorkers,
+		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 5}},
+		Logger:  logger,
+	})
+	if err != nil {
+		return fmt.Errorf("build River client: %w", err)
+	}
+
+	if err := riverClient.Start(ctx); err != nil {
+		return fmt.Errorf("start River client: %w", err)
+	}
+
+	// Wire the River-backed enqueuer into the artifact service.
+	artifactSvc.SetEnqueuer(artifact.NewRiverEnqueuer(riverClient))
+
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
 
 	auth.Register(srv.API, authSvc)
@@ -131,6 +173,12 @@ func run() error {
 	logger.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
+	// Stop River worker pool (drains in-progress jobs).
+	if err := riverClient.Stop(shutdownCtx); err != nil {
+		logger.Error("river stop", "err", err)
+	}
+
 	return httpSrv.Shutdown(shutdownCtx)
 }
 

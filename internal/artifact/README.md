@@ -96,13 +96,68 @@ a typed `role` column:
 `GET` list endpoints swallow 403s so a caller receives only the artifacts their
 role permits, without the request failing.
 
-## Track-D processing handoff
+## Track-D background processing pipeline
 
-After `POST /v1/artifacts/{id}/complete`, `processing_status` is left as
-`'pending'`. A Track-D worker (not part of this module) polls or subscribes for
-artifacts in that state, runs nbconvert / image processing, uploads rendered
-outputs to `BucketRendered`, and sets `processing_status='done'` along with
-`rendered_url` and `thumbnail_url`.
+After `POST /v1/artifacts/{id}/complete`, `CompleteUpload` enqueues a River
+job (`process_artifact`) and returns immediately. The `ProcessArtifactWorker`
+(registered in the same process) picks up the job and:
+
+1. Sets `processing_status = 'processing'`.
+2. Downloads the original from `BucketOriginals` via `ObjectStore.Get`.
+3. Dispatches by `type`:
+   - **`pdf`** — Calls `pdfPageCount` (pure-Go pdfcpu) to extract page count.
+     Stores `{page_count: N}` in `metadata`. Sets `processing_status='done'`.
+     **No thumbnail is generated**: pure-Go PDF→image rasterization requires
+     CGo/native binaries (e.g. MuPDF, Poppler). pdfcpu does not ship a
+     rasterizer, so `thumbnail_url` is left empty for PDFs.
+   - **`ipynb`** — POSTs the raw .ipynb JSON to the nbconvert sidecar
+     (`cfg.NBConvertURL + /render`). The sidecar runs Jupyter nbconvert and
+     returns HTML. The HTML is uploaded to `BucketRendered` as
+     `{storage_key}.html` and `rendered_url` is set.
+   - **`image`** — Uses `github.com/disintegration/imaging` (pure-Go, no CGo)
+     to decode and resize the image to small (≤200px max edge) and medium
+     (≤800px max edge) JPEG thumbnails. Both are uploaded to `BucketRendered`.
+     `thumbnail_url` is set to the small thumbnail; `metadata.thumbnail_medium_url`
+     holds the medium URL.
+   - **`other`** — Sets `processing_status='done'` with no further action.
+4. On success: sets `processing_status='done'` and the output URLs/metadata.
+5. On failure: sets `processing_status='failed'` and records the error in
+   `metadata.error`.
+
+### govips → imaging substitution note
+
+The README originally anticipated govips (a Go binding for libvips, very fast)
+for image processing. libvips is not available in the current deployment
+environment, so Track-D uses the pure-Go `github.com/disintegration/imaging`
+library instead. For production scale, swap `renderThumbnails` for a govips
+implementation — the `ObjectStore`/`Enqueuer` interfaces and worker structure
+remain identical.
+
+### `ObjectStore` interface
+
+```go
+type ObjectStore interface {
+    Get(ctx context.Context, bucket, key string) ([]byte, error)
+    Put(ctx context.Context, bucket, key string, body []byte, contentType string) error
+}
+```
+
+The production implementation (`s3Store`) is built from the same AWS SDK v2
+config the module uses for presigning. Tests inject an in-memory fake.
+`NewS3Store(cfg)` constructs the production implementation.
+
+### `Enqueuer` interface
+
+```go
+type Enqueuer interface {
+    EnqueueProcessArtifact(ctx context.Context, id uuid.UUID) error
+}
+```
+
+`NewRiverEnqueuer(client *river.Client[pgx.Tx])` builds the production
+implementation. The `Service.enqueuer` field is nil by default (keeping existing
+tests green); call `SetEnqueuer(e)` from `cmd/api/main.go` after the River
+client is constructed.
 
 ## Auth
 

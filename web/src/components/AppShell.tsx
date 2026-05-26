@@ -68,6 +68,15 @@ function LogoutIcon({ size = 14 }: { size?: number }) {
   );
 }
 
+function SettingsIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 1.5V3M8 13V14.5M1.5 8H3M13 8H14.5M3.4 3.4L4.5 4.5M11.5 11.5L12.6 12.6M3.4 12.6L4.5 11.5M11.5 4.5L12.6 3.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 interface SidebarProps {
@@ -290,14 +299,18 @@ function Sidebar({
           <div className="me-name">{user?.display_name || user?.email}</div>
           <div className="me-sub">{user?.email}</div>
         </div>
-        <button
-          className="icon-btn"
-          style={{ marginLeft: 'auto' }}
-          onClick={() => void logout()}
-          title="Logout"
-        >
-          <LogoutIcon size={14} />
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
+          <Link to="/settings" className="icon-btn" title="Settings">
+            <SettingsIcon size={13} />
+          </Link>
+          <button
+            className="icon-btn"
+            onClick={() => void logout()}
+            title="Logout"
+          >
+            <LogoutIcon size={14} />
+          </button>
+        </div>
       </div>
     </aside>
   );
