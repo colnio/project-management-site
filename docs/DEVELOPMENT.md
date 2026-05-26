@@ -168,43 +168,43 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 
 ### Track A — Core platform
 
-- [ ] **A0 Local infra** — `docker-compose.dev.yml` (postgres, minio, mailpit, mock-oidc,
+- [x] **A0 Local infra** — `docker-compose.dev.yml` (postgres, minio, mailpit, mock-oidc,
   nbconvert, searxng), `.env.example`, `Makefile`. Goose runs on `cmd/api` boot behind a Postgres
   advisory lock. MinIO init job creates buckets `artifacts-originals`, `artifacts-rendered`.
   **Done when**: `make dev` serves a hello-world huma endpoint; `make up && make migrate` is
   idempotent.
-- [ ] **A1 Identity** — OIDC client (env-configured `issuer` → mock locally, Entra in prod),
+- [x] **A1 Identity** — OIDC client (env-configured `issuer` → mock locally, Entra in prod),
   JWT + httpOnly refresh cookie, local password (Argon2id, mem ≥ 64 MB), `Invite` one-time link
   (emailed to Mailpit), allow-listed domains, PAT model, `InternalAIToken` minter (§6.3). Seed
   `dev@halide-lab.org` for fast login.
-- [ ] **A2 Audit** — `AuditLog` writer used by all later modules; queryable by actor/target/time;
+- [x] **A2 Audit** — `AuditLog` writer used by all later modules; queryable by actor/target/time;
   monthly-partition scaffolding (dormant until threshold).
-- [ ] **A3 Org** — workspaces, memberships, invites; `org.ResolveAccess(user, ws, project) → Role`
+- [x] **A3 Org** — workspaces, memberships, invites; `org.ResolveAccess(user, ws, project) → Role`
   (max of workspace/project/override); scope intersection for tokens.
-- [ ] **A4 API foundation** — chi + huma; middleware chain: auth → `slog` logging → audit hook →
+- [x] **A4 API foundation** — chi + huma; middleware chain: auth → `slog` logging → audit hook →
   rate-limit → `Idempotency-Key` (24h TTL) → ETag/`If-Match`. Error envelope `{code,message,details}`.
   `/openapi.json`, `/docs`, `/llms.txt` stub.
-- [ ] **A5 Frontend shell** — Vite + React + TanStack Router/Query; auth gate (mock-OIDC + local
+- [x] **A5 Frontend shell** — Vite + React + TanStack Router/Query; auth gate (mock-OIDC + local
   password); shell from `design/shell.jsx` (sidebar, workspace switcher, project tree, topbar,
   ⌘K palette); `make openapi` codegen; MSW configured.
 
 ### Track B — Research data backend *(deps A1–A4)*
 
-- [ ] **B1 Projects** — CRUD, visibility (workspace|private), collaborators.
-- [ ] **B2 Iterations** — CRUD, ordering, status, start/end, `IterationSample` join.
-- [ ] **B3 Pages** — `PageBlob` (SHA-256, blocks-only JSONB) + immutable `PageRevision` graph with
+- [x] **B1 Projects** — CRUD, visibility (workspace|private), collaborators.
+- [x] **B2 Iterations** — CRUD, ordering, status, start/end, `IterationSample` join.
+- [x] **B3 Pages** — `PageBlob` (SHA-256, blocks-only JSONB) + immutable `PageRevision` graph with
   `markdownExport`; source enum; candidate/approve/reject; restore-as-new-revision; retention +
   nightly GC (River); ETag; `PagePresence` (SSE + 30s-TTL heartbeat); AI guardrails (§7.1.2).
-- [ ] **B4 Samples** — CRUD, freeform `properties` JSONB, `kind` enum, `SampleRelation` lineage +
+- [x] **B4 Samples** — CRUD, freeform `properties` JSONB, `kind` enum, `SampleRelation` lineage +
   `/lineage` endpoint.
-- [ ] **B5 Experiments** — CRUD, `method` enum, `parameters` JSONB, `ExperimentSample` join,
+- [x] **B5 Experiments** — CRUD, `method` enum, `parameters` JSONB, `ExperimentSample` join,
   optional iteration link.
-- [ ] **B6 Artifacts** — presigned-URL handshake against MinIO; River processing job;
+- [x] **B6 Artifacts** — presigned-URL handshake against MinIO; River processing job;
   `SampleArtifact`/`ExperimentArtifact` typed joins.
 
 ### Track C — Research data frontend *(parallel to B via MSW)*
 
-- [ ] **C1** Project list & detail (3 overview layouts from `design/project-overview.jsx`).
+- [x] **C1** Project list & detail (3 overview layouts from `design/project-overview.jsx`).
 - [ ] **C2** Iteration UI + sample-link picker.
 - [ ] **C3** Page UI: BlockNote with lab reference blocks (`@sample`/`@experiment`/`@artifact`,
   `createBlockSpec`, server-resolved), debounced auto-save (§7.1.4), presence indicator, history
@@ -221,8 +221,8 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 
 ### Track E — Calendar *(deps A3, B1, B2)*
 
-- [ ] **E1** Events backend: `ProjectEvent` CRUD, RFC 5545 recurrence.
-- [ ] **E2** `.ics` feed: signed `GET /v1/cal/{user_id}/{token}.ics`, `CalendarSubscription`, slug
+- [x] **E1** Events backend: `ProjectEvent` CRUD, RFC 5545 recurrence.
+- [x] **E2** `.ics` feed: signed `GET /v1/cal/{user_id}/{token}.ics`, `CalendarSubscription`, slug
   rotation. Validate output with an ICS linter or a real calendar subscription.
 - [ ] **E3** In-app calendar (FullCalendar): month/week/agenda.
 - [ ] **E4** Timeline / Gantt (per-project + unified) from `design/calendar-view.jsx`.
