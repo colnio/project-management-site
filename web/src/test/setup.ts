@@ -44,6 +44,29 @@ vi.mock('@blocknote/mantine', () => ({
   BlockNoteView: vi.fn(() => null),
 }));
 
+// Mock FullCalendar — it uses browser-only APIs (ResizeObserver, IntersectionObserver,
+// complex DOM manipulation) not available in jsdom. We mock it so calendar-related
+// tests (e.g. gantt math) don't fail trying to render the actual calendar grid.
+vi.mock('@fullcalendar/react', () => ({
+  default: vi.fn(() => null),
+}));
+
+vi.mock('@fullcalendar/daygrid', () => ({
+  default: { name: 'dayGridPlugin' },
+}));
+
+vi.mock('@fullcalendar/timegrid', () => ({
+  default: { name: 'timeGridPlugin' },
+}));
+
+vi.mock('@fullcalendar/list', () => ({
+  default: { name: 'listPlugin' },
+}));
+
+vi.mock('@fullcalendar/interaction', () => ({
+  default: { name: 'interactionPlugin' },
+}));
+
 // Set up MSW server for all tests
 export const server = setupServer(...handlers);
 

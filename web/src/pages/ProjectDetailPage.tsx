@@ -17,9 +17,10 @@ import {
 } from '@/hooks/useQueries';
 import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import { PagesPanel } from '@/components/PagesPanel';
+import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
-type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages';
+type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline';
 
 // ─── Tab Bar ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ interface TabBarProps {
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'iterations', label: 'Iterations' },
+  { id: 'timeline', label: 'Timeline' },
   { id: 'samples', label: 'Samples' },
   { id: 'experiments', label: 'Experiments' },
   { id: 'artifacts', label: 'Artifacts' },
@@ -749,6 +751,12 @@ export function ProjectDetailPage() {
             {currentTab === 'experiments' && <ExperimentsTab projectId={projectId} />}
             {currentTab === 'iterations' && <IterationsTab projectId={projectId} />}
             {currentTab === 'artifacts' && <ArtifactsTab projectId={projectId} />}
+            {currentTab === 'timeline' && (
+              <ProjectTimeline
+                projectId={projectId}
+                projectName={project?.name ?? 'Project'}
+              />
+            )}
             {currentTab === 'pages' && (
               <div className="page-wrap">
                 <PagesPanel

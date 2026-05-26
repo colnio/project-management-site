@@ -452,6 +452,148 @@ export const handlers = [
 
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Events endpoints ──────────────────────────────────────────────────────
+
+  // List events for a project (supports ?from=&to=)
+  http.get('/v1/projects/:id/events', () => {
+    return HttpResponse.json([
+      {
+        id: 'evt_1',
+        project_id: 'proj_nmc',
+        iteration_id: undefined,
+        kind: 'deadline',
+        title: 'DOE-BES Report',
+        description: 'Submit quarterly report to DOE-BES.',
+        start_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        end_at: undefined,
+        all_day: true,
+        recurrence_rule: undefined,
+        created_at: '2025-02-01T00:00:00Z',
+        updated_at: '2025-02-01T00:00:00Z',
+        created_by: 'usr_dev',
+      },
+      {
+        id: 'evt_2',
+        project_id: 'proj_nmc',
+        iteration_id: undefined,
+        kind: 'meeting',
+        title: 'Team sync',
+        description: 'Weekly lab meeting.',
+        start_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        end_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+        all_day: false,
+        recurrence_rule: 'FREQ=WEEKLY',
+        created_at: '2025-02-01T00:00:00Z',
+        updated_at: '2025-02-01T00:00:00Z',
+        created_by: 'usr_dev',
+      },
+    ]);
+  }),
+
+  // Create event
+  http.post('/v1/projects/:id/events', async ({ request, params }) => {
+    const body = await request.json() as {
+      kind: string;
+      title: string;
+      description?: string;
+      start_at: string;
+      end_at?: string;
+      all_day?: boolean;
+      recurrence_rule?: string;
+    };
+    return HttpResponse.json({
+      id: `evt_${Date.now()}`,
+      project_id: params.id as string,
+      iteration_id: undefined,
+      kind: body.kind,
+      title: body.title,
+      description: body.description,
+      start_at: body.start_at,
+      end_at: body.end_at,
+      all_day: body.all_day ?? false,
+      recurrence_rule: body.recurrence_rule,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: 'usr_dev',
+    }, { status: 201 });
+  }),
+
+  // Get single event
+  http.get('/v1/events/:id', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id as string,
+      project_id: 'proj_nmc',
+      iteration_id: undefined,
+      kind: 'custom',
+      title: 'Test Event',
+      description: '',
+      start_at: new Date().toISOString(),
+      end_at: undefined,
+      all_day: false,
+      recurrence_rule: undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: 'usr_dev',
+    });
+  }),
+
+  // Update event
+  http.patch('/v1/events/:id', async ({ request, params }) => {
+    const body = await request.json() as Record<string, unknown>;
+    return HttpResponse.json({
+      id: params.id as string,
+      project_id: 'proj_nmc',
+      iteration_id: undefined,
+      kind: body.kind ?? 'custom',
+      title: body.title ?? 'Updated Event',
+      description: body.description ?? '',
+      start_at: body.start_at ?? new Date().toISOString(),
+      end_at: body.end_at ?? undefined,
+      all_day: body.all_day ?? false,
+      recurrence_rule: body.recurrence_rule ?? undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: 'usr_dev',
+    });
+  }),
+
+  // Delete event
+  http.delete('/v1/events/:id', () => new HttpResponse(null, { status: 204 })),
+
+  // ── Iteration endpoints (detail) ──────────────────────────────────────────
+
+  http.get('/v1/iterations/:id', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      project_id: 'proj_nmc',
+      title: 'Test Iteration',
+      description: '',
+      status: 'active',
+      position: 1,
+      start_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      end_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-01-01T00:00:00Z',
+      created_by: 'usr_dev',
+    });
+  }),
+
+  // ── Sample/experiment/iteration links ─────────────────────────────────────
+
+  http.get('/v1/iterations/:id/samples', () => HttpResponse.json([])),
+  http.post('/v1/iterations/:id/samples', async ({ request }) => {
+    const body = await request.json() as { sample_id: string; role?: string };
+    return HttpResponse.json({ ok: true, sample_id: body.sample_id });
+  }),
+  http.delete('/v1/iterations/:id/samples/:sampleId', () => HttpResponse.json({ ok: true })),
+
+  http.get('/v1/samples/:id/lineage', () => HttpResponse.json({ nodes: [], edges: [] })),
+  http.post('/v1/samples/:id/relations', () => HttpResponse.json({ ok: true })),
+
+  http.get('/v1/experiments/:id/samples', () => HttpResponse.json([])),
+  http.post('/v1/experiments/:id/samples', () => HttpResponse.json({ ok: true })),
+  http.delete('/v1/experiments/:id/samples/:sampleId', () => HttpResponse.json({ ok: true })),
+
   // Calendar subscription
   http.get('/v1/cal/me/subscription', () => HttpResponse.json({
     token: 'cal_token_abc',

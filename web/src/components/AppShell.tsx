@@ -68,6 +68,19 @@ function LogoutIcon({ size = 14 }: { size?: number }) {
   );
 }
 
+function CalendarIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M2 7H14" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5.5 1.5V4.5M10.5 1.5V4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="5.5" cy="10" r="1" fill="currentColor" />
+      <circle cx="8" cy="10" r="1" fill="currentColor" />
+      <circle cx="10.5" cy="10" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 function SettingsIcon({ size = 13 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
@@ -231,6 +244,16 @@ function Sidebar({
             <FolderIcon size={13} />
           </span>
           Workspaces
+        </Link>
+        <Link
+          to="/calendar"
+          className="side-item"
+          activeProps={{ className: 'side-item active' }}
+        >
+          <span className="ic">
+            <CalendarIcon size={13} />
+          </span>
+          Calendar
         </Link>
       </nav>
 

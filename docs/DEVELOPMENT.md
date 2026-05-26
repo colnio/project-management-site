@@ -224,8 +224,8 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 - [x] **E1** Events backend: `ProjectEvent` CRUD, RFC 5545 recurrence.
 - [x] **E2** `.ics` feed: signed `GET /v1/cal/{user_id}/{token}.ics`, `CalendarSubscription`, slug
   rotation. Validate output with an ICS linter or a real calendar subscription.
-- [ ] **E3** In-app calendar (FullCalendar): month/week/agenda.
-- [ ] **E4** Timeline / Gantt (per-project + unified) from `design/calendar-view.jsx`.
+- [x] **E3** In-app calendar (FullCalendar): month/week/agenda.
+- [x] **E4** Timeline / Gantt (per-project + unified) from `design/calendar-view.jsx`.
 
 ### Track F — Agent surface *(deps A1, A4)*
 

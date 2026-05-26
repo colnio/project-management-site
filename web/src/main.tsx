@@ -7,6 +7,7 @@ import { setIsAuthenticated } from './router';
 import { router } from './router';
 import './styles/global.css';
 
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

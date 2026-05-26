@@ -35,7 +35,7 @@ conventions live in [`AGENTS.md`](AGENTS.md).
 | C3 | Page editor (BlockNote + @sample/@experiment/@artifact reference blocks) | ✅ done |
 | D1–D3 | Artifact workers: PDF page count, ipynb render, image thumbnails (River) | ✅ done |
 | E1–E2 | Calendar events + signed `.ics` feed | ✅ done |
-| E3–E4 | In-app calendar + Gantt UI | ⛔ pending (only remaining non-AI track) |
+| E3–E4 | In-app calendar (FullCalendar) + custom Gantt timeline UI | ✅ done |
 | F1 | PAT settings UI + calendar subscription | ✅ done |
 | F2 | OpenAPI descriptions + examples | ✅ done |
 | F3 | MCP server (in-binary SSE at `/mcp`, PAT auth) | ✅ done |
@@ -49,8 +49,9 @@ the REST API, server-side permissions and audit on every mutation, full Go test
 suite green. The frontend covers the shell, projects, iterations, samples
 (+lineage), experiments, artifacts (upload/viewers), the BlockNote page editor
 (reference blocks, auto-save, conflict UI, history/restore, presence), and a
-settings page (PATs + calendar). **The only remaining non-AI work is the in-app
-calendar/Gantt UI (E3–E4);** the AI tracks (G) are deferred by design.
+settings page (PATs + calendar), and the calendar/Gantt views. **All non-AI
+tracks (A–F) are now complete;** only the AI tracks (G) remain, deferred by
+design.
 
 ---
 

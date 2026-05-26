@@ -69,6 +69,11 @@ land in **Mailpit** at <http://localhost:8025>.
 
 - Each project has **events** (deadlines, milestone ends, meetings, reminders,
   custom) with start/end times, all-day flag, and RFC 5545 recurrence rules.
+- Open **Calendar** from the sidebar for an in-app month/week/agenda view. Switch
+  scope between a single project and all your visible projects; click a date to
+  create an event and click an event to edit or delete it. A **Timeline** toggle
+  shows a Gantt view — iterations as bars on a date axis with event markers — both
+  per project (the project's Timeline tab) and aggregated across projects.
 - **Subscribe from your own calendar app**: open your calendar subscription in
   settings to get a personal signed URL of the form
   `/v1/cal/{your_id}/{token}.ics`. Paste it into Google Calendar ("Add by URL"),
@@ -76,8 +81,8 @@ land in **Mailpit** at <http://localhost:8025>.
   internet"). It includes every event in the projects you can see.
 - You can **rotate** the URL token at any time, which invalidates the old link.
 - Note: external calendars refresh on their own schedule (Google ~12h, Apple
-  5–60 min), so a brand-new event may not appear instantly. _The in-app calendar
-  and Gantt timeline views are coming soon._
+  5–60 min), so a brand-new event may not appear instantly — use the in-app
+  Calendar view for immediate feedback.
 
 ## For developers and agents (API access)
 

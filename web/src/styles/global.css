@@ -308,6 +308,92 @@ select.field-input { cursor: default; }
   line-height: 1.7 !important;
 }
 
+/* ── Calendar / FullCalendar overrides ── */
+.fc-wrapper {
+  --fc-border-color: var(--line);
+  --fc-button-bg-color: var(--paper-2);
+  --fc-button-border-color: var(--line);
+  --fc-button-text-color: var(--ink);
+  --fc-button-hover-bg-color: var(--paper-3);
+  --fc-button-hover-border-color: var(--line-2);
+  --fc-button-active-bg-color: var(--ink);
+  --fc-button-active-border-color: var(--ink);
+  --fc-today-bg-color: var(--ember-tint);
+  --fc-event-bg-color: var(--ember);
+  --fc-event-border-color: var(--ember);
+  --fc-event-text-color: #fff;
+  --fc-page-bg-color: var(--surface);
+  --fc-neutral-bg-color: var(--paper-2);
+  --fc-list-event-hover-bg-color: var(--paper-2);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.fc-wrapper .fc-button {
+  font-size: 12px !important;
+  font-family: var(--sans) !important;
+  border-radius: var(--r-sm) !important;
+  padding: 4px 10px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+}
+
+.fc-wrapper .fc-button-active {
+  background: var(--ink) !important;
+  border-color: var(--ink) !important;
+  color: var(--paper) !important;
+}
+
+.fc-wrapper .fc-toolbar-title {
+  font-family: var(--serif) !important;
+  font-size: 20px !important;
+  font-weight: 400 !important;
+  color: var(--ink) !important;
+  letter-spacing: -0.01em !important;
+}
+
+.fc-wrapper .fc-event {
+  border-radius: 3px !important;
+  font-size: 11.5px !important;
+  font-family: var(--mono) !important;
+  padding: 1px 4px !important;
+}
+
+.fc-wrapper .fc-col-header-cell {
+  font-size: 10.5px !important;
+  font-family: var(--mono) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: var(--muted-2) !important;
+  font-weight: 500 !important;
+  background: var(--paper) !important;
+}
+
+.fc-wrapper .fc-daygrid-day-number {
+  font-family: var(--mono) !important;
+  font-size: 11px !important;
+  color: var(--muted) !important;
+}
+
+.fc-wrapper .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+  color: var(--ember) !important;
+  font-weight: 700 !important;
+}
+
+.fc-wrapper .fc-list-event-title a {
+  color: var(--ink) !important;
+  font-weight: 500 !important;
+}
+
+.fc-wrapper .fc-list-day-cushion {
+  background: var(--paper-2) !important;
+  font-family: var(--mono) !important;
+  font-size: 10.5px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+}
+
 /* ── Page metadata strip ── */
 .page-meta-strip {
   display: flex;
