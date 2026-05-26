@@ -18,6 +18,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/colnio/project-management-site/internal/ai"
 	"github.com/colnio/project-management-site/internal/artifact"
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
@@ -133,6 +134,20 @@ func run() error {
 
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
 
+	// AI module (G1/G2/G5): load provider, build client (nil if unavailable).
+	aiProvider, aiProvErr := ai.LoadProvider()
+	var aiClient ai.Client
+	if aiProvErr != nil {
+		logger.Warn("ai: provider config error (AI disabled)", "err", aiProvErr)
+	} else if aiProvider == nil {
+		logger.Warn("ai: provider config not found (AI disabled — create aiconf.local.json to enable)")
+	} else {
+		logger.Info("ai: provider loaded", "model", aiProvider.Model, "api_base", aiProvider.APIBase)
+		// NEVER log aiProvider.Token
+		aiClient = ai.NewHTTPClient(aiProvider)
+	}
+	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, projectSvc, auditRec, logger)
+
 	auth.Register(srv.API, authSvc)
 	audit.Register(srv.API, audit.NewService(auditRec))
 	org.Register(srv.API, orgSvc)
@@ -143,6 +158,9 @@ func run() error {
 	page.Register(srv.API, pageSvc)
 	artifact.Register(srv.API, artifactSvc)
 	calendar.Register(srv.API, calendarSvc)
+	ai.Register(srv.API, aiSvc)
+	// SSE streaming chat — chi route (not huma) because it's Server-Sent Events.
+	srv.Router.Post("/v1/ai/conversations/{id}/messages", aiSvc.HandleMessageStream)
 	// Public per-user calendar feed (token in URL, no auth middleware); the
 	// .ics suffix is captured into {token} and stripped by the handler.
 	srv.Router.Get("/v1/cal/{user_id}/{token}", calendarSvc.ICSHandler)

@@ -1,0 +1,261 @@
+package ai
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// ─── Conversation ─────────────────────────────────────────────────────────────
+
+// Conversation represents an AI chat session.
+type Conversation struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	StartedBy uuid.UUID `json:"started_by"`
+	Title     string    `json:"title"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func createConversation(ctx context.Context, pool *pgxpool.Pool, projectID, userID uuid.UUID, title string) (*Conversation, error) {
+	var c Conversation
+	err := pool.QueryRow(ctx,
+		`INSERT INTO ai_conversations (project_id, started_by, title)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, project_id, started_by, title, created_at`,
+		projectID, userID, title,
+	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("ai: create conversation: %w", err)
+	}
+	return &c, nil
+}
+
+func getConversation(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Conversation, error) {
+	var c Conversation
+	err := pool.QueryRow(ctx,
+		`SELECT id, project_id, started_by, title, created_at FROM ai_conversations WHERE id=$1`,
+		id,
+	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.CreatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("ai: get conversation: %w", err)
+	}
+	return &c, nil
+}
+
+func listConversations(ctx context.Context, pool *pgxpool.Pool, projectID uuid.UUID) ([]*Conversation, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT id, project_id, started_by, title, created_at
+		 FROM ai_conversations WHERE project_id=$1 ORDER BY created_at DESC`,
+		projectID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ai: list conversations: %w", err)
+	}
+	defer rows.Close()
+	var out []*Conversation
+	for rows.Next() {
+		var c Conversation
+		if err := rows.Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, &c)
+	}
+	return out, rows.Err()
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+
+// Message is a persisted chat message.
+type Message struct {
+	ID             uuid.UUID  `json:"id"`
+	ConversationID uuid.UUID  `json:"conversation_id"`
+	Seq            int        `json:"seq"`
+	Role           string     `json:"role"`
+	Content        string     `json:"content"`
+	ToolCalls      []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID     string     `json:"tool_call_id,omitempty"`
+	Name           string     `json:"name,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+func appendMessage(ctx context.Context, pool *pgxpool.Pool, convID uuid.UUID, seq int, msg ChatMessage) (*Message, error) {
+	var toolCallsJSON []byte
+	if len(msg.ToolCalls) > 0 {
+		var err error
+		toolCallsJSON, err = json.Marshal(msg.ToolCalls)
+		if err != nil {
+			return nil, fmt.Errorf("ai: marshal tool calls: %w", err)
+		}
+	}
+
+	var m Message
+	var rawTC []byte
+	err := pool.QueryRow(ctx,
+		`INSERT INTO ai_messages (conversation_id, seq, role, content, tool_calls, tool_call_id, name)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 RETURNING id, conversation_id, seq, role, content, tool_calls, tool_call_id, name, created_at`,
+		convID, seq, msg.Role, msg.Content, toolCallsJSON, msg.ToolCallID, msg.Name,
+	).Scan(&m.ID, &m.ConversationID, &m.Seq, &m.Role, &m.Content, &rawTC, &m.ToolCallID, &m.Name, &m.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("ai: append message: %w", err)
+	}
+	if len(rawTC) > 0 {
+		_ = json.Unmarshal(rawTC, &m.ToolCalls)
+	}
+	return &m, nil
+}
+
+func listMessages(ctx context.Context, pool *pgxpool.Pool, convID uuid.UUID) ([]*Message, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT id, conversation_id, seq, role, content, tool_calls, tool_call_id, name, created_at
+		 FROM ai_messages WHERE conversation_id=$1 ORDER BY seq`,
+		convID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ai: list messages: %w", err)
+	}
+	defer rows.Close()
+	var out []*Message
+	for rows.Next() {
+		var m Message
+		var rawTC []byte
+		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Seq, &m.Role, &m.Content, &rawTC, &m.ToolCallID, &m.Name, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		if len(rawTC) > 0 {
+			_ = json.Unmarshal(rawTC, &m.ToolCalls)
+		}
+		out = append(out, &m)
+	}
+	return out, rows.Err()
+}
+
+func nextSeq(ctx context.Context, pool *pgxpool.Pool, convID uuid.UUID) (int, error) {
+	var max *int
+	err := pool.QueryRow(ctx,
+		`SELECT MAX(seq) FROM ai_messages WHERE conversation_id=$1`, convID,
+	).Scan(&max)
+	if err != nil {
+		return 0, err
+	}
+	if max == nil {
+		return 0, nil
+	}
+	return *max + 1, nil
+}
+
+// ─── Tool calls ───────────────────────────────────────────────────────────────
+
+// ToolCallRecord is a persisted AI tool call record.
+type ToolCallRecord struct {
+	ID             uuid.UUID  `json:"id"`
+	ConversationID *uuid.UUID `json:"conversation_id,omitempty"`
+	RunID          *uuid.UUID `json:"run_id,omitempty"`
+	Tool           string     `json:"tool"`
+	InputJSON      any        `json:"input_json,omitempty"`
+	OutputJSON     any        `json:"output_json,omitempty"`
+	Status         string     `json:"status"`
+	ExecutedBy     *uuid.UUID `json:"executed_by,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+func recordToolCall(ctx context.Context, pool *pgxpool.Pool, convID *uuid.UUID, tool string, inputJSON json.RawMessage, status string) (*ToolCallRecord, error) {
+	var id uuid.UUID
+	var createdAt time.Time
+	err := pool.QueryRow(ctx,
+		`INSERT INTO ai_tool_calls (conversation_id, tool, input_json, status)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, created_at`,
+		convID, tool, []byte(inputJSON), status,
+	).Scan(&id, &createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("ai: record tool call: %w", err)
+	}
+	return &ToolCallRecord{
+		ID:             id,
+		ConversationID: convID,
+		Tool:           tool,
+		Status:         status,
+		CreatedAt:      createdAt,
+	}, nil
+}
+
+func updateToolCallOutput(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, outputJSON json.RawMessage, status string, executedBy *uuid.UUID) error {
+	_, err := pool.Exec(ctx,
+		`UPDATE ai_tool_calls SET output_json=$2, status=$3, executed_by=$4 WHERE id=$1`,
+		id, []byte(outputJSON), status, executedBy,
+	)
+	return err
+}
+
+func getToolCall(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*ToolCallRecord, error) {
+	var tc ToolCallRecord
+	var convID *uuid.UUID
+	var rawIn, rawOut []byte
+	err := pool.QueryRow(ctx,
+		`SELECT id, conversation_id, tool, input_json, output_json, status, executed_by, created_at
+		 FROM ai_tool_calls WHERE id=$1`, id,
+	).Scan(&tc.ID, &convID, &tc.Tool, &rawIn, &rawOut, &tc.Status, &tc.ExecutedBy, &tc.CreatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("ai: get tool call: %w", err)
+	}
+	tc.ConversationID = convID
+	return &tc, nil
+}
+
+// ─── Usage records ────────────────────────────────────────────────────────────
+
+const (
+	defaultPricePer1k    = 0.0   // $ per 1k tokens (configurable; 0.0 default for dev)
+	defaultMonthlyCapUSD = 50.0  // generous cap per workspace per month
+	spendWarnThreshold   = 0.80  // warn at 80% of cap
+)
+
+func recordUsage(ctx context.Context, pool *pgxpool.Pool, workspaceID, projectID, userID uuid.UUID, feature, model string, usage Usage) error {
+	total := usage.PromptTokens + usage.CompletionTokens
+	cost := float64(total) / 1000.0 * defaultPricePer1k
+	_, err := pool.Exec(ctx,
+		`INSERT INTO ai_usage_records (workspace_id, project_id, user_id, feature, model, prompt_tokens, completion_tokens, usd_cost)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		workspaceID, projectID, userID, feature, model,
+		usage.PromptTokens, usage.CompletionTokens, cost,
+	)
+	return err
+}
+
+// SpendCheckResult is the result of a spend cap check.
+type SpendCheckResult struct {
+	Allowed  bool
+	SoftWarn bool    // true when >= 80% of cap
+	Spent    float64 // current month total
+}
+
+func checkSpendCap(ctx context.Context, pool *pgxpool.Pool, workspaceID uuid.UUID) (SpendCheckResult, error) {
+	var spent float64
+	err := pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(usd_cost),0) FROM ai_usage_records
+		 WHERE workspace_id=$1
+		   AND date_trunc('month', created_at) = date_trunc('month', now())`,
+		workspaceID,
+	).Scan(&spent)
+	if err != nil {
+		return SpendCheckResult{Allowed: true}, fmt.Errorf("ai: check spend cap: %w", err)
+	}
+	if spent >= defaultMonthlyCapUSD {
+		return SpendCheckResult{Allowed: false, Spent: spent}, nil
+	}
+	warn := spent >= defaultMonthlyCapUSD*spendWarnThreshold
+	return SpendCheckResult{Allowed: true, SoftWarn: warn, Spent: spent}, nil
+}

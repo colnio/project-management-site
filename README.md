@@ -40,7 +40,15 @@ conventions live in [`AGENTS.md`](AGENTS.md).
 | F2 | OpenAPI descriptions + examples | ✅ done |
 | F3 | MCP server (in-binary SSE at `/mcp`, PAT auth) | ✅ done |
 | F4 | `/llms.txt` generated from OpenAPI | ✅ done |
-| G1–G8 | AI orchestrator, workflows, chat (Ollama) | ⛔ deferred (not started by design) |
+| G1, G2, G5 | AI chat backend: orchestrator (OpenAI-compatible client), tool gating by autonomy, conversation store + metering | ✅ done |
+| G3, G4 | Risk-workflow engine + library | ⛔ in progress |
+| G6, G7, G8 | AI chat UI, workflow runner UI, autonomy config UI | ⛔ pending |
+
+> **AI provider:** the orchestrator reads `aiconf.local.json` (gitignored) for an
+> OpenAI-compatible endpoint. Currently a LiteLLM proxy with `gpt-4.1-mini`;
+> verified end-to-end (streaming chat + tool-calling + token metering). The client
+> is contained to `internal/ai/` so swapping providers (OpenRouter, Ollama) is a
+> one-file change.
 
 The entire **non-AI backend** (Tracks A + B + D workers + E backend + F) is
 implemented, wired, and integration-tested: **51 REST endpoints** (all
@@ -50,8 +58,9 @@ suite green. The frontend covers the shell, projects, iterations, samples
 (+lineage), experiments, artifacts (upload/viewers), the BlockNote page editor
 (reference blocks, auto-save, conflict UI, history/restore, presence), and a
 settings page (PATs + calendar), and the calendar/Gantt views. **All non-AI
-tracks (A–F) are now complete;** only the AI tracks (G) remain, deferred by
-design.
+tracks (A–F) are complete.** Track G (AI) is now in progress: the agentic-chat
+backend (G1/G2/G5) is live; the workflow engine (G3/G4) and AI frontend
+(G6/G7/G8) are next.
 
 ---
 
