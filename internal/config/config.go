@@ -77,7 +77,7 @@ func Load() (*Config, error) {
 		S3PublicURLBase: getenv("S3_PUBLIC_URL_BASE", "http://localhost:9000"),
 		SMTPHost:        getenv("SMTP_HOST", "localhost"),
 		SMTPPort:        getenv("SMTP_PORT", "1025"),
-		SMTPFrom:        getenv("SMTP_FROM", "no-reply@halide-lab.org"),
+		SMTPFrom:        getenv("SMTP_FROM", "no-reply@graphene-lab.org"),
 		OIDCIssuer:      getenv("OIDC_ISSUER", "http://localhost:9100/default"),
 		OIDCClientID:    getenv("OIDC_CLIENT_ID", "lab-app"),
 		OIDCClientSecret: getenv("OIDC_CLIENT_SECRET", "lab-secret"),
@@ -92,7 +92,7 @@ func Load() (*Config, error) {
 		NBConvertURL:    getenv("NBCONVERT_URL", "http://localhost:8090"),
 		SearxNGURL:      getenv("SEARXNG_URL", "http://localhost:8888"),
 	}
-	c.AllowedEmailDomains = splitCSV(getenv("ALLOWED_EMAIL_DOMAINS", "halide-lab.org"))
+	c.AllowedEmailDomains = splitCSV(getenv("ALLOWED_EMAIL_DOMAINS", "nus.edu.sg,u.nus.edu"))
 
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")

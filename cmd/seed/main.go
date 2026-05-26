@@ -48,6 +48,6 @@ func run() error {
 	if err := authSvc.SeedDevUser(ctx); err != nil {
 		return err
 	}
-	logger.Info("seeded dev user", "email", "dev@halide-lab.org", "password", "devpassword")
+	logger.Info("seeded dev user", "email", "dev@graphene-lab.org", "password", "devpassword")
 	return nil
 }

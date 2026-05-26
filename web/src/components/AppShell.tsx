@@ -140,7 +140,7 @@ function Sidebar({
           {activeWorkspace?.name[0]?.toUpperCase() ?? 'H'}
         </div>
         <div style={{ minWidth: 0 }}>
-          <div className="ws-name">{activeWorkspace?.name ?? 'Halide Lab'}</div>
+          <div className="ws-name">{activeWorkspace?.name ?? 'Graphene Lab'}</div>
           <div className="ws-sub">{activeWorkspace?.slug ?? 'workspace'}</div>
         </div>
         <button

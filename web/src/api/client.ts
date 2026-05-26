@@ -1,5 +1,5 @@
 /**
- * Typed fetch wrapper for the Halide Lab API.
+ * Typed fetch wrapper for the Graphene Lab API.
  * - Attaches Bearer token from memory (provided by AuthStore)
  * - On 401, attempts one silent token refresh then retries
  * - On second 401, clears auth state (caller should redirect to /login)

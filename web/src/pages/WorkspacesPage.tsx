@@ -34,7 +34,7 @@ function NewWorkspaceDialog({ onClose }: DialogProps) {
           <TextInput
             value={name}
             onChange={setName}
-            placeholder="e.g. Halide Lab"
+            placeholder="e.g. Graphene Lab"
             autoFocus
           />
         </label>

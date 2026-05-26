@@ -81,7 +81,7 @@ TTL is hard-coded to 15 minutes. Revokes all tokens for the given conversation/r
 func (s *Service) SeedDevUser(ctx context.Context) error
 ```
 
-Upserts `dev@halide-lab.org` / `Dev User` / `is_system_admin=true` / password `devpassword`. Idempotent.
+Upserts `dev@graphene-lab.org` / `Dev User` / `is_system_admin=true` / password `devpassword`. Idempotent.
 
 ## HTTP Endpoints
 

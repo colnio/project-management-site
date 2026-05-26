@@ -479,12 +479,12 @@ func buildICS(events []*Event, now time.Time) string {
 	var sb strings.Builder
 	sb.WriteString("BEGIN:VCALENDAR\r\n")
 	sb.WriteString("VERSION:2.0\r\n")
-	sb.WriteString("PRODID:-//Halide Lab//PM//EN\r\n")
+	sb.WriteString("PRODID:-//Graphene Lab//PM//EN\r\n")
 	sb.WriteString("CALSCALE:GREGORIAN\r\n")
 
 	for _, e := range events {
 		sb.WriteString("BEGIN:VEVENT\r\n")
-		fmt.Fprintf(&sb, "UID:%s@halide-lab\r\n", e.ID.String())
+		fmt.Fprintf(&sb, "UID:%s@graphene-lab\r\n", e.ID.String())
 		fmt.Fprintf(&sb, "DTSTAMP:%s\r\n", now.Format("20060102T150405Z"))
 
 		if e.AllDay {

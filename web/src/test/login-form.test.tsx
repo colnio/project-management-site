@@ -20,7 +20,7 @@ vi.mock('../hooks/useAuth', () => ({
 describe('LoginPage', () => {
   it('renders email and password fields with placeholder text', () => {
     render(<LoginPage />);
-    expect(screen.getByPlaceholderText('dev@halide-lab.org')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('dev@graphene-lab.org')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('devpassword')).toBeInTheDocument();
   });
 
@@ -35,12 +35,12 @@ describe('LoginPage', () => {
 
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@halide-lab.org'), 'dev@halide-lab.org');
+    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'dev@graphene-lab.org');
     await user.type(screen.getByPlaceholderText('devpassword'), 'devpassword');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith('dev@halide-lab.org', 'devpassword');
+      expect(mockLogin).toHaveBeenCalledWith('dev@graphene-lab.org', 'devpassword');
     });
   });
 
@@ -51,7 +51,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@halide-lab.org'), 'bad@email.com');
+    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'bad@email.com');
     await user.type(screen.getByPlaceholderText('devpassword'), 'wrongpass');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
@@ -67,7 +67,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@halide-lab.org'), 'dev@halide-lab.org');
+    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'dev@graphene-lab.org');
     await user.type(screen.getByPlaceholderText('devpassword'), 'devpassword');
 
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));

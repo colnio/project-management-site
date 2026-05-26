@@ -96,7 +96,7 @@ sleep 5
 # 3. Login.
 ACCESS=$(curl -sf -X POST localhost:8080/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"dev@halide-lab.org","password":"devpassword"}' | jq -r '.access_token')
+  -d '{"email":"dev@graphene-lab.org","password":"devpassword"}' | jq -r '.access_token')
 
 # 4. Get workspace + create project.
 WS=$(curl -sf -H "Authorization: Bearer $ACCESS" localhost:8080/v1/workspaces | jq -r '.[0].id')

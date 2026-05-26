@@ -105,10 +105,10 @@ using a chi route. Because the real URL ends in `.ics`, the captured `{token}` p
 ```
 BEGIN:VCALENDAR\r\n
 VERSION:2.0\r\n
-PRODID:-//Halide Lab//PM//EN\r\n
+PRODID:-//Graphene Lab//PM//EN\r\n
 CALSCALE:GREGORIAN\r\n
 BEGIN:VEVENT\r\n
-UID:<event_id>@halide-lab\r\n
+UID:<event_id>@graphene-lab\r\n
 DTSTAMP:<now UTC in 20060102T150405Z>\r\n
 DTSTART:<start UTC in 20060102T150405Z>\r\n
 [DTEND:<end UTC>]\r\n

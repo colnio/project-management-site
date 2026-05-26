@@ -131,10 +131,10 @@ func (s *Service) verifyLocalLogin(ctx context.Context, email, password string) 
 	return u, nil
 }
 
-// SeedDevUser upserts dev@halide-lab.org as a system admin with local password.
+// SeedDevUser upserts dev@graphene-lab.org as a system admin with local password.
 // Idempotent — safe to call on every boot.
 func (s *Service) SeedDevUser(ctx context.Context) error {
-	const devEmail = "dev@halide-lab.org"
+	const devEmail = "dev@graphene-lab.org"
 	const devName = "Dev User"
 	const devPw = "devpassword"
 

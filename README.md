@@ -81,7 +81,7 @@ is required so the newer toolchain is fetched automatically.
 make up                 # docker-compose up -d
 
 # 2. Seed the dev login user (also runs migrations)
-go run ./cmd/seed       # dev@halide-lab.org / devpassword
+go run ./cmd/seed       # dev@graphene-lab.org / devpassword
 
 # 3. Backend API on :8080 (runs migrations on boot behind an advisory lock)
 go run ./cmd/api
@@ -90,7 +90,7 @@ go run ./cmd/api
 cd web && pnpm install && pnpm dev
 ```
 
-Open <http://localhost:5173> and log in with `dev@halide-lab.org` / `devpassword`.
+Open <http://localhost:5173> and log in with `dev@graphene-lab.org` / `devpassword`.
 Mailpit UI: <http://localhost:8025>. MinIO console: <http://localhost:9001>.
 OpenAPI: <http://localhost:8080/openapi.json>, docs at `/docs`.
 

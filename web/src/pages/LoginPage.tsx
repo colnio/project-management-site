@@ -70,7 +70,7 @@ export function LoginPage() {
               marginBottom: 4,
             }}
           >
-            Halide Lab
+            Graphene Lab
           </div>
           <div
             style={{
@@ -125,7 +125,7 @@ export function LoginPage() {
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="dev@halide-lab.org"
+                  placeholder="dev@graphene-lab.org"
                   required
                   autoComplete="email"
                   style={{

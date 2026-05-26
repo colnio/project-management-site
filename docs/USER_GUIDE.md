@@ -9,7 +9,7 @@ available today; sections marked _(coming soon)_ are planned but not yet built.
    `go run ./cmd/seed`, `go run ./cmd/api`, and `cd web && pnpm dev`.
 2. Open <http://localhost:5173>.
 3. Sign in with the seeded developer account:
-   - **Email:** `dev@halide-lab.org`
+   - **Email:** `dev@graphene-lab.org`
    - **Password:** `devpassword`
 
 University users will sign in via Microsoft SSO and external collaborators via an

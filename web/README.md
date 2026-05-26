@@ -1,6 +1,6 @@
-# Halide Lab — Web Frontend
+# Graphene Lab — Web Frontend
 
-React SPA frontend for the Halide Lab project-management platform.
+React SPA frontend for the Graphene Lab project-management platform.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ pnpm install
 pnpm dev        # starts Vite dev server on http://localhost:5173
 ```
 
-Dev credentials (seeded in the database): `dev@halide-lab.org` / `devpassword`
+Dev credentials (seeded in the database): `dev@graphene-lab.org` / `devpassword`
 
 The Vite dev server proxies all `/v1/*` requests to `http://localhost:8080`.
 

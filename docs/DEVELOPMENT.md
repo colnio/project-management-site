@@ -176,7 +176,7 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 - [x] **A1 Identity** — OIDC client (env-configured `issuer` → mock locally, Entra in prod),
   JWT + httpOnly refresh cookie, local password (Argon2id, mem ≥ 64 MB), `Invite` one-time link
   (emailed to Mailpit), allow-listed domains, PAT model, `InternalAIToken` minter (§6.3). Seed
-  `dev@halide-lab.org` for fast login.
+  `dev@graphene-lab.org` for fast login.
 - [x] **A2 Audit** — `AuditLog` writer used by all later modules; queryable by actor/target/time;
   monthly-partition scaffolding (dormant until threshold).
 - [x] **A3 Org** — workspaces, memberships, invites; `org.ResolveAccess(user, ws, project) → Role`
@@ -287,7 +287,7 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 1. `ollama serve` + `ollama pull qwen2.5:7b-instruct`.
 2. `make up` → `make migrate` → `make seed`.
 3. `make dev` → open <http://localhost:5173>.
-4. **Auth**: log in via the mock-OIDC redirect *and* via local-password `dev@halide-lab.org`.
+4. **Auth**: log in via the mock-OIDC redirect *and* via local-password `dev@graphene-lab.org`.
 5. **Core slice**: workspace → project → iteration → sample (with lineage) → experiment → upload a
    PDF and an `.ipynb` (confirm thumbnail + nbconvert HTML render from MinIO).
 6. **Editor**: insert `@sample`/`@experiment` reference blocks, edit, confirm auto-save creates a

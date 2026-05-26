@@ -41,7 +41,7 @@ func newTestService(t *testing.T) (*auth.Service, context.Context) {
 		RefreshTokenTTL: 24 * time.Hour,
 		CookieDomain:    "localhost",
 		CookieSecure:    false,
-		AllowedEmailDomains: []string{"halide-lab.org"},
+		AllowedEmailDomains: []string{"graphene-lab.org"},
 		WebOrigin:       "http://localhost:5173",
 	}
 
@@ -113,11 +113,11 @@ func TestPasswordEmptyPassword(t *testing.T) {
 func TestCreateAndGetUser(t *testing.T) {
 	svc, ctx := newTestService(t)
 
-	u, err := svc.CreateUser(ctx, "Alice@Halide-Lab.Org", "Alice")
+	u, err := svc.CreateUser(ctx, "Alice@Graphene-Lab.Org", "Alice")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	if u.Email != "alice@halide-lab.org" {
+	if u.Email != "alice@graphene-lab.org" {
 		t.Errorf("expected lowercased email, got %q", u.Email)
 	}
 	if u.DisplayName != "Alice" {
@@ -125,7 +125,7 @@ func TestCreateAndGetUser(t *testing.T) {
 	}
 
 	// GetUserByEmail
-	u2, err := svc.GetUserByEmail(ctx, "alice@halide-lab.org")
+	u2, err := svc.GetUserByEmail(ctx, "alice@graphene-lab.org")
 	if err != nil {
 		t.Fatalf("GetUserByEmail: %v", err)
 	}
@@ -146,11 +146,11 @@ func TestCreateAndGetUser(t *testing.T) {
 func TestCreateUserDuplicateConflict(t *testing.T) {
 	svc, ctx := newTestService(t)
 
-	_, err := svc.CreateUser(ctx, "dup@halide-lab.org", "First")
+	_, err := svc.CreateUser(ctx, "dup@graphene-lab.org", "First")
 	if err != nil {
 		t.Fatalf("first CreateUser: %v", err)
 	}
-	_, err = svc.CreateUser(ctx, "dup@halide-lab.org", "Second")
+	_, err = svc.CreateUser(ctx, "dup@graphene-lab.org", "Second")
 	if err == nil {
 		t.Fatal("expected conflict error on duplicate email")
 	}
@@ -162,7 +162,7 @@ func TestCreateUserDuplicateConflict(t *testing.T) {
 func TestGetUserByEmailNotFound(t *testing.T) {
 	svc, ctx := newTestService(t)
 
-	_, err := svc.GetUserByEmail(ctx, "nobody@halide-lab.org")
+	_, err := svc.GetUserByEmail(ctx, "nobody@graphene-lab.org")
 	if err == nil {
 		t.Fatal("expected not-found error")
 	}
@@ -182,7 +182,7 @@ func TestGetUserByIDNotFound(t *testing.T) {
 func TestAccessTokenRoundTrip(t *testing.T) {
 	svc, ctx := newTestService(t)
 
-	u, err := svc.CreateUser(ctx, "jwt@halide-lab.org", "JWT User")
+	u, err := svc.CreateUser(ctx, "jwt@graphene-lab.org", "JWT User")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestAccessTokenExpired(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	svc2, _ := auth.NewService(ctx, pool, cfg, audit.Nop{}, log)
 
-	u, _ := svc.CreateUser(ctx, "exp@halide-lab.org", "Expired")
+	u, _ := svc.CreateUser(ctx, "exp@graphene-lab.org", "Expired")
 	rawToken := auth.ExportIssueAccessToken(t, svc2, u)
 
 	_, err := svc2.VerifyAccessToken(ctx, rawToken)
@@ -229,7 +229,7 @@ func TestAccessTokenExpired(t *testing.T) {
 
 func TestAccessTokenInvalidSignature(t *testing.T) {
 	svc, ctx := newTestService(t)
-	u, _ := svc.CreateUser(ctx, "badsig@halide-lab.org", "Bad Sig")
+	u, _ := svc.CreateUser(ctx, "badsig@graphene-lab.org", "Bad Sig")
 	rawToken := auth.ExportIssueAccessToken(t, svc, u)
 
 	// Tamper the token.
@@ -249,7 +249,7 @@ func TestAccessTokenInvalidSignature(t *testing.T) {
 
 func TestPATFullLifecycle(t *testing.T) {
 	svc, ctx := newTestService(t)
-	u, _ := svc.CreateUser(ctx, "pat@halide-lab.org", "PAT User")
+	u, _ := svc.CreateUser(ctx, "pat@graphene-lab.org", "PAT User")
 
 	// Create PAT.
 	id, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "test-token", []string{"read", "write"}, nil)
@@ -289,7 +289,7 @@ func TestPATFullLifecycle(t *testing.T) {
 
 func TestPATExpired(t *testing.T) {
 	svc, ctx := newTestService(t)
-	u, _ := svc.CreateUser(ctx, "patexp@halide-lab.org", "PAT Exp")
+	u, _ := svc.CreateUser(ctx, "patexp@graphene-lab.org", "PAT Exp")
 
 	exp := time.Now().Add(-1 * time.Hour) // already expired
 	_, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "expired", []string{}, &exp)
@@ -314,7 +314,7 @@ func TestPATUnknownPrefix(t *testing.T) {
 
 func TestPATScopesOnPrincipal(t *testing.T) {
 	svc, ctx := newTestService(t)
-	u, _ := svc.CreateUser(ctx, "patscopes@halide-lab.org", "Scopes User")
+	u, _ := svc.CreateUser(ctx, "patscopes@graphene-lab.org", "Scopes User")
 
 	scopes := []string{"samples:read", "projects:write"}
 	_, raw, _ := auth.ExportCreatePAT(t, svc, ctx, u.ID, "scoped", scopes, nil)
@@ -338,7 +338,7 @@ func TestPATScopesOnPrincipal(t *testing.T) {
 
 func TestInternalAITokenLifecycle(t *testing.T) {
 	svc, ctx := newTestService(t)
-	u, _ := svc.CreateUser(ctx, "iai@halide-lab.org", "AI User")
+	u, _ := svc.CreateUser(ctx, "iai@graphene-lab.org", "AI User")
 	convID := uuid.New()
 
 	raw, err := svc.MintInternalAIToken(ctx, u.ID, convID, []string{"read"}, json.RawMessage(`{"k":"v"}`))
@@ -390,12 +390,12 @@ func TestEmailDomainAllowed(t *testing.T) {
 		allowed []string
 		want    bool
 	}{
-		{"user@halide-lab.org", []string{"halide-lab.org"}, true},
-		{"user@HALIDE-LAB.ORG", []string{"halide-lab.org"}, true},
-		{"user@other.org", []string{"halide-lab.org"}, false},
+		{"user@graphene-lab.org", []string{"graphene-lab.org"}, true},
+		{"user@GRAPHENE-LAB.ORG", []string{"graphene-lab.org"}, true},
+		{"user@other.org", []string{"graphene-lab.org"}, false},
 		{"user@anything.com", []string{}, true},  // empty = allow all
-		{"notanemail", []string{"halide-lab.org"}, false},
-		{"user@corp.com", []string{"halide-lab.org", "corp.com"}, true},
+		{"notanemail", []string{"graphene-lab.org"}, false},
+		{"user@corp.com", []string{"graphene-lab.org", "corp.com"}, true},
 	}
 	for _, tc := range tests {
 		got := auth.ExportEmailDomainAllowed(tc.email, tc.allowed)
@@ -418,7 +418,7 @@ func TestSeedDevUser(t *testing.T) {
 		t.Fatalf("SeedDevUser second call: %v", err)
 	}
 
-	u, err := svc.GetUserByEmail(ctx, "dev@halide-lab.org")
+	u, err := svc.GetUserByEmail(ctx, "dev@graphene-lab.org")
 	if err != nil {
 		t.Fatalf("GetUserByEmail after seed: %v", err)
 	}
