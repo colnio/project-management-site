@@ -15,13 +15,18 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/colnio/project-management-site/internal/artifact"
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
 	"github.com/colnio/project-management-site/internal/config"
 	"github.com/colnio/project-management-site/internal/db"
+	"github.com/colnio/project-management-site/internal/experiment"
+	"github.com/colnio/project-management-site/internal/iteration"
 	"github.com/colnio/project-management-site/internal/org"
+	"github.com/colnio/project-management-site/internal/page"
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
+	"github.com/colnio/project-management-site/internal/sample"
 )
 
 func main() {
@@ -75,11 +80,24 @@ func run() error {
 	//   project.Register(srv.API, projectSvc)
 	orgSvc := org.NewService(pool, cfg, auditRec, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, auditRec, logger)
+	iterationSvc := iteration.NewService(pool, projectSvc, auditRec, logger)
+	sampleSvc := sample.NewService(pool, projectSvc, auditRec, logger)
+	experimentSvc := experiment.NewService(pool, projectSvc, auditRec, logger)
+	pageSvc := page.NewService(pool, projectSvc, auditRec, logger)
+	artifactSvc, err := artifact.NewService(pool, projectSvc, cfg, auditRec, logger)
+	if err != nil {
+		return err
+	}
 
 	auth.Register(srv.API, authSvc)
 	audit.Register(srv.API, audit.NewService(auditRec))
 	org.Register(srv.API, orgSvc)
 	project.Register(srv.API, projectSvc)
+	iteration.Register(srv.API, iterationSvc)
+	sample.Register(srv.API, sampleSvc)
+	experiment.Register(srv.API, experimentSvc)
+	page.Register(srv.API, pageSvc)
+	artifact.Register(srv.API, artifactSvc)
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,

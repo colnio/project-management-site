@@ -4,8 +4,11 @@
 package platform
 
 import (
+	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"net/http"
+	"reflect"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -47,6 +50,17 @@ func New(deps *ServerDeps) *Server {
 		"uses the same surface. See /llms.txt for an agent-oriented summary."
 	config.Servers = []*huma.Server{{URL: "/"}}
 
+	// Modules are authored independently and frequently reuse generic input
+	// type names (createInput, linkSampleInput, ...). huma derives OpenAPI
+	// component names from Go type names, so two different anonymous request
+	// bodies with the same enclosing type name would collide. Disambiguate
+	// anonymous structs by their structural signature so parallel modules never
+	// clash. Named types keep their clean names.
+	if config.Components == nil {
+		config.Components = &huma.Components{}
+	}
+	config.Components.Schemas = huma.NewMapRegistry("#/components/schemas/", disambiguatingSchemaNamer)
+
 	api := humachi.New(r, config)
 
 	s := &Server{Router: r, API: api, Logger: logger}
@@ -62,6 +76,26 @@ func (s *Server) registerSystemRoutes() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+}
+
+// disambiguatingSchemaNamer behaves like huma.DefaultSchemaNamer but, for
+// unnamed (anonymous) structs — typically inline request/response bodies —
+// appends a short hash of the type's full structural signature. Two distinct
+// bodies that would otherwise share a hint-derived name (e.g. two modules each
+// with a linkSampleInput) get distinct component names; structurally identical
+// bodies still share one name.
+func disambiguatingSchemaNamer(t reflect.Type, hint string) string {
+	base := huma.DefaultSchemaNamer(t, hint)
+	dt := t
+	for dt.Kind() == reflect.Ptr {
+		dt = dt.Elem()
+	}
+	if dt.Kind() == reflect.Struct && dt.Name() == "" {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(dt.String()))
+		base = fmt.Sprintf("%s_%x", base, h.Sum32())
+	}
+	return base
 }
 
 // MountLLMSTxt serves a static /llms.txt agent-discovery stub. Track F4 will
