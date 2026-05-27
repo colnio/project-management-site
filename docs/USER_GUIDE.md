@@ -42,11 +42,14 @@ land in **Mailpit** at <http://localhost:8025>.
   start/end dates. The iteration detail page lets you edit fields and link the
   samples an iteration touches (with role input/output/passthrough).
 - **Experiments** — a structured record of what was actually done: a method
-  (cycling, synthesis, SEM, XRD, EIS, weighing, drying, custom). The experiment
-  detail page shows **method-specific parameter forms** (e.g. cycling rate / cycles
-  / voltage window), a result summary, status, and a **sample picker** to link the
-  samples involved (subject/reference/control/byproduct), plus an optional link to
-  an iteration.
+  (cycling, synthesis, SEM, XRD, EIS, weighing, drying, custom). Each gets a
+  short human-readable code (`EX-1`, `EX-2`, … per project) shown instead of a
+  raw UUID. The experiment detail page shows **method-specific parameter forms**
+  (e.g. cycling rate / cycles / voltage window), a result summary, status, a
+  **sample picker** to link the samples involved (subject/reference/control/
+  byproduct), an optional iteration link, and renders attached artifacts as
+  method-appropriate embeds (SEM micrographs, EIS fit PDFs + notebook cells,
+  cycling overlays).
 - **Pages** — block-editor documents (BlockNote) attached to a project, iteration,
   sample, or experiment. Create/open pages from a project's **Notes / Pages** tab.
   The editor auto-saves (after ~10s idle, on blur, or Ctrl/Cmd-S) and supports
@@ -60,10 +63,68 @@ land in **Mailpit** at <http://localhost:8025>.
 - **Artifacts** — files (PDF, Jupyter notebook, image, other) scoped to a project.
   Upload from the project's Artifacts tab: the file goes directly to object
   storage via a presigned URL and is then processed in the background — PDFs get a
-  page count, notebooks are rendered to HTML, and images get thumbnails. View PDFs
-  inline (PDF.js), images in a lightbox, and rendered notebooks in a sandboxed
+  page count, notebooks are rendered to HTML, and images get thumbnails. The
+  Artifacts tab is a **thumbnail gallery** — items show their generated thumbnail
+  (or a type-specific placeholder) with a processing indicator until ready. View
+  PDFs inline (PDF.js), images in a lightbox, and rendered notebooks in a sandboxed
   frame. Attach artifacts to samples or experiments with a typed role from those
   detail pages.
+
+## Risk Register
+
+Every project has a **Risk Register** — the lab's record of what could go wrong
+and how it's mitigated. It appears at the top of the project **Overview** and on
+the active **iteration** page.
+
+- Each risk has a **likelihood** (HIGH / MED / LOW), an **impact** headline +
+  description, a **mitigation**, an optional **Plan B**, and a status.
+- Risks flagged **PI REVIEW** need a principal investigator's sign-off. While an
+  iteration has an unresolved HIGH risk flagged for PI review, you **cannot move
+  that iteration to _active_** — the platform blocks the transition until the flag
+  is cleared (this is the PI sign-off gate).
+- Risks are authored by hand or **drafted by AI**: run a risk-assessment workflow
+  (see _AI assistant_) and the engine fills the register with AI-sourced rows
+  (rating → likelihood, plus mitigations), tagged with the originating run.
+
+## Overview layouts & Tweaks
+
+- The project **Overview** has three layouts — **Dashboard** (KPI tiles + recent
+  samples/experiments), **Editorial** (narrative + lead-questions + register), and
+  **Stream** (a chronological activity feed). Switch with the segmented control on
+  the Overview, or from the Tweaks panel.
+- Open the **Tweaks** panel (gear in the sidebar foot) to change the Overview
+  layout, toggle **dark mode**, pick an **accent color**, set **density**
+  (compact / regular / comfy), toggle the AI panel, set the AI **autonomy** mode,
+  and jump to a project tab. Choices persist across reloads.
+
+## Workspace surfaces
+
+The sidebar exposes workspace-level pages for the currently selected workspace:
+
+- **Inbox** — a single feed of things needing attention (PI-flag reviews, proposed
+  AI writes, audit/system events), grouped Today / Earlier / Older and filterable
+  by kind; each item deep-links to its source.
+- **People** — the member directory grouped by Owners / Admins / Members /
+  External, with avatars, roles, and join dates.
+- **Meetings** — workspace/project meetings split into upcoming and past; open one
+  for its agenda, decisions, action-items, attendees, and editable notes. Create a
+  meeting with the **New meeting** button.
+- **Admin** — workspace settings, an AI usage overview (spend today/month vs the
+  monthly cap), the members table, the risk-workflow library, and the audit log.
+- **Templates** — the risk-assessment workflow library; each opens a definition
+  page showing the step accordion (with prompt text) and the output schema.
+
+## Creating projects & iterations
+
+- **New project** (from the Workspaces view) is a wizard: Basics → an optional **AI
+  risk-assessment** step that drafts the register → Team → an optional first
+  iteration.
+- **New iteration** (from a project's Iterations tab) is a wizard: Basics →
+  Cycling protocol → Samples picker → an optional **AI-drafted iteration risk
+  register**. If the draft raises a HIGH risk flagged for PI review, activating the
+  iteration is blocked until a PI signs off.
+- Both AI steps degrade gracefully if the assistant isn't configured — you can
+  always skip and finish.
 
 ## Calendar
 
@@ -72,10 +133,11 @@ land in **Mailpit** at <http://localhost:8025>.
 - Open **Calendar** from the sidebar for an in-app month/week/agenda view. Switch
   scope between a single project and all your visible projects; click a date to
   create an event and click an event to edit or delete it. A **Timeline** toggle
-  shows a Gantt view — iterations as bars on a date axis with event markers — both
-  per project (the project's Timeline tab) and aggregated across projects.
-- **Subscribe from your own calendar app**: open your calendar subscription in
-  settings to get a personal signed URL of the form
+  shows a Gantt view — iterations as bars on a date axis with event markers, with
+  a **TODAY** marker line — both per project (the project's Timeline tab) and
+  aggregated across projects.
+- **Subscribe from your own calendar app**: the subscription panel is on the
+  Calendar page (and in Settings) — get a personal signed URL of the form
   `/v1/cal/{your_id}/{token}.ics`. Paste it into Google Calendar ("Add by URL"),
   Apple Calendar ("Subscribe to Calendar…"), or Outlook ("Add calendar from
   internet"). It includes every event in the projects you can see.
@@ -109,13 +171,15 @@ The platform includes an AI assistant (configured via `aiconf.local.json` — an
 OpenAI-compatible endpoint; if it's not configured the AI features show "not
 configured" and everything else still works).
 
-- **Chat** — open **Ask AI** from a project to chat with an assistant scoped to
-  that project. Replies **stream** in live. The assistant can call read tools
-  (search the project, read samples/experiments/pages/artifacts, trace lineage)
-  and shows what it used as citations. Whether it can make *changes* (draft a
-  page, set an iteration status, create a reminder, flag for review) depends on
-  the project's **autonomy mode** — in `suggest_writes` it proposes a change and
-  you **approve or reject** it inline.
+- **Chat** — open **Ask AI** from a project to dock a Cursor-style assistant panel
+  on the right, scoped to that project. Replies **stream** in live. The assistant
+  can call read tools (search the project, read samples/experiments/pages/
+  artifacts, trace lineage) and shows what it used as numbered **citations**. A
+  status strip shows the current **autonomy mode** and a **spend meter** (model +
+  today's spend against the workspace monthly cap). Whether it can make *changes*
+  (draft a page, set an iteration status, create a reminder, flag for review)
+  depends on the project's **autonomy mode** — in `suggest_writes` it proposes a
+  change and you **approve or reject** it inline.
 - **Risk-assessment workflows** — the **AI Workflows** tab runs a guided
   assessment (`battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1`)
   against a project/sample/experiment. The result shows an overall rating,

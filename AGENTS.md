@@ -18,10 +18,14 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
 3. **Audit every mutation.** Accept an `audit.Recorder` and record an
    `audit.Entry` (action, resource_type, resource_id) for each write. Tests
    assert it (use a capturing fake recorder).
-4. **Don't build AI yet.** Track G (Ollama orchestrator, workflows, chat) is
-   deliberately not implemented. AI-adjacent *plumbing* that isn't AI logic is
-   fine (e.g. the `internal_ai_tokens` table, page revision `source='ai'`
-   fields) — but no LLM calls, tool dispatch, or workflow engine.
+4. **AI calls the public API as the user.** Track G is built (`internal/ai`). The
+   orchestrator never reaches into other modules' tables: it mints a short-lived
+   internal token (`iai_`) and calls the public REST API at `127.0.0.1:<port>/v1`,
+   so auth/audit/rate-limit/permissions apply uniformly. Write tools are gated by
+   `AutonomyConfig`. New AI-driven side effects (e.g. risk-register population)
+   should go through the owning module's exported Go API (see
+   `risk.Service.UpsertFromWorkflow`, wired via `ai.Service.SetRiskService`), not
+   cross-module SQL.
 
 ## Build & tooling
 
@@ -45,8 +49,9 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
   a fresh DB; never drop the shared `lab` DB.
 - Per-module ranges already used: extensions 00001, idempotency 00025,
   audit 00010, auth 00020, org 00030–34, project 00040, iteration 00050–51,
-  sample 00060, experiment 00070–71, page 00080, artifact 00090,
-  calendar 00100. Pick the next free range for new modules.
+  sample 00060, experiment 00070–71 (+ EX-N codes 00121), page 00080,
+  artifact 00090, calendar 00100, AI 00110–115, risk 00120, meetings 00122,
+  inbox indexes 00123. Pick the next free range (≥00124) for new modules.
 
 ## huma gotchas (these crash at boot, not in unit tests)
 
