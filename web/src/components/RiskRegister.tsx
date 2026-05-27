@@ -2,13 +2,19 @@
  * RiskRegister — displays the project (or iteration) risk table.
  *
  * Props:
- *   projectId   — always required (used for the "Run assessment" button)
+ *   projectId   — always required (used for the "Run assessment" button + mutations)
  *   iterationId — when set, shows only risks scoped to that iteration
  *
  * Likelihood pills: HIGH (red) / MED (amber) / LOW (green)
  * Impact headline is color-coded by likelihood severity.
  * Source badge shows "AI" for workflow-generated risks.
  * PI REVIEW chip appears when flagged_for_pi_review === true.
+ *
+ * Editing:
+ *   "+ Add risk" button → RiskFormDialog (create mode)
+ *   Per-row pencil icon → RiskFormDialog (edit mode)
+ *   Per-row trash icon  → window.confirm → useDeleteRisk
+ *   PI-review toggle    → visible only when user.is_system_admin === true
  */
 import { useState } from 'react';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
@@ -16,10 +22,14 @@ import {
   useProjectRisks,
   useIterationRisks,
   useRunWorkflow,
+  useDeleteRisk,
+  useSetRiskPIReview,
   type Risk,
 } from '@/hooks/useRiskQueries';
 import { useQueryClient } from '@tanstack/react-query';
 import { riskKeys } from '@/hooks/useRiskQueries';
+import { useAuth } from '@/hooks/useAuth';
+import { RiskFormDialog } from '@/components/RiskFormDialog';
 
 // ─── Likelihood pill ─────────────────────────────────────────────────────────
 
@@ -72,7 +82,27 @@ function ImpactCell({ risk }: { risk: Risk }) {
 
 // ─── Risk row ────────────────────────────────────────────────────────────────
 
-function RiskRow({ risk }: { risk: Risk }) {
+interface RiskRowProps {
+  risk: Risk;
+  projectId: string;
+  isPI: boolean;
+  onEdit: (risk: Risk) => void;
+}
+
+function RiskRow({ risk, projectId, isPI, onEdit }: RiskRowProps) {
+  const deleteRisk = useDeleteRisk(projectId);
+  const setPIReview = useSetRiskPIReview(projectId);
+
+  const handleDelete = () => {
+    if (window.confirm(`Delete risk "${risk.title}"? This cannot be undone.`)) {
+      deleteRisk.mutate(risk.id);
+    }
+  };
+
+  const handleTogglePIReview = () => {
+    setPIReview.mutate({ riskId: risk.id, flagged: !risk.flagged_for_pi_review });
+  };
+
   return (
     <tr style={{ borderBottom: '1px solid var(--line)' }}>
       {/* Seq */}
@@ -184,6 +214,55 @@ function RiskRow({ risk }: { risk: Risk }) {
           <span style={{ fontSize: 12, color: 'var(--muted-2)', fontFamily: 'var(--mono)' }}>—</span>
         )}
       </td>
+
+      {/* Actions */}
+      <td
+        style={{
+          padding: '8px 10px',
+          verticalAlign: 'top',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {/* PI-review toggle — PI only */}
+          {isPI && (
+            <button
+              className="icon-btn"
+              onClick={handleTogglePIReview}
+              disabled={setPIReview.isPending}
+              title={risk.flagged_for_pi_review ? 'Clear PI review flag' : 'Flag for PI review'}
+              style={{
+                fontSize: 11,
+                color: risk.flagged_for_pi_review ? '#9a2a1e' : 'var(--muted-2)',
+                padding: '2px 5px',
+              }}
+            >
+              {risk.flagged_for_pi_review ? '⚑' : '⚐'}
+            </button>
+          )}
+
+          {/* Edit */}
+          <button
+            className="icon-btn"
+            onClick={() => onEdit(risk)}
+            title="Edit risk"
+            style={{ fontSize: 11, color: 'var(--muted-2)', padding: '2px 5px' }}
+          >
+            ✎
+          </button>
+
+          {/* Delete */}
+          <button
+            className="icon-btn"
+            onClick={handleDelete}
+            disabled={deleteRisk.isPending}
+            title="Delete risk"
+            style={{ fontSize: 11, color: 'var(--muted-2)', padding: '2px 5px' }}
+          >
+            ✕
+          </button>
+        </div>
+      </td>
     </tr>
   );
 }
@@ -198,6 +277,12 @@ interface RiskRegisterProps {
 export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
   const qc = useQueryClient();
   const [runError, setRunError] = useState<string | null>(null);
+
+  // Dialog state: null = closed, 'create' = new risk, Risk object = edit mode
+  const [dialogState, setDialogState] = useState<null | 'create' | Risk>(null);
+
+  const { user } = useAuth();
+  const isPI = !!user?.is_system_admin;
 
   const projectResult = useProjectRisks(iterationId ? undefined : projectId);
   const iterationResult = useIterationRisks(iterationId);
@@ -233,149 +318,175 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
       : null;
 
   return (
-    <div
-      style={{
-        border: '1px solid var(--line)',
-        borderRadius: 10,
-        overflow: 'hidden',
-        marginBottom: 32,
-      }}
-    >
-      {/* Header */}
+    <>
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '13px 20px',
-          borderBottom: '1px solid var(--line)',
-          background: 'var(--paper-2)',
+          border: '1px solid var(--line)',
+          borderRadius: 10,
+          overflow: 'hidden',
+          marginBottom: 32,
         }}
       >
-        <div style={{ flex: 1 }}>
-          <span
-            style={{
-              fontFamily: 'var(--sans)',
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: 'var(--ink-2)',
-            }}
-          >
-            Risk Register
-          </span>
-          {risks && risks.length > 0 && (
-            <span
-              style={{
-                marginLeft: 8,
-                fontFamily: 'var(--mono)',
-                fontSize: 10.5,
-                color: 'var(--muted)',
-                background: 'var(--surface)',
-                border: '1px solid var(--line)',
-                borderRadius: 99,
-                padding: '1px 6px',
-              }}
-            >
-              {risks.length}
-            </span>
-          )}
-        </div>
-
-        {runError && (
-          <span
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              color: 'var(--bad)',
-              maxWidth: 240,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {runError}
-          </span>
-        )}
-
-        <button
-          className="top-btn"
-          onClick={handleRunAssessment}
-          disabled={runWorkflow.isPending}
-          style={{ fontSize: 12 }}
-        >
-          {runWorkflow.isPending ? 'Running…' : 'Run risk assessment'}
-        </button>
-      </div>
-
-      {/* Body */}
-      {isLoading ? (
-        <LoadingState message="Loading risks…" />
-      ) : isError ? (
-        <ErrorState message="Failed to load risks." />
-      ) : !risks || risks.length === 0 ? (
-        <EmptyState message="No risks recorded. Run a risk assessment or add one manually." />
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              background: 'var(--surface)',
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  background: 'var(--paper-2)',
-                  borderBottom: '1px solid var(--line)',
-                }}
-              >
-                {['#', 'Risk', 'Likelihood', 'Impact', 'Mitigation / Plan B'].map(h => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '8px 12px',
-                      textAlign: 'left',
-                      fontFamily: 'var(--mono)',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      letterSpacing: '0.07em',
-                      textTransform: 'uppercase',
-                      color: 'var(--muted-2)',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {risks.map(r => (
-                <RiskRow key={r.id} risk={r} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Footer */}
-      {latestUpdate && (
+        {/* Header */}
         <div
           style={{
-            padding: '8px 20px',
-            borderTop: '1px solid var(--line)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '13px 20px',
+            borderBottom: '1px solid var(--line)',
             background: 'var(--paper-2)',
-            fontFamily: 'var(--mono)',
-            fontSize: 10.5,
-            color: 'var(--muted-2)',
           }}
         >
-          Last updated {new Date(latestUpdate).toLocaleString()}
+          <div style={{ flex: 1 }}>
+            <span
+              style={{
+                fontFamily: 'var(--sans)',
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--ink-2)',
+              }}
+            >
+              Risk Register
+            </span>
+            {risks && risks.length > 0 && (
+              <span
+                style={{
+                  marginLeft: 8,
+                  fontFamily: 'var(--mono)',
+                  fontSize: 10.5,
+                  color: 'var(--muted)',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 99,
+                  padding: '1px 6px',
+                }}
+              >
+                {risks.length}
+              </span>
+            )}
+          </div>
+
+          {runError && (
+            <span
+              style={{
+                fontFamily: 'var(--mono)',
+                fontSize: 11,
+                color: 'var(--bad)',
+                maxWidth: 240,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {runError}
+            </span>
+          )}
+
+          <button
+            className="top-btn"
+            onClick={() => setDialogState('create')}
+            style={{ fontSize: 12 }}
+          >
+            + Add risk
+          </button>
+
+          <button
+            className="top-btn"
+            onClick={handleRunAssessment}
+            disabled={runWorkflow.isPending}
+            style={{ fontSize: 12 }}
+          >
+            {runWorkflow.isPending ? 'Running…' : 'Run risk assessment'}
+          </button>
         </div>
+
+        {/* Body */}
+        {isLoading ? (
+          <LoadingState message="Loading risks…" />
+        ) : isError ? (
+          <ErrorState message="Failed to load risks." />
+        ) : !risks || risks.length === 0 ? (
+          <EmptyState message="No risks recorded. Run a risk assessment or add one manually." />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                background: 'var(--surface)',
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    background: 'var(--paper-2)',
+                    borderBottom: '1px solid var(--line)',
+                  }}
+                >
+                  {['#', 'Risk', 'Likelihood', 'Impact', 'Mitigation / Plan B', ''].map(h => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: '8px 12px',
+                        textAlign: 'left',
+                        fontFamily: 'var(--mono)',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        letterSpacing: '0.07em',
+                        textTransform: 'uppercase',
+                        color: 'var(--muted-2)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {risks.map(r => (
+                  <RiskRow
+                    key={r.id}
+                    risk={r}
+                    projectId={projectId}
+                    isPI={isPI}
+                    onEdit={risk => setDialogState(risk)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Footer */}
+        {latestUpdate && (
+          <div
+            style={{
+              padding: '8px 20px',
+              borderTop: '1px solid var(--line)',
+              background: 'var(--paper-2)',
+              fontFamily: 'var(--mono)',
+              fontSize: 10.5,
+              color: 'var(--muted-2)',
+            }}
+          >
+            Last updated {new Date(latestUpdate).toLocaleString()}
+          </div>
+        )}
+      </div>
+
+      {/* RiskFormDialog */}
+      {dialogState !== null && (
+        <RiskFormDialog
+          projectId={projectId}
+          iterationId={iterationId}
+          risk={dialogState === 'create' ? undefined : dialogState}
+          onClose={() => setDialogState(null)}
+        />
       )}
-    </div>
+    </>
   );
 }
