@@ -30,15 +30,27 @@ interface StreamingMessage {
 interface StreamingToolCall {
   id: string;
   name: string;
-  arguments: Record<string, unknown>;
+  arguments: unknown;
   status?: string;
   result?: unknown;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatToolArgs(args: Record<string, unknown>): string {
-  const entries = Object.entries(args);
+function formatToolArgs(args: unknown): string {
+  // Args may arrive as null/undefined (history with no args), a JSON string
+  // (OpenAI-style function.arguments), or an object. Normalize all cases.
+  let obj: unknown = args;
+  if (typeof obj === 'string') {
+    const str = obj;
+    try {
+      obj = JSON.parse(str);
+    } catch {
+      return str.trim() ? `(${str})` : '()';
+    }
+  }
+  if (obj == null || typeof obj !== 'object') return '()';
+  const entries = Object.entries(obj as Record<string, unknown>);
   if (entries.length === 0) return '()';
   const inner = entries.map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ');
   return `(${inner})`;

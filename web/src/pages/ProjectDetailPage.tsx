@@ -709,9 +709,12 @@ interface ProjectDetailSearch {
   tab?: Tab;
 }
 
+const TAB_IDS = new Set<Tab>(TABS.map(t => t.id));
+
 export function ProjectDetailPage() {
   const { projectId } = useParams({ strict: false }) as { projectId: string };
   const search = useSearch({ strict: false }) as ProjectDetailSearch;
+  const router = useRouter();
   const { data: project, isLoading, isError } = useProject(projectId);
   const { data: samples = [] } = useProjectSamples(projectId);
   const { data: experiments = [] } = useProjectExperiments(projectId);
@@ -719,9 +722,17 @@ export function ProjectDetailPage() {
   const { data: artifacts = [] } = useProjectArtifacts(projectId);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
-  const activeTab: Tab = search.tab ?? 'overview';
-  const [_tab, setTab] = useState<Tab>(activeTab);
-  const currentTab = search.tab ?? _tab;
+  // URL search param is the single source of truth for the active tab.
+  // Unknown values (e.g. a hand-typed ?tab=settings) fall back to overview
+  // so the content area is never blank.
+  const currentTab: Tab = search.tab && TAB_IDS.has(search.tab) ? search.tab : 'overview';
+  const setTab = (tab: Tab) => {
+    void router.navigate({
+      to: '/projects/$projectId',
+      params: { projectId },
+      search: { tab },
+    });
+  };
 
   const crumbs = [
     { label: 'Workspaces', href: '/workspaces' },

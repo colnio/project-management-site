@@ -24,8 +24,78 @@ export function setIsAuthenticated(fn: () => boolean) {
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
+function RootErrorComponent({ error }: { error: Error }) {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--paper, #faf9f6)',
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 480,
+          border: '1px solid var(--line, #e6e2d8)',
+          borderRadius: 12,
+          background: 'var(--surface, #fff)',
+          padding: '28px 32px',
+          fontFamily: 'var(--sans, system-ui)',
+        }}
+      >
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--ink, #1a1a1a)' }}>
+          Something went wrong
+        </div>
+        <div style={{ fontSize: 13.5, color: 'var(--muted, #7a7468)', lineHeight: 1.6, marginBottom: 18 }}>
+          This view hit an unexpected error. You can reload it or head back home.
+        </div>
+        <pre
+          style={{
+            fontFamily: 'var(--mono, monospace)',
+            fontSize: 11.5,
+            color: 'var(--bad, #b94e3c)',
+            background: 'var(--paper-2, #f3f1eb)',
+            border: '1px solid var(--line, #e6e2d8)',
+            borderRadius: 6,
+            padding: '8px 10px',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            marginBottom: 18,
+            maxHeight: 140,
+            overflow: 'auto',
+          }}
+        >
+          {error?.message ?? String(error)}
+        </pre>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            className="top-btn primary"
+            style={{ fontSize: 13, padding: '7px 14px' }}
+            onClick={() => window.location.reload()}
+          >
+            Reload
+          </button>
+          <button
+            className="top-btn"
+            style={{ fontSize: 13, padding: '7px 14px' }}
+            onClick={() => {
+              window.location.href = '/';
+            }}
+          >
+            Go home
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
+  errorComponent: RootErrorComponent,
 });
 
 const loginRoute = createRoute({

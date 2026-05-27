@@ -28,9 +28,30 @@ export interface AIMessage {
 export interface AIToolCall {
   id: string;
   name: string;
-  arguments: Record<string, unknown>;
+  arguments: unknown;
   status?: 'proposed' | 'approved' | 'rejected' | 'executed';
   result?: unknown;
+}
+
+// The backend persists tool calls in OpenAI nested form
+// ({ id, type, function: { name, arguments } }) where arguments is a JSON
+// string. Normalize to the flat shape the UI renders so history never feeds
+// undefined into the tool-call card.
+function normalizeToolCall(raw: unknown): AIToolCall {
+  const tc = (raw ?? {}) as Record<string, unknown>;
+  const fn = (tc.function ?? {}) as Record<string, unknown>;
+  return {
+    id: String(tc.id ?? ''),
+    name: String(tc.name ?? fn.name ?? ''),
+    arguments: tc.arguments ?? fn.arguments ?? {},
+    status: tc.status as AIToolCall['status'],
+    result: tc.result,
+  };
+}
+
+function normalizeMessage(raw: AIMessage): AIMessage {
+  if (!raw.tool_calls || raw.tool_calls.length === 0) return raw;
+  return { ...raw, tool_calls: raw.tool_calls.map(normalizeToolCall) };
 }
 
 export interface AutonomyConfig {
@@ -100,7 +121,9 @@ export function useConversationMessages(convId: string | undefined) {
   return useQuery({
     queryKey: convId ? aiKeys.conversationMessages(convId) : ['ai', 'conversations', 'none', 'messages'],
     queryFn: () =>
-      api.get<{ items: AIMessage[] } | null>(`/v1/ai/conversations/${convId}`).then(r => r?.items ?? []),
+      api
+        .get<{ items: AIMessage[] } | null>(`/v1/ai/conversations/${convId}`)
+        .then(r => (r?.items ?? []).map(normalizeMessage)),
     enabled: !!convId,
   });
 }
