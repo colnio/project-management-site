@@ -576,8 +576,8 @@ export function NewIterationWizard({ projectId, onClose }: NewIterationWizardPro
       const it = await createIteration.mutateAsync({
         title: title.trim(),
         description: combinedDescription || undefined,
-        start_at: startAt || undefined,
-        end_at: endAt || undefined,
+        start_at: startAt ? new Date(startAt).toISOString() : undefined,
+        end_at: endAt ? new Date(endAt).toISOString() : undefined,
       });
       setIterationId(it.id);
       setStep(3);
