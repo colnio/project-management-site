@@ -15,6 +15,13 @@ import { ExperimentDetailPage } from './pages/ExperimentDetailPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PageEditorPage } from './pages/PageEditorPage';
 import { CalendarPage } from './pages/CalendarPage';
+import { InboxPage } from './pages/InboxPage';
+import { PeoplePage } from './pages/PeoplePage';
+import { MeetingsPage } from './pages/MeetingsPage';
+import { MeetingDetailPage } from './pages/MeetingDetailPage';
+import { AdminPage } from './pages/AdminPage';
+import { TemplatesPage } from './pages/TemplatesPage';
+import { TemplateDetailPage } from './pages/TemplateDetailPage';
 
 // Token accessor injected at auth setup — used by guards
 let isAuthenticated: () => boolean = () => false;
@@ -170,6 +177,48 @@ const calendarRoute = createRoute({
   component: CalendarPage,
 });
 
+const inboxRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/inbox',
+  component: InboxPage,
+});
+
+const peopleRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/people',
+  component: PeoplePage,
+});
+
+const meetingsRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/meetings',
+  component: MeetingsPage,
+});
+
+const meetingDetailRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/meetings/$meetingId',
+  component: MeetingDetailPage,
+});
+
+const adminRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/admin',
+  component: AdminPage,
+});
+
+const templatesRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/templates',
+  component: TemplatesPage,
+});
+
+const templateDetailRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/templates/$workflowKey',
+  component: TemplateDetailPage,
+});
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -184,6 +233,13 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     pageEditorRoute,
     calendarRoute,
+    inboxRoute,
+    peopleRoute,
+    meetingsRoute,
+    meetingDetailRoute,
+    adminRoute,
+    templatesRoute,
+    templateDetailRoute,
   ]),
 ]);
 

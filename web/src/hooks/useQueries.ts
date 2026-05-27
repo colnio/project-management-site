@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { api } from '@/api/client';
 import type {
   Workspace,
@@ -347,4 +348,40 @@ export function useUnlinkExperimentSample(experimentId: string) {
       api.delete<{ ok: boolean }>(`/v1/experiments/${experimentId}/samples/${sampleId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.experimentSamples(experimentId) }),
   });
+}
+
+// ─── Current Workspace ────────────────────────────────────────────────────────
+
+const LS_KEY = 'currentWorkspaceId';
+
+/**
+ * Returns the currently-active workspace, persisted in localStorage.
+ * Falls back to the first workspace from the API if no selection is stored.
+ */
+export function useCurrentWorkspace() {
+  const { data: workspaces = [] } = useWorkspaces();
+
+  const [workspaceId, setWorkspaceIdState] = useState<string | undefined>(() => {
+    return localStorage.getItem(LS_KEY) ?? undefined;
+  });
+
+  // When workspaces load, ensure the stored id is still valid; fall back to first.
+  useEffect(() => {
+    if (workspaces.length === 0) return;
+    const stored = localStorage.getItem(LS_KEY);
+    if (stored && workspaces.some(w => w.id === stored)) {
+      setWorkspaceIdState(stored);
+    } else {
+      const first = workspaces[0].id;
+      localStorage.setItem(LS_KEY, first);
+      setWorkspaceIdState(first);
+    }
+  }, [workspaces]);
+
+  const setWorkspaceId = (id: string) => {
+    localStorage.setItem(LS_KEY, id);
+    setWorkspaceIdState(id);
+  };
+
+  return { workspaceId, workspaces, setWorkspaceId };
 }

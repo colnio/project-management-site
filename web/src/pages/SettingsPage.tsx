@@ -4,7 +4,7 @@
  * - API Tokens: list PATs, create (with one-time secret reveal + copy), revoke
  * - Calendar subscription: show .ics URL, rotate, scope toggle
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import {
@@ -17,6 +17,7 @@ import {
 } from '@/hooks/useArtifactQueries';
 import type { PATInfo, CreateTokenOutput } from '@/hooks/useArtifactQueries';
 import { useWorkspaces } from '@/hooks/useQueries';
+import { useAuth } from '@/hooks/useAuth';
 import { WorkspaceAutonomySection } from '@/components/AutonomyConfig';
 
 // ─── Known scopes ─────────────────────────────────────────────────────────────
@@ -416,6 +417,141 @@ function CalendarSection() {
   );
 }
 
+// ─── Profile section ─────────────────────────────────────────────────────────
+
+function ProfileSection() {
+  const { user } = useAuth();
+
+  if (!user) return <ErrorState message="Not signed in." />;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div>
+        <FieldLabel>Display Name</FieldLabel>
+        <input
+          className="field-input"
+          defaultValue={user.display_name ?? ''}
+          readOnly
+          title="Display name editing requires a backend endpoint that is not yet available."
+          style={{ cursor: 'not-allowed', opacity: 0.7 }}
+        />
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', marginTop: 6 }}>
+          Display name editing is read-only (no PATCH /v1/me endpoint). (Deviation)
+        </div>
+      </div>
+      <div>
+        <FieldLabel>Email</FieldLabel>
+        <input
+          className="field-input"
+          defaultValue={user.email}
+          readOnly
+          style={{ cursor: 'not-allowed', opacity: 0.7 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Notifications section ────────────────────────────────────────────────────
+
+const NOTIFICATION_KEYS = [
+  { key: 'notif_pi_flag', label: 'PI review flags', description: 'Notify when a risk is flagged for PI review' },
+  { key: 'notif_ai_proposal', label: 'AI proposals', description: 'Notify when an AI action awaits approval' },
+  { key: 'notif_mentions', label: 'Mentions', description: 'Notify when you are mentioned' },
+  { key: 'notif_meetings', label: 'Meeting reminders', description: 'Notify before scheduled meetings' },
+] as const;
+
+type NotifKey = typeof NOTIFICATION_KEYS[number]['key'];
+
+function NotificationsSection() {
+  const [prefs, setPrefs] = useState<Record<NotifKey, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem('notif_prefs');
+      if (stored) return JSON.parse(stored) as Record<NotifKey, boolean>;
+    } catch {}
+    return { notif_pi_flag: true, notif_ai_proposal: true, notif_mentions: true, notif_meetings: true };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('notif_prefs', JSON.stringify(prefs));
+  }, [prefs]);
+
+  const toggle = (key: NotifKey) => {
+    setPrefs(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', marginBottom: 4 }}>
+        Preferences stored locally in your browser.
+      </div>
+      {NOTIFICATION_KEYS.map(({ key, label, description }) => (
+        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button
+            onClick={() => toggle(key)}
+            style={{
+              width: 36,
+              height: 20,
+              borderRadius: 10,
+              background: prefs[key] ? 'var(--ember)' : 'var(--line-2)',
+              position: 'relative',
+              flexShrink: 0,
+              transition: 'background 0.2s ease',
+              border: 0,
+            }}
+          >
+            <span
+              style={{
+                position: 'absolute',
+                top: 2,
+                left: prefs[key] ? 18 : 2,
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                background: '#fff',
+                transition: 'left 0.2s ease',
+              }}
+            />
+          </button>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 500 }}>{label}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', fontFamily: 'var(--mono)', marginTop: 1 }}>{description}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Security / TOTP section ──────────────────────────────────────────────────
+
+function SecuritySection() {
+  // No TOTP backend endpoint exists — UI rendered in disabled "Coming soon" state. (Deviation)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div>
+        <div style={{ fontWeight: 500, fontSize: 13.5, marginBottom: 6 }}>
+          Two-Factor Authentication (TOTP)
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55, marginBottom: 14 }}>
+          Protect your account with an authenticator app like Google Authenticator or Authy.
+        </div>
+        <button
+          className="top-btn"
+          disabled
+          title="TOTP endpoint not yet available"
+          style={{ opacity: 0.5, cursor: 'not-allowed' }}
+        >
+          Enable 2FA — Coming soon
+        </button>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', marginTop: 8 }}>
+          TOTP backend endpoint not yet available. (Deviation)
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Workspace Autonomy wrapper ───────────────────────────────────────────────
 
 function WorkspaceAutonomyWrapper() {
@@ -439,6 +575,18 @@ export function SettingsPage() {
         <h1 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 400, letterSpacing: '-0.01em', margin: '0 0 28px' }}>
           Settings
         </h1>
+
+        <SectionCard title="Profile">
+          <ProfileSection />
+        </SectionCard>
+
+        <SectionCard title="Notifications">
+          <NotificationsSection />
+        </SectionCard>
+
+        <SectionCard title="Security">
+          <SecuritySection />
+        </SectionCard>
 
         <SectionCard title="API Tokens">
           <ApiTokensSection />

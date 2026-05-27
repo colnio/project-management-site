@@ -2,11 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkspaces, useProjects } from '@/hooks/useQueries';
+import { useInbox } from '@/hooks/useWorkspaceQueries';
 import { Avatar } from './Avatar';
 import { CommandPalette } from './CommandPalette';
 import { TweaksPanel } from './TweaksPanel';
 import type { Workspace, Project } from '@/api/types';
 import type { ReactNode } from 'react';
+
+const LS_WS_KEY = 'currentWorkspaceId';
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -100,6 +103,54 @@ function TweaksIcon({ size = 13 }: { size?: number }) {
   );
 }
 
+function InboxIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M2 10H5.5L6.5 12H9.5L10.5 10H14" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PeopleIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <circle cx="6" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M1.5 13C1.5 10.5 3.5 8.5 6 8.5C8.5 8.5 10.5 10.5 10.5 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M11 7.5C12.7 7.5 14 8.8 14 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="11.5" cy="4.5" r="2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function MeetingsIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 5V8.5L10.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AdminIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <path d="M8 2L10 6L14.5 6.5L11 9.5L12 14L8 11.5L4 14L5 9.5L1.5 6.5L6 6L8 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TemplatesIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 interface SidebarProps {
@@ -110,6 +161,7 @@ interface SidebarProps {
   onSelectWorkspace: (id: string) => void;
   onOpenPalette: () => void;
   onOpenTweaks: () => void;
+  inboxCount?: number;
 }
 
 function Sidebar({
@@ -120,6 +172,7 @@ function Sidebar({
   onSelectWorkspace,
   onOpenPalette,
   onOpenTweaks,
+  inboxCount = 0,
 }: SidebarProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -258,6 +311,39 @@ function Sidebar({
           Workspaces
         </Link>
         <Link
+          to="/inbox"
+          className="side-item"
+          activeProps={{ className: 'side-item active' }}
+        >
+          <span className="ic">
+            <InboxIcon size={13} />
+          </span>
+          Inbox
+          {inboxCount > 0 && (
+            <span className="count">{inboxCount > 99 ? '99+' : inboxCount}</span>
+          )}
+        </Link>
+        <Link
+          to="/meetings"
+          className="side-item"
+          activeProps={{ className: 'side-item active' }}
+        >
+          <span className="ic">
+            <MeetingsIcon size={13} />
+          </span>
+          Meetings
+        </Link>
+        <Link
+          to="/people"
+          className="side-item"
+          activeProps={{ className: 'side-item active' }}
+        >
+          <span className="ic">
+            <PeopleIcon size={13} />
+          </span>
+          People
+        </Link>
+        <Link
           to="/calendar"
           className="side-item"
           activeProps={{ className: 'side-item active' }}
@@ -267,7 +353,43 @@ function Sidebar({
           </span>
           Calendar
         </Link>
+        <Link
+          to="/admin"
+          className="side-item"
+          activeProps={{ className: 'side-item active' }}
+        >
+          <span className="ic">
+            <AdminIcon size={13} />
+          </span>
+          Admin
+        </Link>
       </nav>
+
+      {/* Templates section */}
+      <div className="side-sect">
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <TemplatesIcon size={11} />
+          Templates
+        </span>
+      </div>
+      <div style={{ padding: '0 6px', display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {[
+          { key: 'battery-safety-risk', label: 'Battery Safety Risk' },
+          { key: 'experimental-risk', label: 'Experimental Risk' },
+          { key: 'project-risk', label: 'Project Risk' },
+        ].map(tpl => (
+          <Link
+            key={tpl.key}
+            to="/templates/$workflowKey"
+            params={{ workflowKey: tpl.key }}
+            className="side-item"
+            activeProps={{ className: 'side-item active' }}
+          >
+            <span className="ic" style={{ color: 'var(--muted-2)' }}>·</span>
+            {tpl.label}
+          </Link>
+        ))}
+      </div>
 
       {/* Projects section */}
       <div className="side-sect">
@@ -404,14 +526,24 @@ export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarA
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const { data: workspaces = [] } = useWorkspaces();
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | undefined>();
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | undefined>(() => {
+    return localStorage.getItem(LS_WS_KEY) ?? undefined;
+  });
 
-  // Pick first workspace by default
+  // Pick first workspace by default or validate stored id
   useEffect(() => {
-    if (workspaces.length > 0 && !activeWorkspaceId) {
-      setActiveWorkspaceId(workspaces[0].id);
+    if (workspaces.length === 0) return;
+    const stored = localStorage.getItem(LS_WS_KEY);
+    if (stored && workspaces.some(w => w.id === stored)) {
+      setActiveWorkspaceId(stored);
+    } else {
+      const first = workspaces[0].id;
+      localStorage.setItem(LS_WS_KEY, first);
+      setActiveWorkspaceId(first);
     }
-  }, [workspaces, activeWorkspaceId]);
+  }, [workspaces]);
+
+  const { data: inboxItems = [] } = useInbox(activeWorkspaceId);
 
   const { data: projects = [] } = useProjects(activeWorkspaceId);
 
@@ -437,6 +569,7 @@ export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarA
 
   const handleSelectWorkspace = useCallback(
     (workspaceId: string) => {
+      localStorage.setItem(LS_WS_KEY, workspaceId);
       setActiveWorkspaceId(workspaceId);
       void router.navigate({ to: '/workspaces' });
     },
@@ -451,11 +584,13 @@ export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarA
         workspaces={workspaces}
         projects={projects}
         onSelectWorkspace={(id) => {
+          localStorage.setItem(LS_WS_KEY, id);
           setActiveWorkspaceId(id);
           void router.navigate({ to: '/workspaces' });
         }}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenTweaks={() => setTweaksOpen(true)}
+        inboxCount={inboxItems.length}
       />
 
       <div className="main">
