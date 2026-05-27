@@ -396,6 +396,10 @@ export interface PageEditorCoreProps {
   showToolbar?: boolean;
   /** Optional callback when save status changes. */
   onSaveStatus?: (status: SaveStatus) => void;
+  /** Whether this editor runs the presence heartbeat/indicator. Default true.
+   *  Set false for secondary editors on the same screen to avoid duplicate
+   *  heartbeat/poll loops (e.g. the notes slot when the description slot covers it). */
+  enablePresence?: boolean;
 }
 
 export function PageEditorCore({
@@ -403,6 +407,7 @@ export function PageEditorCore({
   projectId: propProjectId,
   showToolbar = true,
   onSaveStatus,
+  enablePresence = true,
 }: PageEditorCoreProps) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -467,7 +472,18 @@ export function PageEditorCore({
       setSaveStatusNotify('saved');
       setIsDirty(false);
       void qc.invalidateQueries({ queryKey: pageKeys.revisions(pageId) });
-      void qc.invalidateQueries({ queryKey: pageKeys.page(pageId) });
+      // Update the page cache from the save response instead of refetching it,
+      // avoiding an extra GET per save (and a doubled storm with two editors).
+      qc.setQueryData<GetPageResponse>(pageKeys.page(pageId), (prev) =>
+        prev
+          ? {
+              ...prev,
+              blocks: result.data.blocks,
+              current_revision_id: result.data.page.current_revision_id ?? prev.current_revision_id,
+              _etag: result.etag,
+            }
+          : prev
+      );
     },
     [editor, isDirty, pageId, qc, setSaveStatusNotify]
   );
@@ -498,11 +514,12 @@ export function PageEditorCore({
   // ─── Heartbeat ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (!enablePresence) return;
     const send = () => void heartbeat.mutate({ pageId, clientId });
     send();
-    const interval = setInterval(send, 15000);
+    const interval = setInterval(send, 30000);
     return () => clearInterval(interval);
-  }, [pageId, clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pageId, clientId, enablePresence]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Conflict handlers ───────────────────────────────────────────────────────
 
@@ -747,7 +764,7 @@ export function PageEditorCore({
       {showToolbar && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderBottom: '1px solid var(--line)', background: 'var(--surface)' }}>
           <SaveStatusBadge status={saveStatus} />
-          {pageData && <PresenceIndicator pageId={pageId} currentUserId={user?.id ?? ''} />}
+          {pageData && enablePresence && <PresenceIndicator pageId={pageId} currentUserId={user?.id ?? ''} />}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button className="top-btn" onClick={() => setShowHistory(h => !h)} style={{ background: showHistory ? 'var(--paper-2)' : undefined }}>
               History

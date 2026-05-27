@@ -15,7 +15,8 @@ initTweaks();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      staleTime: 5 * 60_000,        // treat data fresh for 5 min; mutations invalidate their keys
+      refetchOnWindowFocus: false,  // stop the whole query set refiring on every tab/window focus
       retry: 1,
     },
   },

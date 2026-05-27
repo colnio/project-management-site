@@ -141,6 +141,7 @@ export function EntityPageEditor({ parentType, parentId, projectId, slot }: Enti
         pageId={resolvedPageId}
         projectId={projectId}
         showToolbar={true}
+        enablePresence={slot !== 'notes'}
       />
     </div>
   );

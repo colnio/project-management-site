@@ -190,7 +190,7 @@ export function usePresence(pageId: string | undefined) {
         r => r.present ?? []
       ),
     enabled: !!pageId,
-    refetchInterval: 15000,
+    refetchInterval: 30000,
   });
 }
 
