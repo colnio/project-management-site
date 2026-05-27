@@ -15,8 +15,19 @@ import {
 import type { PATInfo, CreateTokenOutput } from '@/hooks/useArtifactQueries';
 import { useCurrentWorkspace } from '@/hooks/useQueries';
 import { useAuth } from '@/hooks/useAuth';
+import { api, ApiError } from '@/api/client';
+import type { User } from '@/api/types';
 import { WorkspaceAutonomySection } from '@/components/AutonomyConfig';
 import { CalendarSubscriptionPanel } from '@/components/CalendarSubscriptionPanel';
+
+const TITLE_OPTIONS = [
+  { value: '', label: 'Select role…' },
+  { value: 'PhD student', label: 'PhD Student' },
+  { value: 'Postdoc', label: 'Postdoc' },
+  { value: 'PI', label: 'PI (Principal Investigator)' },
+  { value: 'Staff', label: 'Research Staff' },
+  { value: 'Other', label: 'Other' },
+];
 
 // ─── Known scopes ─────────────────────────────────────────────────────────────
 
@@ -330,25 +341,105 @@ function CalendarSection() {
 // ─── Profile section ─────────────────────────────────────────────────────────
 
 function ProfileSection() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+
+  const [firstName, setFirstName] = useState(user?.first_name ?? '');
+  const [lastName, setLastName] = useState(user?.last_name ?? '');
+  const [title, setTitle] = useState(user?.title ?? '');
+  const [description, setDescription] = useState(user?.description ?? '');
+  const [displayName, setDisplayName] = useState(user?.display_name ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saved, setSaved] = useState(false);
 
   if (!user) return <ErrorState message="Not signed in." />;
 
+  const handleSave = async () => {
+    setSaveError('');
+    setSaving(true);
+    try {
+      await api.patch<User>('/v1/me/profile', {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        title: title || undefined,
+        description: description.trim() || undefined,
+        display_name: displayName.trim() || undefined,
+      });
+      await refreshUser();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setSaveError(err.message || 'Failed to save profile');
+      } else {
+        setSaveError('Network error — please try again.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div>
-        <FieldLabel>Display Name</FieldLabel>
-        <input
-          className="field-input"
-          defaultValue={user.display_name ?? ''}
-          readOnly
-          title="Display name editing requires a backend endpoint that is not yet available."
-          style={{ cursor: 'not-allowed', opacity: 0.7 }}
-        />
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', marginTop: 6 }}>
-          Display name editing is read-only (no PATCH /v1/me endpoint). (Deviation)
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div>
+          <FieldLabel>First name</FieldLabel>
+          <input
+            className="field-input"
+            value={firstName}
+            onChange={e => setFirstName(e.target.value)}
+            placeholder="Ada"
+          />
+        </div>
+        <div>
+          <FieldLabel>Last name</FieldLabel>
+          <input
+            className="field-input"
+            value={lastName}
+            onChange={e => setLastName(e.target.value)}
+            placeholder="Lovelace"
+          />
         </div>
       </div>
+
+      <div>
+        <FieldLabel>Display name</FieldLabel>
+        <input
+          className="field-input"
+          value={displayName}
+          onChange={e => setDisplayName(e.target.value)}
+          placeholder="Auto from first + last name"
+        />
+      </div>
+
+      <div>
+        <FieldLabel>Role</FieldLabel>
+        <select
+          className="field-input"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          style={{ cursor: 'pointer' }}
+        >
+          {TITLE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <FieldLabel>Bio</FieldLabel>
+        <textarea
+          className="field-input"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="Short description about your research focus…"
+          rows={3}
+          style={{ resize: 'vertical', minHeight: 64, fontFamily: 'var(--sans)', width: '100%' }}
+        />
+      </div>
+
       <div>
         <FieldLabel>Email</FieldLabel>
         <input
@@ -357,6 +448,33 @@ function ProfileSection() {
           readOnly
           style={{ cursor: 'not-allowed', opacity: 0.7 }}
         />
+      </div>
+
+      {saveError && (
+        <div
+          style={{
+            background: 'var(--pill-blocked-bg)',
+            border: '1px solid var(--pill-blocked-bd)',
+            borderRadius: 6,
+            padding: '8px 12px',
+            fontFamily: 'var(--mono)',
+            fontSize: 12,
+            color: 'var(--pill-blocked-fg)',
+          }}
+        >
+          {saveError}
+        </div>
+      )}
+
+      <div>
+        <button
+          className="top-btn primary"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          style={{ fontSize: 13, opacity: saving ? 0.7 : 1 }}
+        >
+          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save profile'}
+        </button>
       </div>
     </div>
   );

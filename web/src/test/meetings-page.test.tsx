@@ -34,9 +34,18 @@ vi.mock('@tanstack/react-router', () => ({
 // Mock useAuth (AppShell reads user)
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({
-    user: { id: 'usr_dev', email: 'dev@graphene-lab.org', display_name: 'Dev', is_system_admin: false },
+    user: {
+      id: 'usr_dev',
+      email: 'dev@graphene-lab.org',
+      display_name: 'Dev',
+      global_role: 'member',
+      status: 'approved',
+      profile_completed: true,
+    },
     logout: vi.fn(),
     login: vi.fn(),
+    register: vi.fn(),
+    refreshUser: vi.fn(),
     status: 'authenticated',
   }),
 }));

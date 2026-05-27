@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { setIsAuthenticated } from './router';
+import { setIsAuthenticated, setProfileComplete } from './router';
 import { router } from './router';
 import { initTweaks } from './hooks/useTweaks';
 import './styles/global.css';
@@ -24,10 +24,11 @@ const queryClient = new QueryClient({
 
 // Bridge component that wires auth state to the router guard
 function AppBridge() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
-  // Expose auth status to route guards
+  // Expose auth status and profile completion to route guards
   setIsAuthenticated(() => status === 'authenticated');
+  setProfileComplete(() => !!user?.profile_completed);
 
   // Don't render the router until we've resolved auth state
   if (status === 'loading') {

@@ -14,7 +14,7 @@
  *   "+ Add risk" button → RiskFormDialog (create mode)
  *   Per-row pencil icon → RiskFormDialog (edit mode)
  *   Per-row trash icon  → window.confirm → useDeleteRisk
- *   PI-review toggle    → visible only when user.is_system_admin === true
+ *   PI-review toggle    → visible only when isPrivileged(user) === true
  */
 import { useState } from 'react';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
@@ -29,6 +29,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { riskKeys } from '@/hooks/useRiskQueries';
 import { useAuth } from '@/hooks/useAuth';
+import { isPrivileged } from '@/api/types';
 import { RiskFormDialog } from '@/components/RiskFormDialog';
 import { useAIPanel } from '@/components/AIPanelProvider';
 import { useProject } from '@/hooks/useQueries';
@@ -288,7 +289,7 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
   const [approvalOpen, setApprovalOpen] = useState(false);
 
   const { user } = useAuth();
-  const isPI = !!user?.is_system_admin;
+  const isPI = isPrivileged(user);
 
   // Workspace id needed for stakeholder picker
   const { data: project } = useProject(projectId);

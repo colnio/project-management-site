@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { configureClient, setAccessToken, getAccessToken } from '@/api/client';
 import { api } from '@/api/client';
-import type { User, LoginOutput, RefreshOutput } from '@/api/types';
+import type { User, LoginOutput, RefreshOutput, RegisterOutput } from '@/api/types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,9 @@ interface AuthContextValue {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  register: (email: string, password: string, passwordConfirm: string) => Promise<RegisterOutput>;
+  /** Re-fetch /v1/me and update the user in state — used after profile setup */
+  refreshUser: () => Promise<void>;
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -101,8 +104,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const register = useCallback(async (
+    email: string,
+    password: string,
+    passwordConfirm: string,
+  ): Promise<RegisterOutput> => {
+    return api.post<RegisterOutput>('/v1/auth/register', {
+      email,
+      password,
+      password_confirm: passwordConfirm,
+    });
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const me = await api.get<User>('/v1/me');
+    setUser(me);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ status, user, login, logout }}>
+    <AuthContext.Provider value={{ status, user, login, logout, register, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

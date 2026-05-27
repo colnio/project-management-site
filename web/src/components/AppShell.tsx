@@ -8,6 +8,7 @@ import { Avatar } from './Avatar';
 import { CommandPalette } from './CommandPalette';
 import { TweaksPanel } from './TweaksPanel';
 import type { Workspace, Project } from '@/api/types';
+import { isPrivileged } from '@/api/types';
 import type { ReactNode } from 'react';
 
 const LS_WS_KEY = 'currentWorkspaceId';
@@ -420,16 +421,18 @@ function Sidebar({
           </span>
           Calendar
         </Link>
-        <Link
-          to="/admin"
-          className="side-item"
-          activeProps={{ className: 'side-item active' }}
-        >
-          <span className="ic">
-            <AdminIcon size={13} />
-          </span>
-          Admin
-        </Link>
+        {isPrivileged(user) && (
+          <Link
+            to="/admin"
+            className="side-item"
+            activeProps={{ className: 'side-item active' }}
+          >
+            <span className="ic">
+              <AdminIcon size={13} />
+            </span>
+            Admin
+          </Link>
+        )}
       </nav>
 
       {/* Templates section */}

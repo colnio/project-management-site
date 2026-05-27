@@ -9,6 +9,8 @@ import {
 } from '@/hooks/useQueries';
 import { NewProjectWizard } from '@/components/wizards/NewProjectWizard';
 import type { Workspace } from '@/api/types';
+import { useAuth } from '@/hooks/useAuth';
+import { isPrivileged } from '@/api/types';
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
 
@@ -221,6 +223,8 @@ function WorkspaceSection({
 export function WorkspacesPage() {
   const { data: workspaces = [], isLoading, isError } = useWorkspaces();
   const [showNewWorkspace, setShowNewWorkspace] = useState(false);
+  const { user } = useAuth();
+  const canCreateWorkspace = isPrivileged(user);
 
   const crumbs = [{ label: 'Home', href: '/' }, { label: 'Workspaces' }];
 
@@ -230,14 +234,16 @@ export function WorkspacesPage() {
         <div className="section-h" style={{ marginTop: 8 }}>
           <h2>Workspaces</h2>
           <span className="meta">{workspaces.length} workspace{workspaces.length !== 1 ? 's' : ''}</span>
-          <span className="right">
-            <button
-              className="top-btn primary"
-              onClick={() => setShowNewWorkspace(true)}
-            >
-              + New workspace
-            </button>
-          </span>
+          {canCreateWorkspace && (
+            <span className="right">
+              <button
+                className="top-btn primary"
+                onClick={() => setShowNewWorkspace(true)}
+              >
+                + New workspace
+              </button>
+            </span>
+          )}
         </div>
 
         {isLoading && <LoadingState message="Loading workspaces…" />}

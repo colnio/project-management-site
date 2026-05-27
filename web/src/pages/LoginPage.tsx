@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, Link } from '@tanstack/react-router';
 import { useAuth } from '@/hooks/useAuth';
 import { ApiError } from '@/api/client';
 
@@ -221,7 +221,13 @@ export function LoginPage() {
             color: 'var(--muted-2)',
           }}
         >
-          dev credentials pre-filled as placeholder
+          Don't have an account?{' '}
+          <Link
+            to="/register"
+            style={{ color: 'var(--ember)', textDecoration: 'none' }}
+          >
+            Create one
+          </Link>
         </div>
       </div>
     </div>

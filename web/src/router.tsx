@@ -6,6 +6,8 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ProfileSetupPage } from './pages/ProfileSetupPage';
 import { HomePage } from './pages/HomePage';
 import { WorkspacesPage } from './pages/WorkspacesPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
@@ -27,6 +29,12 @@ import { TemplateDetailPage } from './pages/TemplateDetailPage';
 let isAuthenticated: () => boolean = () => false;
 export function setIsAuthenticated(fn: () => boolean) {
   isAuthenticated = fn;
+}
+
+// Profile completion accessor — injected by AppBridge in main.tsx
+let profileComplete: () => boolean = () => true;
+export function setProfileComplete(fn: () => boolean) {
+  profileComplete = fn;
 }
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
@@ -111,13 +119,24 @@ const loginRoute = createRoute({
   component: LoginPage,
 });
 
-// Guard for all authenticated routes
+const registerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/register',
+  component: RegisterPage,
+});
+
+// Guard for all authenticated routes — also redirects to /profile/setup when profile incomplete
 const authGuardRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'auth',
-  beforeLoad: () => {
+  beforeLoad: ({ location }) => {
     if (!isAuthenticated()) {
       throw redirect({ to: '/login' });
+    }
+    // If the user hasn't completed their profile yet, redirect to setup
+    // (but skip the redirect if they're already on /profile/setup)
+    if (!profileComplete() && location.pathname !== '/profile/setup') {
+      throw redirect({ to: '/profile/setup' });
     }
   },
   component: () => <Outlet />,
@@ -219,10 +238,19 @@ const templateDetailRoute = createRoute({
   component: TemplateDetailPage,
 });
 
+// Profile setup route — inside auth guard but bypasses the profile-complete redirect
+// (the guard allows /profile/setup through explicitly).
+const profileSetupRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/profile/setup',
+  component: ProfileSetupPage,
+});
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  registerRoute,
   authGuardRoute.addChildren([
     homeRoute,
     workspacesRoute,
@@ -240,6 +268,7 @@ const routeTree = rootRoute.addChildren([
     adminRoute,
     templatesRoute,
     templateDetailRoute,
+    profileSetupRoute,
   ]),
 ]);
 

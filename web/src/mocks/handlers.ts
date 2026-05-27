@@ -5,7 +5,13 @@ const devUser = {
   id: 'usr_dev',
   email: 'dev@graphene-lab.org',
   display_name: 'Dev User',
-  is_system_admin: false,
+  global_role: 'member' as const,
+  status: 'approved' as const,
+  profile_completed: true,
+  first_name: 'Dev',
+  last_name: 'User',
+  title: 'PhD student',
+  description: '',
   created_at: '2025-01-01T00:00:00Z',
 };
 
@@ -30,6 +36,21 @@ const devProject = {
 };
 
 export const handlers = [
+  // Auth: register
+  http.post('/v1/auth/register', async ({ request }) => {
+    const body = await request.json() as { email: string; password: string; password_confirm: string };
+    if (body.password !== body.password_confirm) {
+      return HttpResponse.json(
+        { code: 'auth.password_mismatch', message: 'Passwords do not match' },
+        { status: 400 }
+      );
+    }
+    return HttpResponse.json(
+      { status: 'pending', message: 'Your account is awaiting approval.' },
+      { status: 201 }
+    );
+  }),
+
   // Auth: login
   http.post('/v1/auth/login', async ({ request }) => {
     const body = await request.json() as { email: string; password: string };
@@ -58,6 +79,32 @@ export const handlers = [
   // Me
   http.get('/v1/me', () => {
     return HttpResponse.json(devUser);
+  }),
+
+  // Profile update
+  http.patch('/v1/me/profile', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    return HttpResponse.json({
+      ...devUser,
+      ...body,
+      profile_completed: true,
+    });
+  }),
+
+  // Admin: user management
+  http.get('/v1/admin/users', () => {
+    return HttpResponse.json({
+      items: [devUser],
+    });
+  }),
+
+  http.patch('/v1/admin/users/:id', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    return HttpResponse.json({ ok: true, ...body });
+  }),
+
+  http.delete('/v1/admin/users/:id', () => {
+    return HttpResponse.json({ ok: true });
   }),
 
   // Workspaces

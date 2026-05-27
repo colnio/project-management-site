@@ -1,20 +1,30 @@
 /**
  * Login form rendering and submit tests.
  */
+import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoginPage } from '../pages/LoginPage';
 
-// Mock TanStack Router's useNavigate
+// Mock TanStack Router's useNavigate + Link
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn().mockResolvedValue(undefined),
+  Link: ({ children, to, ...rest }: { children: React.ReactNode; to: string; [k: string]: unknown }) =>
+    <a href={to as string} {...rest}>{children}</a>,
 }));
 
 // Mock useAuth
 const mockLogin = vi.fn();
 vi.mock('../hooks/useAuth', () => ({
-  useAuth: () => ({ login: mockLogin, status: 'unauthenticated', user: null, logout: vi.fn() }),
+  useAuth: () => ({
+    login: mockLogin,
+    status: 'unauthenticated',
+    user: null,
+    logout: vi.fn(),
+    register: vi.fn(),
+    refreshUser: vi.fn(),
+  }),
 }));
 
 describe('LoginPage', () => {

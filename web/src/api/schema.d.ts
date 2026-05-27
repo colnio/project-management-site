@@ -1721,7 +1721,17 @@ export interface components {
             display_name: string;
             email: string;
             id: string;
-            is_system_admin: boolean;
+            /** @deprecated use global_role instead */
+            is_system_admin?: boolean;
+            /** @enum {string} */
+            global_role: 'admin' | 'pi' | 'member';
+            /** @enum {string} */
+            status: 'pending' | 'approved' | 'suspended';
+            profile_completed: boolean;
+            first_name?: string;
+            last_name?: string;
+            title?: string;
+            description?: string;
         };
         Workspace: {
             /**
