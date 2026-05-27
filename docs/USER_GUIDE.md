@@ -28,7 +28,12 @@ land in **Mailpit** at <http://localhost:8025>.
   explicit project collaboration, and admin override. Editors and owners can
   change content; viewers are read-only.
 - Add collaborators to a project by email (they must already have an account /
-  have accepted an invite).
+  have accepted an invite). Use the **Share** button in the project header to add
+  a collaborator by email + role (owner/editor/viewer), see who has access, and
+  remove people. Adding/removing collaborators requires the **owner** role.
+- The project header's **"..."** menu has: **Edit details** (name, description,
+  visibility), **Archive project**, **Manage access** (same Share dialog), and
+  **Copy link**.
 - **⌘K command palette** — search across projects, workspaces, samples,
   experiments, and pages for the active project. Type any fragment of a name or
   title to jump directly to an entity.
@@ -101,6 +106,10 @@ the active **iteration** page.
 - Risks are authored by hand or **drafted by AI**: run a risk-assessment workflow
   (see _AI assistant_) and the engine fills the register with AI-sourced rows
   (rating → likelihood, plus mitigations), tagged with the originating run.
+- **Editing by hand**: use **+ Add risk** to create a risk, or the per-row pencil
+  to edit and the ✕ to delete. The **PI-review flag** toggle is shown only to
+  principal investigators (system-admin accounts); everyone else can still add,
+  edit, and delete risks and see the PI REVIEW chip.
 
 ## Overview layouts & Tweaks
 
