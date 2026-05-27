@@ -1115,6 +1115,7 @@ export function ProjectDetailPage() {
       activeProjectId={projectId}
       topBarCrumbs={crumbs}
       topBarActions={topBarActions}
+      onJumpTab={(tab) => setTab(tab as Tab)}
     >
       {isLoading ? (
         <LoadingState />
@@ -1212,6 +1213,7 @@ export function ProjectDetailPage() {
       {aiPanelOpen && (
         <AIChatPanel
           projectId={projectId}
+          workspaceId={project?.workspace_id}
           onClose={() => setAiPanelOpen(false)}
         />
       )}

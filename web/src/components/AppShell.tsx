@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useWorkspaces, useProjects } from '@/hooks/useQueries';
 import { Avatar } from './Avatar';
 import { CommandPalette } from './CommandPalette';
+import { TweaksPanel } from './TweaksPanel';
 import type { Workspace, Project } from '@/api/types';
 import type { ReactNode } from 'react';
 
@@ -90,6 +91,15 @@ function SettingsIcon({ size = 13 }: { size?: number }) {
   );
 }
 
+function TweaksIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <path d="M2 4.5H14M2 8H10M2 11.5H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="12" cy="11.5" r="2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 interface SidebarProps {
@@ -99,6 +109,7 @@ interface SidebarProps {
   projects: Project[];
   onSelectWorkspace: (id: string) => void;
   onOpenPalette: () => void;
+  onOpenTweaks: () => void;
 }
 
 function Sidebar({
@@ -108,6 +119,7 @@ function Sidebar({
   projects,
   onSelectWorkspace,
   onOpenPalette,
+  onOpenTweaks,
 }: SidebarProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -323,6 +335,13 @@ function Sidebar({
           <div className="me-sub">{user?.email}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
+          <button
+            className="icon-btn"
+            onClick={onOpenTweaks}
+            title="Tweaks"
+          >
+            <TweaksIcon size={13} />
+          </button>
           <Link to="/settings" className="icon-btn" title="Settings">
             <SettingsIcon size={13} />
           </Link>
@@ -377,11 +396,13 @@ interface AppShellProps {
   activeProjectId?: string;
   topBarCrumbs?: Array<{ label: string; href?: string }>;
   topBarActions?: ReactNode;
+  onJumpTab?: (tab: string) => void;
 }
 
-export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarActions }: AppShellProps) {
+export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarActions, onJumpTab }: AppShellProps) {
   const router = useRouter();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [tweaksOpen, setTweaksOpen] = useState(false);
   const { data: workspaces = [] } = useWorkspaces();
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | undefined>();
 
@@ -434,6 +455,7 @@ export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarA
           void router.navigate({ to: '/workspaces' });
         }}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenTweaks={() => setTweaksOpen(true)}
       />
 
       <div className="main">
@@ -449,6 +471,14 @@ export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarA
         onSelectProject={handleSelectProject}
         onSelectWorkspace={handleSelectWorkspace}
       />
+
+      {tweaksOpen && (
+        <TweaksPanel
+          onClose={() => setTweaksOpen(false)}
+          projectId={activeProjectId}
+          onJump={onJumpTab}
+        />
+      )}
     </div>
   );
 }

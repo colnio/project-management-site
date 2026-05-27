@@ -5,7 +5,11 @@ import { RouterProvider } from '@tanstack/react-router';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { setIsAuthenticated } from './router';
 import { router } from './router';
+import { initTweaks } from './hooks/useTweaks';
 import './styles/global.css';
+
+// Apply persisted theme/density/accent before first render.
+initTweaks();
 
 
 const queryClient = new QueryClient({

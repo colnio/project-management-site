@@ -86,6 +86,14 @@ export interface WorkflowOutput {
   [key: string]: unknown;
 }
 
+export interface AIUsageSummary {
+  spent_today: number;
+  spent_month: number;
+  monthly_cap: number;
+  pct: number;
+  model: string;
+}
+
 // ─── Query Keys ──────────────────────────────────────────────────────────────
 
 export const aiKeys = {
@@ -93,6 +101,7 @@ export const aiKeys = {
   conversationMessages: (convId: string) => ['ai', 'conversations', convId, 'messages'] as const,
   workspaceAutonomy: (wsId: string) => ['workspaces', wsId, 'autonomy'] as const,
   projectAutonomy: (projectId: string) => ['projects', projectId, 'autonomy'] as const,
+  workspaceUsage: (wsId: string) => ['workspaces', wsId, 'ai', 'usage'] as const,
   workflows: ['ai', 'workflows'] as const,
   run: (runId: string) => ['ai', 'runs', runId] as const,
 };
@@ -164,7 +173,7 @@ export function useUpdateWorkspaceAutonomy(workspaceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { mode: AutonomyConfig['mode']; allowed_tools: string[] }) =>
-      api.patch<AutonomyConfig>(`/v1/workspaces/${workspaceId}/autonomy`, body),
+      api.put<AutonomyConfig>(`/v1/workspaces/${workspaceId}/autonomy`, body),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: aiKeys.workspaceAutonomy(workspaceId) }),
   });
@@ -182,9 +191,20 @@ export function useUpdateProjectAutonomy(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { mode: AutonomyConfig['mode']; allowed_tools: string[] }) =>
-      api.patch<AutonomyConfig>(`/v1/projects/${projectId}/autonomy`, body),
+      api.put<AutonomyConfig>(`/v1/projects/${projectId}/autonomy`, body),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: aiKeys.projectAutonomy(projectId) }),
+  });
+}
+
+// ─── Usage Summary ────────────────────────────────────────────────────────────
+
+export function useAIUsage(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: workspaceId ? aiKeys.workspaceUsage(workspaceId) : ['workspaces', 'none', 'ai', 'usage'],
+    queryFn: () => api.get<AIUsageSummary>(`/v1/workspaces/${workspaceId}/ai/usage`),
+    enabled: !!workspaceId,
+    staleTime: 60_000,
   });
 }
 

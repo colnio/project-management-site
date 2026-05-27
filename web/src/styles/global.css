@@ -110,7 +110,8 @@ input, select, textarea { font-family: inherit; }
 .me-sub { font-size: 10.5px; color: var(--muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Top bar ── */
-.main { min-width: 0; display: flex; flex-direction: column; }
+/* When AI panel is open, --ai-w is set on <html>; push content left so nothing hides under the rail */
+.main { min-width: 0; display: flex; flex-direction: column; padding-right: var(--ai-w, 0px); transition: padding-right 0.2s ease; }
 .top { position: sticky; top: 0; z-index: 10; background: var(--top-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 10px 24px; display: flex; align-items: center; gap: 14px; min-height: 48px; }
 .crumbs { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; font-family: var(--mono); min-width: 0; flex-shrink: 1; overflow: hidden; white-space: nowrap; }
 .crumbs .sep { opacity: .5; }

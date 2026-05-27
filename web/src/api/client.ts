@@ -116,6 +116,12 @@ export const api = {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   },
+  put<T>(path: string, body?: unknown): Promise<T> {
+    return apiFetch<T>(path, {
+      method: 'PUT',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  },
   delete<T>(path: string): Promise<T> {
     return apiFetch<T>(path, { method: 'DELETE' });
   },

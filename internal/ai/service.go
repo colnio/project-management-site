@@ -245,6 +245,13 @@ func (s *Service) GetProjectAutonomy(ctx context.Context, p *platform.Principal,
 	return GetAutonomy(ctx, s.pool, "project", projectID)
 }
 
+// GetUsageSummary returns spend metrics for a workspace.
+func (s *Service) GetUsageSummary(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID) (*UsageSummary, error) {
+	// Reuse the same lightweight auth as GetWorkspaceAutonomy — no role required
+	// beyond being authenticated (any workspace member can view spend data).
+	return getUsageSummary(ctx, s.pool, workspaceID)
+}
+
 // SetProjectAutonomy upserts the autonomy config for a project.
 func (s *Service) SetProjectAutonomy(ctx context.Context, p *platform.Principal, projectID uuid.UUID, mode string, allowedTools []string) error {
 	proj, _, err := s.projects.Authorize(ctx, p, projectID, org.RoleOwner)

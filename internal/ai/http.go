@@ -143,6 +143,29 @@ func Register(api huma.API, svc *Service) {
 		return &aiToolCallOutput{Body: tc}, nil
 	})
 
+	// Usage summary.
+	huma.Register(api, huma.Operation{
+		OperationID: "ai-get-workspace-usage",
+		Method:      http.MethodGet,
+		Path:        "/v1/workspaces/{id}/ai/usage",
+		Summary:     "Get AI usage summary for a workspace",
+		Tags:        []string{"AI"},
+	}, func(ctx context.Context, input *autonomyScopeInput) (*aiUsageSummaryOutput, error) {
+		p, ok := platform.PrincipalFrom(ctx)
+		if !ok {
+			return nil, platform.Unauthorized("authentication required")
+		}
+		wsID, err := uuid.Parse(input.ID)
+		if err != nil {
+			return nil, platform.BadRequest("invalid_workspace_id", "invalid workspace id")
+		}
+		summary, err := svc.GetUsageSummary(ctx, p, wsID)
+		if err != nil {
+			return nil, err
+		}
+		return &aiUsageSummaryOutput{Body: summary}, nil
+	})
+
 	// Autonomy endpoints.
 	huma.Register(api, huma.Operation{
 		OperationID: "ai-get-workspace-autonomy",
@@ -295,6 +318,10 @@ type autonomyPutInput struct {
 
 type autonomyOutput struct {
 	Body *AutonomyConfig
+}
+
+type aiUsageSummaryOutput struct {
+	Body *UsageSummary
 }
 
 // ensure org import is used for RoleOwner

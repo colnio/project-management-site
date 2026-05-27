@@ -259,3 +259,47 @@ func checkSpendCap(ctx context.Context, pool *pgxpool.Pool, workspaceID uuid.UUI
 	warn := spent >= defaultMonthlyCapUSD*spendWarnThreshold
 	return SpendCheckResult{Allowed: true, SoftWarn: warn, Spent: spent}, nil
 }
+
+// UsageSummary holds the current usage statistics for a workspace.
+type UsageSummary struct {
+	SpentToday   float64 `json:"spent_today"`
+	SpentMonth   float64 `json:"spent_month"`
+	MonthlyCap   float64 `json:"monthly_cap"`
+	Pct          float64 `json:"pct"`
+	Model        string  `json:"model"`
+}
+
+func getUsageSummary(ctx context.Context, pool *pgxpool.Pool, workspaceID uuid.UUID) (*UsageSummary, error) {
+	var spentToday, spentMonth float64
+	err := pool.QueryRow(ctx,
+		`SELECT
+		   COALESCE(SUM(usd_cost) FILTER (WHERE created_at::date = now()::date), 0),
+		   COALESCE(SUM(usd_cost) FILTER (WHERE date_trunc('month', created_at) = date_trunc('month', now())), 0)
+		 FROM ai_usage_records
+		 WHERE workspace_id=$1`,
+		workspaceID,
+	).Scan(&spentToday, &spentMonth)
+	if err != nil {
+		return nil, fmt.Errorf("ai: get usage summary: %w", err)
+	}
+
+	// Fetch the most recent model used for this workspace.
+	var model string
+	_ = pool.QueryRow(ctx,
+		`SELECT model FROM ai_usage_records WHERE workspace_id=$1 ORDER BY created_at DESC LIMIT 1`,
+		workspaceID,
+	).Scan(&model)
+
+	pct := 0.0
+	if defaultMonthlyCapUSD > 0 {
+		pct = spentMonth / defaultMonthlyCapUSD
+	}
+
+	return &UsageSummary{
+		SpentToday: spentToday,
+		SpentMonth: spentMonth,
+		MonthlyCap: defaultMonthlyCapUSD,
+		Pct:        pct,
+		Model:      model,
+	}, nil
+}
