@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useSearch, useRouter } from '@tanstack/react-router';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
@@ -15,9 +15,11 @@ import {
   useCreateSample,
   useCreateExperiment,
   useWorkspaceMembers,
+  useArchiveProject,
 } from '@/hooks/useQueries';
 import { NewIterationWizard } from '@/components/wizards/NewIterationWizard';
 import { ShareDialog } from '@/components/ShareDialog';
+import { EditProjectDialog } from '@/components/EditProjectDialog';
 import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import { PagesPanel } from '@/components/PagesPanel';
 import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
@@ -95,6 +97,44 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
   const { data: project } = useProject(projectId);
   const { data: members = [] } = useWorkspaceMembers(project?.workspace_id);
   const [shareOpen, setShareOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const router = useRouter();
+  const archiveProject = useArchiveProject(projectId);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        moreButtonRef.current &&
+        !moreButtonRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [menuOpen]);
+
+  const handleArchive = async () => {
+    setMenuOpen(false);
+    if (!window.confirm('Archive this project? It will be hidden from active views.')) return;
+    await archiveProject.mutateAsync();
+    void router.navigate({ to: '/' });
+  };
+
+  const handleCopyLink = async () => {
+    await navigator.clipboard.writeText(`${window.location.origin}/projects/${projectId}`);
+    setCopiedLink(true);
+    setMenuOpen(false);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
   if (!project) return null;
 
@@ -177,14 +217,110 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
           >
             ⟳
           </button>
-          <button
-            className="icon-btn"
-            title="More options"
-            onClick={() => console.log('More')}
-            style={{ fontSize: 16, letterSpacing: 1 }}
-          >
-            …
-          </button>
+
+          {/* More (…) button + dropdown */}
+          <div style={{ position: 'relative' }}>
+            <button
+              ref={moreButtonRef}
+              className="icon-btn"
+              title="More options"
+              onClick={() => setMenuOpen(o => !o)}
+              style={{ fontSize: 16, letterSpacing: 1 }}
+            >
+              {copiedLink ? '✓' : '…'}
+            </button>
+
+            {menuOpen && (
+              <div
+                ref={menuRef}
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  right: 0,
+                  zIndex: 300,
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line-2)',
+                  borderRadius: 9,
+                  boxShadow: '0 8px 32px rgba(20,18,14,0.18)',
+                  minWidth: 184,
+                  padding: '5px 0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <button
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    textAlign: 'left',
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    color: 'var(--ink)',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--sans)',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--paper-2)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                  onClick={() => { setMenuOpen(false); setEditOpen(true); }}
+                >
+                  Edit details
+                </button>
+                <button
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    textAlign: 'left',
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    color: 'var(--ink)',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--sans)',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--paper-2)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                  onClick={() => { void handleArchive(); }}
+                >
+                  Archive project
+                </button>
+                <div style={{ height: 1, background: 'var(--line)', margin: '4px 0' }} />
+                <button
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    textAlign: 'left',
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    color: 'var(--ink)',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--sans)',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--paper-2)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                  onClick={() => { setMenuOpen(false); setShareOpen(true); }}
+                >
+                  Manage access
+                </button>
+                <button
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    textAlign: 'left',
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    color: 'var(--ink)',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--sans)',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--paper-2)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                  onClick={() => { void handleCopyLink(); }}
+                >
+                  Copy link
+                </button>
+              </div>
+            )}
+          </div>
+
           {onToggleAI && (
             <button
               className="top-btn primary"
@@ -201,6 +337,9 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
     </div>
     {shareOpen && (
       <ShareDialog projectId={projectId} onClose={() => setShareOpen(false)} />
+    )}
+    {editOpen && (
+      <EditProjectDialog projectId={projectId} onClose={() => setEditOpen(false)} />
     )}
     </>
   );
