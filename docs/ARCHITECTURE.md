@@ -72,7 +72,8 @@ keeps one HTTP code path for all three.
   `read:experiments`, `write:experiments`, `read:iterations`, `write:iterations`,
   `read:risks`, `write:risks`, `read:artifacts`, `write:artifacts`, `read:pages`,
   `write:pages`, `read:meetings`, `write:meetings`, `read:calendar`,
-  `write:calendar`, `read:ai`, `write:ai`, `read:inbox`, `read:audit`,
+  `write:calendar`, `read:ai`, `write:ai`, `read:inbox`, `read:approvals`,
+  `write:approvals`, `read:audit`,
   `admin:org`. The helper `platform.RequireScope(p, scope)` is called immediately
   after `platform.PrincipalFrom` in every authenticated huma handler. Enforcement
   rule: a token whose scope list is **non-empty** is fully restricted to those
@@ -96,7 +97,8 @@ keeps one HTTP code path for all three.
 | calendar | `project_events`, `calendar_subscriptions` | event CRUD; signed per-user `.ics` feed at `/v1/cal/{user_id}/{token}.ics` (token is the bearer, no auth middleware), re-checking access via a synthetic principal |
 | risk | `risks` | H1 — first-class Risk Register: likelihood/impact/mitigation/Plan B, PI-review flag, per-project `seq`; `source` human/ai with `workflow_run_id` link; AI workflows call `UpsertFromWorkflow` |
 | meeting | `meetings` | H2 — workspace/project meetings; jsonb attendees/decisions/action_items; workspace-membership guard |
-| inbox | _(read-only aggregation)_ | H2 — aggregates PI-flagged risks, proposed AI tool calls, and audit entries into `GET /v1/workspaces/{id}/inbox` (owns no tables) |
+| inbox | _(read-only aggregation)_ | H2 — aggregates PI-flagged risks, proposed AI tool calls, audit entries, and pending approval requests into `GET /v1/workspaces/{id}/inbox` (owns no tables) |
+| approval | `approval_requests` | Risk-assessment sign-off: stakeholder recipients snapshotted as jsonb (workspace members ∪ project collaborators); create emails recipients + audits; decide (approve/reject) by a recipient or project editor; pending requests surface in the inbox; workspace-scoped queries go through `project.ListIDsForWorkspace` |
 
 Cross-entity references between sibling domains are stored as bare uuids (no
 cross-module FK), so modules stay independently testable and buildable.
@@ -152,6 +154,16 @@ The agentic-chat backend (`internal/ai`, Tracks G1/G2/G5) is implemented:
   injects a system message carrying the current `project_id`, project name,
   `workspace_id`, and date so the assistant answers project-scoped questions
   without asking the user to specify a project.
+- **Skills.** A conversation may carry a `skill` (column on `ai_conversations`).
+  Skill markdown lives in the embeddable `skills/` package (`skills/embed.go`,
+  `LoadSkill`, same pattern as `workflows/`); when a conversation has a skill,
+  sse.go appends that markdown verbatim after the context preamble as the system
+  prompt (used by the Risk Register's "Review with AI", which seeds a
+  `risk_assesment_skill` conversation). Falls back to the generic prompt if the
+  skill is missing.
+- **Synchronous risk review.** `POST /v1/projects/{id}/ai/risk-review` (`read:ai`)
+  is a one-shot `Client.Chat` summary of the risk register in project context
+  (not streamed) — used by the Send-for-approval dialog.
 - **Tools.** Read tools (read/list samples, experiments, pages, artifacts,
   lineage, `search_project_content`, `list_projects`) are always available; write
   tools (`draft_page`, `update_iteration_status`, `create_reminder`,

@@ -67,7 +67,11 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
   audit 00010, auth 00020, org 00030–34, project 00040, iteration 00050–51,
   sample 00060, experiment 00070–71 (+ EX-N codes 00121), page 00080,
   artifact 00090, calendar 00100, AI 00110–115, risk 00120, meetings 00122,
-  inbox indexes 00123. Pick the next free range (≥00124) for new modules.
+  inbox indexes 00123, meetings kickoff 00124, pages.slot 00125,
+  ai_conversations.skill 00126, approval_requests 00127.
+  Pick the next free range (≥00128) for new modules.
+  Embeddable assets follow the `//go:embed` pattern: `workflows/` (workflow JSON)
+  and `skills/` (skill markdown via `skills.LoadSkill`).
   The `page` module gained a new `GET /v1/projects/{id}/pages` endpoint (no new
   migration needed — reads existing `page_revisions`/`page_blobs` tables).
 

@@ -110,6 +110,15 @@ the active **iteration** page.
   to edit and the ✕ to delete. The **PI-review flag** toggle is shown only to
   principal investigators (system-admin accounts); everyone else can still add,
   edit, and delete risks and see the PI REVIEW chip.
+- **Review with AI**: opens the sidebar AI assistant in a guided, multi-phase
+  risk-assessment dialogue (driven by the `risk_assesment_skill`). Unlike the
+  one-click "Run risk assessment" workflow, this is interactive — answer the
+  assistant's prompts to build the assessment.
+- **Send for approval**: opens a dialog to pick stakeholders (workspace members
+  and project collaborators), write a description, and **Generate review** (an AI
+  summary of the risk register you can edit). Sending creates a tracked approval
+  request, emails the stakeholders, and posts it to their workspace **Inbox**,
+  where a recipient (or a project editor) can **Approve** or **Reject** it.
 
 ## Overview layouts & Tweaks
 
