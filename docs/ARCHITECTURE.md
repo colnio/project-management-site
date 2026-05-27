@@ -236,11 +236,15 @@ role pickers), C3 the BlockNote page editor — split into:
   save/ETag/presence/history logic, used by the `/pages/:pageId` route and by
   `EntityPageEditor`.
 - **`EntityPageEditor`** (`web/src/components/editor/EntityPageEditor.tsx`) —
-  load-or-creates a page for an entity, seeded with an Overview heading, an
-  embedded non-editable `entityDashboard` block (dispatching to per-entity
-  dashboard components in `web/src/components/dashboards/`), and a Notes section.
-  Project, iteration, experiment, and sample detail pages now render this instead
-  of per-tab content sections.
+  load-or-creates a BlockNote page for an entity, keyed by `parent_type +
+  parent_id + slot`. Pages carry a `slot` column (`''` for legacy/standalone,
+  `'description'`/`'notes'` for entity sections). Project and iteration detail
+  pages render three stacked sections: a `slot="description"` editor, a live
+  imperative dashboard (`web/src/components/dashboards/`, with
+  `IterationStatusControls` for iterations), and a `slot="notes"` editor.
+  Experiment and sample pages render a single `slot="description"` editor. The
+  `entityDashboard` BlockNote block remains registered so legacy single-doc pages
+  (slot `''`) still load.
 - Custom blocks: `sampleRef`/`experimentRef`/`artifactRef` (reference cards) and
   `imageEmbed`/`pdfEmbed`/`htmlEmbed` (inline attachments — HTML in a sandboxed
   `<iframe sandbox="allow-scripts">` via `ArtHTML`), all in `refBlocks.tsx`,

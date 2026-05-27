@@ -55,11 +55,13 @@ land in **Mailpit** at <http://localhost:8025>.
   cycling overlays).
 - **Pages** — block-editor documents (BlockNote) attached to a project, iteration,
   sample, or experiment. There are two entry points:
-  - **Entity pages**: every project, iteration, experiment, and sample detail view
-    _is_ a BlockNote document. The layout is fixed: editable prose at the top,
-    followed by an embedded (non-editable) **dashboard block** showing the entity's
-    KPIs, risk register, lineage graph, etc., followed by editable **Notes** prose.
-    No need to navigate to a separate tab — everything is in one scrollable document.
+  - **Entity pages**: project and iteration detail views render three stacked
+    sections — an editable **Description** document at the top, a **Dashboard**
+    section (KPIs, Risk Register, linked samples/experiments; iterations also get
+    Start/Stop status controls), and an editable **Notes** document below. The
+    Description and Notes areas are independent BlockNote documents; the dashboard
+    between them is live (not part of the document). Experiment and sample views
+    keep a single editable Description document.
   - **Standalone pages**: create/open additional pages from the project's **Pages**
     tab or from the **Notes** dropdown in the sidebar (which lists all pages for
     that project). These open in the full-screen page editor.

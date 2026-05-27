@@ -344,3 +344,13 @@ warning is resolved.
   Testing Gaps section above has been updated to reflect the new test backfill.
   This document should be treated as closed for this review cycle; open a new
   review after the next material feature or infrastructure change.
+- **2026-05-27 (follow-up):** Running the newly-added package tests against a
+  live Postgres (they had been silently skipping when the test DB was
+  unreachable) surfaced bugs the green-but-skipped suite had masked: the
+  Finding 5/13 inbox refactor left `risk.ListFlaggedForPIReviewByWorkspace`
+  selecting an unqualified `id` across a `risks`/`projects` JOIN (inbox 500,
+  SQLSTATE 42702); `org.uniqueSlug` panicked on slug collisions (`suffix[:6]`
+  from a 4-char token); and the meeting `kind` enum gained `kickoff` in the API
+  without the matching DB CHECK constraint (migration 00124). All fixed.
+  Lesson: a "green" run that skips DB-backed tests is not a passing gate —
+  ensure the package test databases are reachable when running the suite.
