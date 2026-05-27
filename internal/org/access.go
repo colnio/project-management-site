@@ -121,18 +121,18 @@ func (s *Service) ResolveAccess(ctx context.Context, userID, workspaceID uuid.UU
 	return effective, nil
 }
 
-// ResolveAccessForPrincipal is a convenience wrapper that also handles system
-// admins: if p.IsSystemAdmin is true and the resolved role is none/viewer, it
-// bumps the effective role to at least viewer (and records an audit entry when
-// that bump is what grants access).
+// ResolveAccessForPrincipal is a convenience wrapper that also handles
+// privileged users (admin or PI): if p.IsPrivileged() is true and the
+// resolved role is none/viewer, it bumps the effective role to at least viewer
+// (and records an audit entry when that bump is what grants access).
 func (s *Service) ResolveAccessForPrincipal(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID, projectVisibility string, projectID *uuid.UUID) (Role, error) {
 	role, err := s.ResolveAccess(ctx, p.UserID, workspaceID, projectVisibility, projectID)
 	if err != nil {
 		return RoleNone, err
 	}
 
-	if p.IsSystemAdmin && !role.CanRead() {
-		// Admin override bump — audit this.
+	if p.IsPrivileged() && !role.CanRead() {
+		// Privileged-user override bump — audit this.
 		_ = s.rec.Record(ctx, audit.Entry{
 			Actor:        p.UserID,
 			ViaTokenID:   p.ViaTokenID,

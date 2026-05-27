@@ -422,8 +422,8 @@ func TestSeedDevUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUserByEmail after seed: %v", err)
 	}
-	if !u.IsSystemAdmin {
-		t.Error("expected dev user to be system admin")
+	if u.GlobalRole != "admin" {
+		t.Errorf("expected dev user to have global_role 'admin', got %q", u.GlobalRole)
 	}
 	if u.DisplayName != "Dev User" {
 		t.Errorf("expected 'Dev User', got %q", u.DisplayName)

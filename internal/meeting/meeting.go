@@ -105,7 +105,7 @@ func (s *Service) checkWorkspaceMember(ctx context.Context, p *platform.Principa
 	if err != nil {
 		return err
 	}
-	if !isMember && !p.IsSystemAdmin {
+	if !isMember && !p.IsPrivileged() {
 		return platform.Forbidden("not a member of this workspace")
 	}
 	return nil

@@ -15,17 +15,28 @@ import (
 
 // User is the exported domain struct for a platform user.
 type User struct {
-	ID            uuid.UUID
-	Email         string
-	DisplayName   string
-	IsSystemAdmin bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID               uuid.UUID
+	Email            string
+	DisplayName      string
+	GlobalRole       string    `json:"global_role"`
+	Status           string    `json:"status"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	Title            string    `json:"title"`
+	Description      string    `json:"description"`
+	ProfileCompleted bool      `json:"profile_completed"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.IsSystemAdmin, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(
+		&u.ID, &u.Email, &u.DisplayName,
+		&u.GlobalRole, &u.Status,
+		&u.FirstName, &u.LastName, &u.Title, &u.Description, &u.ProfileCompleted,
+		&u.CreatedAt, &u.UpdatedAt,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +47,10 @@ func scanUser(row pgx.Row) (*User, error) {
 // platform.NotFound error if absent.
 func (s *Service) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, email, display_name, is_system_admin, created_at, updated_at
+		`SELECT id, email, display_name,
+		        global_role, status,
+		        first_name, last_name, title, description, profile_completed,
+		        created_at, updated_at
 		 FROM users WHERE email=$1`,
 		strings.ToLower(email),
 	)
@@ -53,7 +67,10 @@ func (s *Service) GetUserByEmail(ctx context.Context, email string) (*User, erro
 // GetUserByID returns the user with the given ID or a platform.NotFound error.
 func (s *Service) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, email, display_name, is_system_admin, created_at, updated_at
+		`SELECT id, email, display_name,
+		        global_role, status,
+		        first_name, last_name, title, description, profile_completed,
+		        created_at, updated_at
 		 FROM users WHERE id=$1`,
 		id,
 	)
@@ -68,11 +85,15 @@ func (s *Service) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) 
 }
 
 // CreateUser creates a new user. Email is lowercased. Returns platform.Conflict
-// if the email already exists.
+// if the email already exists. New users receive defaults: global_role='member',
+// status='pending' — later batches add approval/registration flows.
 func (s *Service) CreateUser(ctx context.Context, email, displayName string) (*User, error) {
 	row := s.pool.QueryRow(ctx,
 		`INSERT INTO users (email, display_name) VALUES ($1,$2)
-		 RETURNING id, email, display_name, is_system_admin, created_at, updated_at`,
+		 RETURNING id, email, display_name,
+		           global_role, status,
+		           first_name, last_name, title, description, profile_completed,
+		           created_at, updated_at`,
 		strings.ToLower(email), displayName,
 	)
 	u, err := scanUser(row)
@@ -131,11 +152,13 @@ func (s *Service) verifyLocalLogin(ctx context.Context, email, password string) 
 	return u, nil
 }
 
-// SeedDevUser upserts dev@graphene-lab.org as a system admin with local password.
+// SeedDevUser upserts dev@graphene-lab.org as a platform admin with local password.
 // Idempotent — safe to call on every boot.
 func (s *Service) SeedDevUser(ctx context.Context) error {
 	const devEmail = "dev@graphene-lab.org"
 	const devName = "Dev User"
+	const devFirstName = "Dev"
+	const devLastName = "User"
 	const devPw = "devpassword"
 
 	hash, err := HashPassword(devPw)
@@ -145,12 +168,13 @@ func (s *Service) SeedDevUser(ctx context.Context) error {
 
 	var userID uuid.UUID
 	err = s.pool.QueryRow(ctx,
-		`INSERT INTO users (email, display_name, is_system_admin)
-		 VALUES ($1,$2,true)
+		`INSERT INTO users (email, display_name, global_role, status, first_name, last_name, profile_completed)
+		 VALUES ($1,$2,'admin','approved',$3,$4,true)
 		 ON CONFLICT (email) DO UPDATE
-		   SET display_name=$2, is_system_admin=true, updated_at=now()
+		   SET display_name=$2, global_role='admin', status='approved',
+		       first_name=$3, last_name=$4, profile_completed=true, updated_at=now()
 		 RETURNING id`,
-		devEmail, devName,
+		devEmail, devName, devFirstName, devLastName,
 	).Scan(&userID)
 	if err != nil {
 		return fmt.Errorf("auth: seed dev user: %w", err)

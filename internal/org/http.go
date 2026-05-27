@@ -166,12 +166,12 @@ func (s *Service) handleGetWorkspace(ctx context.Context, in *getWorkspaceInput)
 		return nil, err
 	}
 
-	// Only members (or system admin) may view.
+	// Only members (or privileged users) may view.
 	_, isMember, err := s.WorkspaceRole(ctx, wsID, p.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if !isMember && !p.IsSystemAdmin {
+	if !isMember && !p.IsPrivileged() {
 		return nil, platform.Forbidden("not a member of this workspace")
 	}
 
@@ -206,7 +206,7 @@ func (s *Service) handleListMembers(ctx context.Context, in *listMembersInput) (
 	if err != nil {
 		return nil, err
 	}
-	if !isMember && !p.IsSystemAdmin {
+	if !isMember && !p.IsPrivileged() {
 		return nil, platform.Forbidden("not a member of this workspace")
 	}
 

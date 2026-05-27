@@ -259,7 +259,7 @@ func TestService_PermissionCheck_NotAdmin(t *testing.T) {
 	rec := audit.NewRecorder(pool, log)
 	svc := audit.NewService(rec)
 
-	p := &platform.Principal{UserID: uuid.New(), IsSystemAdmin: false}
+	p := &platform.Principal{UserID: uuid.New(), GlobalRole: "member"}
 	ctx := platform.WithPrincipal(context.Background(), p)
 
 	_, err := svc.HandleListAudit(ctx, &audit.GetAuditInput{})
@@ -286,9 +286,9 @@ func TestService_PermissionCheck_TokenMissingScope(t *testing.T) {
 	tokenID := uuid.New()
 	p := &platform.Principal{
 		UserID:        uuid.New(),
-		IsSystemAdmin: true,
-		ViaTokenID:    &tokenID,
-		Scopes:        []string{"read:samples"}, // no read:audit
+		GlobalRole: "admin",
+		ViaTokenID: &tokenID,
+		Scopes:     []string{"read:samples"}, // no read:audit
 	}
 	ctx := platform.WithPrincipal(context.Background(), p)
 
@@ -321,7 +321,7 @@ func TestService_HappyPath_Admin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := &platform.Principal{UserID: uuid.New(), IsSystemAdmin: true}
+	p := &platform.Principal{UserID: uuid.New(), GlobalRole: "admin"}
 	ctx = platform.WithPrincipal(ctx, p)
 
 	out, err := svc.HandleListAudit(ctx, &audit.GetAuditInput{Actor: actor.String()})

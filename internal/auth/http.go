@@ -297,20 +297,32 @@ type loginOutput struct {
 }
 
 type userJSON struct {
-	ID            uuid.UUID `json:"id"`
-	Email         string    `json:"email"`
-	DisplayName   string    `json:"display_name"`
-	IsSystemAdmin bool      `json:"is_system_admin"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID               uuid.UUID `json:"id"`
+	Email            string    `json:"email"`
+	DisplayName      string    `json:"display_name"`
+	GlobalRole       string    `json:"global_role"`
+	Status           string    `json:"status"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	Title            string    `json:"title"`
+	Description      string    `json:"description"`
+	ProfileCompleted bool      `json:"profile_completed"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 func userToJSON(u *User) userJSON {
 	return userJSON{
-		ID:            u.ID,
-		Email:         u.Email,
-		DisplayName:   u.DisplayName,
-		IsSystemAdmin: u.IsSystemAdmin,
-		CreatedAt:     u.CreatedAt,
+		ID:               u.ID,
+		Email:            u.Email,
+		DisplayName:      u.DisplayName,
+		GlobalRole:       u.GlobalRole,
+		Status:           u.Status,
+		FirstName:        u.FirstName,
+		LastName:         u.LastName,
+		Title:            u.Title,
+		Description:      u.Description,
+		ProfileCompleted: u.ProfileCompleted,
+		CreatedAt:        u.CreatedAt,
 	}
 }
 

@@ -308,9 +308,9 @@ func TestResolveAccessForPrincipal_SystemAdmin(t *testing.T) {
 	}
 
 	p := &platform.Principal{
-		UserID:        sysAdmin.ID,
-		Email:         sysAdmin.Email,
-		IsSystemAdmin: true,
+		UserID:     sysAdmin.ID,
+		Email:      sysAdmin.Email,
+		GlobalRole: "admin",
 	}
 
 	projectID := uuid.New()

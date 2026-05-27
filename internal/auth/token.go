@@ -20,8 +20,8 @@ import (
 // ─── Access JWT ─────────────────────────────────────────────────────────────
 
 type accessClaims struct {
-	Email   string `json:"email"`
-	IsAdmin bool   `json:"is_admin"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -29,8 +29,8 @@ type accessClaims struct {
 func (s *Service) issueAccessToken(u *User) (string, error) {
 	now := time.Now()
 	claims := accessClaims{
-		Email:   u.Email,
-		IsAdmin: u.IsSystemAdmin,
+		Email: u.Email,
+		Role:  u.GlobalRole,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   u.ID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -62,9 +62,9 @@ func (s *Service) VerifyAccessToken(_ context.Context, raw string) (*platform.Pr
 		return nil, platform.Unauthorized("invalid subject in access token")
 	}
 	return &platform.Principal{
-		UserID:        userID,
-		Email:         claims.Email,
-		IsSystemAdmin: claims.IsAdmin,
+		UserID:     userID,
+		Email:      claims.Email,
+		GlobalRole: claims.Role,
 	}, nil
 }
 
@@ -231,11 +231,11 @@ func (s *Service) VerifyPAT(ctx context.Context, raw string) (*platform.Principa
 	}
 	tokenID := r.id
 	return &platform.Principal{
-		UserID:        u.ID,
-		Email:         u.Email,
-		IsSystemAdmin: u.IsSystemAdmin,
-		ViaTokenID:    &tokenID,
-		Scopes:        r.scopes,
+		UserID:     u.ID,
+		Email:      u.Email,
+		GlobalRole: u.GlobalRole,
+		ViaTokenID: &tokenID,
+		Scopes:     r.scopes,
 	}, nil
 }
 
@@ -367,7 +367,7 @@ func (s *Service) VerifyInternalAIToken(ctx context.Context, raw string) (*platf
 	return &platform.Principal{
 		UserID:              u.ID,
 		Email:               u.Email,
-		IsSystemAdmin:       u.IsSystemAdmin,
+		GlobalRole:          u.GlobalRole,
 		ViaAIConversationID: &convID,
 		Scopes:              scopes,
 	}, nil

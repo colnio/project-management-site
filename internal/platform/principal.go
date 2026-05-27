@@ -11,10 +11,14 @@ import (
 // The same struct represents a human (JWT), an external agent (PAT), and the
 // in-app AI (internal token) — only the Via* fields differ. This keeps one
 // HTTP code path for all three, per spec §6.3 / §7.6.
+//
+// GlobalRole carries the user's platform-level role ("admin", "pi", or
+// "member"). Use IsAdmin(), IsPI(), and IsPrivileged() rather than comparing
+// the string directly — those methods are nil-safe.
 type Principal struct {
-	UserID        uuid.UUID
-	Email         string
-	IsSystemAdmin bool // system-level admin/PI override (every use is audited)
+	UserID     uuid.UUID
+	Email      string
+	GlobalRole string // "admin" | "pi" | "member" | "" (legacy/unknown)
 
 	// Exactly one of the Via* fields is set for non-interactive callers; both
 	// nil means a first-party browser session (JWT).
@@ -25,6 +29,16 @@ type Principal struct {
 	// owner's resolved permissions (empty slice => full first-party session).
 	Scopes []string
 }
+
+// IsAdmin reports whether the principal holds the "admin" global role.
+func (p *Principal) IsAdmin() bool { return p != nil && p.GlobalRole == "admin" }
+
+// IsPI reports whether the principal holds the "pi" global role.
+func (p *Principal) IsPI() bool { return p != nil && p.GlobalRole == "pi" }
+
+// IsPrivileged reports whether the principal is admin or PI — i.e. holds
+// elevated platform-level access beyond a regular member.
+func (p *Principal) IsPrivileged() bool { return p.IsAdmin() || p.IsPI() }
 
 // HasScope reports whether the principal carries the given scope.
 //

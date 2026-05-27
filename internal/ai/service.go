@@ -259,10 +259,10 @@ func (s *Service) SetWorkspaceAutonomy(ctx context.Context, p *platform.Principa
 	if err != nil {
 		return err
 	}
-	if !isMember && !p.IsSystemAdmin {
+	if !isMember && !p.IsPrivileged() {
 		return platform.Forbidden("not a member of this workspace")
 	}
-	if role != string(org.RoleOwner) && !p.IsSystemAdmin {
+	if role != string(org.RoleOwner) && !p.IsPrivileged() {
 		return platform.Forbidden("workspace owner role required to update autonomy config")
 	}
 	if err := UpsertAutonomy(ctx, s.pool, "workspace", workspaceID, mode, allowedTools); err != nil {
@@ -296,13 +296,13 @@ func (s *Service) GetUsageSummary(ctx context.Context, p *platform.Principal, wo
 }
 
 // checkWorkspaceMember returns a Forbidden error if the principal is not a
-// member of the workspace (and not a system admin).
+// member of the workspace (and not a privileged user).
 func (s *Service) checkWorkspaceMember(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID) error {
 	_, isMember, err := s.orgSvc.WorkspaceRole(ctx, workspaceID, p.UserID)
 	if err != nil {
 		return err
 	}
-	if !isMember && !p.IsSystemAdmin {
+	if !isMember && !p.IsPrivileged() {
 		return platform.Forbidden("not a member of this workspace")
 	}
 	return nil
