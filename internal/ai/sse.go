@@ -14,6 +14,7 @@ import (
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
+	"github.com/colnio/project-management-site/skills"
 )
 
 const maxToolRounds = 5
@@ -135,24 +136,48 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 
 	// Build the full message history for the model.
 	// Compose a system message with project context (not persisted to DB).
+
+	// contextPreamble is always included as the foundation of the system prompt.
+	contextPreamble := fmt.Sprintf(
+		"Current context:\n"+
+			"  project_id: %s\n"+
+			"  project_name: %s\n"+
+			"  workspace_id: %s\n"+
+			"  today: %s\n\n"+
+			"You are running inside a web application; there is no local filesystem. "+
+			"Use the available tools to read project data and produce the final report as a chat message and/or via the draft_page tool.",
+		proj.ID.String(),
+		proj.Name,
+		proj.WorkspaceID.String(),
+		time.Now().Format("2006-01-02"),
+	)
+
+	var systemContent string
+	if conv.Skill != nil && *conv.Skill != "" {
+		skillBody, skillErr := skills.LoadSkill(*conv.Skill)
+		if skillErr == nil {
+			systemContent = contextPreamble + "\n\n" + skillBody
+		} else {
+			s.log.Warn("ai: sse: load skill failed; falling back to generic prompt", "skill", *conv.Skill, "err", skillErr)
+			systemContent = "You are an AI assistant embedded in a research project management tool.\n" +
+				contextPreamble + "\n\n" +
+				"Instructions:\n" +
+				"- When a tool requires a project_id and the user has not specified one, default to the current project_id above.\n" +
+				"- Use the list_projects tool when the user asks about multiple projects or projects outside the current one.\n" +
+				"- Be concise and factual in your responses."
+		}
+	} else {
+		systemContent = "You are an AI assistant embedded in a research project management tool.\n" +
+			contextPreamble + "\n\n" +
+			"Instructions:\n" +
+			"- When a tool requires a project_id and the user has not specified one, default to the current project_id above.\n" +
+			"- Use the list_projects tool when the user asks about multiple projects or projects outside the current one.\n" +
+			"- Be concise and factual in your responses."
+	}
+
 	systemMsg := ChatMessage{
-		Role: "system",
-		Content: fmt.Sprintf(
-			"You are an AI assistant embedded in a research project management tool.\n"+
-				"Current context:\n"+
-				"  project_id: %s\n"+
-				"  project_name: %s\n"+
-				"  workspace_id: %s\n"+
-				"  today: %s\n\n"+
-				"Instructions:\n"+
-				"- When a tool requires a project_id and the user has not specified one, default to the current project_id above.\n"+
-				"- Use the list_projects tool when the user asks about multiple projects or projects outside the current one.\n"+
-				"- Be concise and factual in your responses.",
-			proj.ID.String(),
-			proj.Name,
-			proj.WorkspaceID.String(),
-			time.Now().Format("2006-01-02"),
-		),
+		Role:    "system",
+		Content: systemContent,
 	}
 	history := make([]ChatMessage, 0, len(existingMsgs)+2)
 	history = append(history, systemMsg)

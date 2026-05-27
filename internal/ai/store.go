@@ -19,17 +19,18 @@ type Conversation struct {
 	ProjectID uuid.UUID `json:"project_id"`
 	StartedBy uuid.UUID `json:"started_by"`
 	Title     string    `json:"title"`
+	Skill     *string   `json:"skill,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func createConversation(ctx context.Context, pool *pgxpool.Pool, projectID, userID uuid.UUID, title string) (*Conversation, error) {
+func createConversation(ctx context.Context, pool *pgxpool.Pool, projectID, userID uuid.UUID, title string, skill *string) (*Conversation, error) {
 	var c Conversation
 	err := pool.QueryRow(ctx,
-		`INSERT INTO ai_conversations (project_id, started_by, title)
-		 VALUES ($1, $2, $3)
-		 RETURNING id, project_id, started_by, title, created_at`,
-		projectID, userID, title,
-	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.CreatedAt)
+		`INSERT INTO ai_conversations (project_id, started_by, title, skill)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, project_id, started_by, title, skill, created_at`,
+		projectID, userID, title, skill,
+	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("ai: create conversation: %w", err)
 	}
@@ -39,9 +40,9 @@ func createConversation(ctx context.Context, pool *pgxpool.Pool, projectID, user
 func getConversation(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Conversation, error) {
 	var c Conversation
 	err := pool.QueryRow(ctx,
-		`SELECT id, project_id, started_by, title, created_at FROM ai_conversations WHERE id=$1`,
+		`SELECT id, project_id, started_by, title, skill, created_at FROM ai_conversations WHERE id=$1`,
 		id,
-	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.CreatedAt)
+	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -53,7 +54,7 @@ func getConversation(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Co
 
 func listConversations(ctx context.Context, pool *pgxpool.Pool, projectID uuid.UUID) ([]*Conversation, error) {
 	rows, err := pool.Query(ctx,
-		`SELECT id, project_id, started_by, title, created_at
+		`SELECT id, project_id, started_by, title, skill, created_at
 		 FROM ai_conversations WHERE project_id=$1 ORDER BY created_at DESC`,
 		projectID,
 	)
@@ -64,7 +65,7 @@ func listConversations(ctx context.Context, pool *pgxpool.Pool, projectID uuid.U
 	var out []*Conversation
 	for rows.Next() {
 		var c Conversation
-		if err := rows.Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, &c)

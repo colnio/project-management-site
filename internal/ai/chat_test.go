@@ -15,16 +15,19 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"log/slog"
+	"os"
+
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
 	"github.com/colnio/project-management-site/internal/config"
+	"github.com/colnio/project-management-site/internal/iteration"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
+	"github.com/colnio/project-management-site/internal/risk"
 	"github.com/colnio/project-management-site/internal/testsupport"
-
-	"log/slog"
-	"os"
+	"github.com/colnio/project-management-site/skills"
 )
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -107,7 +110,7 @@ func TestService_Unavailable(t *testing.T) {
 	pool := testsupport.NewPool(t)
 	svc, sd := newTestService(t, pool, nil) // nil client = disabled
 
-	_, err := svc.CreateConversation(context.Background(), sd.Principal, sd.ProjectID, "test")
+	_, err := svc.CreateConversation(context.Background(), sd.Principal, sd.ProjectID, "test", nil)
 	if err == nil {
 		t.Fatal("expected error when AI unavailable")
 	}
@@ -122,7 +125,7 @@ func TestService_CreateAndListConversations(t *testing.T) {
 	svc, sd := newTestService(t, pool, stub)
 
 	ctx := context.Background()
-	conv, err := svc.CreateConversation(ctx, sd.Principal, sd.ProjectID, "My Test Chat")
+	conv, err := svc.CreateConversation(ctx, sd.Principal, sd.ProjectID, "My Test Chat", nil)
 	if err != nil {
 		t.Fatalf("CreateConversation: %v", err)
 	}
@@ -227,7 +230,7 @@ func TestChatLoop_ReadToolThenText(t *testing.T) {
 	)
 
 	p := &platform.Principal{UserID: user.ID, Email: email}
-	conv, err := svc.CreateConversation(ctx, p, projID, "loop test")
+	conv, err := svc.CreateConversation(ctx, p, projID, "loop test", nil)
 	if err != nil {
 		t.Fatalf("create conv: %v", err)
 	}
@@ -316,7 +319,7 @@ func TestChatLoop_SpendCapRefusal(t *testing.T) {
 	svc.restBase = "http://127.0.0.1:19099"
 
 	p := &platform.Principal{UserID: user.ID, Email: email}
-	conv, _ := svc.CreateConversation(ctx, p, projID, "cap test")
+	conv, _ := svc.CreateConversation(ctx, p, projID, "cap test", nil)
 
 	reqBody, _ := json.Marshal(map[string]string{"content": "hello"})
 	w := httptest.NewRecorder()
@@ -405,3 +408,174 @@ func TestInternalTokenMintedAndRevoked(t *testing.T) {
 		t.Error("expected error after revoke")
 	}
 }
+
+// ─── Skills package tests ─────────────────────────────────────────────────────
+
+func TestSkillsLoadSkill_RiskAssessment(t *testing.T) {
+	body, err := skills.LoadSkill("risk_assesment_skill")
+	if err != nil {
+		t.Fatalf("LoadSkill: %v", err)
+	}
+	if len(body) == 0 {
+		t.Error("expected non-empty skill body")
+	}
+	if !strings.Contains(body, "Risk Assessment") {
+		t.Errorf("expected skill body to contain 'Risk Assessment', got %d chars", len(body))
+	}
+}
+
+func TestSkillsLoadSkill_NotFound(t *testing.T) {
+	_, err := skills.LoadSkill("nonexistent_skill")
+	if err == nil {
+		t.Fatal("expected error for nonexistent skill")
+	}
+	if !strings.Contains(err.Error(), "skills: load") {
+		t.Errorf("expected wrapped error with 'skills: load', got: %v", err)
+	}
+}
+
+// ─── Conversation skill round-trip test ──────────────────────────────────────
+
+func TestCreateConversation_SkillRoundTrip(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	stub := NewStubClient(nil)
+	svc, sd := newTestService(t, pool, stub)
+
+	ctx := context.Background()
+	skill := "risk_assesment_skill"
+	conv, err := svc.CreateConversation(ctx, sd.Principal, sd.ProjectID, "Skill Chat", &skill)
+	if err != nil {
+		t.Fatalf("CreateConversation: %v", err)
+	}
+	if conv.Skill == nil {
+		t.Fatal("expected Skill to be set on created conversation")
+	}
+	if *conv.Skill != skill {
+		t.Errorf("skill = %q, want %q", *conv.Skill, skill)
+	}
+
+	// Round-trip through getConversation (store-level).
+	loaded, err := getConversation(ctx, pool, conv.ID)
+	if err != nil {
+		t.Fatalf("getConversation: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected conversation to be found")
+	}
+	if loaded.Skill == nil {
+		t.Fatal("expected Skill to be present after reload")
+	}
+	if *loaded.Skill != skill {
+		t.Errorf("reloaded skill = %q, want %q", *loaded.Skill, skill)
+	}
+
+	// Round-trip through listConversations.
+	convs, err := svc.ListConversations(ctx, sd.Principal, sd.ProjectID)
+	if err != nil {
+		t.Fatalf("ListConversations: %v", err)
+	}
+	var found *Conversation
+	for _, c := range convs {
+		if c.ID == conv.ID {
+			found = c
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("conversation not found in list")
+	}
+	if found.Skill == nil || *found.Skill != skill {
+		t.Errorf("listed conversation skill = %v, want %q", found.Skill, skill)
+	}
+}
+
+// ─── ReviewRisks tests ────────────────────────────────────────────────────────
+
+func TestReviewRisks_ReturnsContent(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	ctx := context.Background()
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	authSvc, _ := auth.NewService(ctx, pool, &config.Config{
+		JWTSigningKey:   "review-test-key",
+		AccessTokenTTL:  time.Minute,
+		RefreshTokenTTL: time.Hour,
+		OIDCIssuer:      "http://localhost:9999/nonexistent",
+	}, audit.Nop{}, logger)
+	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
+	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
+
+	email := fmt.Sprintf("review-test-%s@example.com", uuid.New().String()[:8])
+	user, _ := authSvc.CreateUser(ctx, email, "Review Test")
+	ws, _ := orgSvc.CreateWorkspace(ctx, "reviewws"+user.ID.String()[:8], user.ID)
+	projID := uuid.New()
+	_, _ = pool.Exec(ctx,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		projID, ws.ID, "Review Proj", "", "workspace", user.ID,
+	)
+
+	// Seed a couple of risks.
+	_, _ = pool.Exec(ctx,
+		`INSERT INTO risks (project_id, seq, title, likelihood, impact_headline, impact_description, mitigation, created_by)
+		 VALUES ($1, 1, 'Thermal runaway', 'high', 'Fire', '', '', $2),
+		        ($1, 2, 'Short circuit',  'med',  'Data loss', '', '', $2)`,
+		projID, user.ID,
+	)
+
+	rec := &capturingRecorder{}
+	stub := NewStubClient([]StubResponse{
+		{Response: &ChatResponse{
+			Message: ChatMessage{Role: "assistant", Content: "Risk review: two risks found. Recommendation: proceed with caution."},
+			Usage:   Usage{PromptTokens: 50, CompletionTokens: 30, TotalTokens: 80},
+		}},
+	})
+
+	// Build AI service wired with a real risk service.
+	riskSvc := newTestRiskService(pool, projectSvc, logger)
+	svc := NewService(pool, &config.Config{Port: "19099"}, stub, authSvc, orgSvc, projectSvc, rec, logger)
+	svc.SetRiskService(riskSvc)
+
+	p := &platform.Principal{UserID: user.ID, Email: email}
+
+	review, err := svc.ReviewRisks(ctx, p, projID, nil)
+	if err != nil {
+		t.Fatalf("ReviewRisks: %v", err)
+	}
+	if !strings.Contains(review, "two risks") {
+		t.Errorf("expected review content, got: %q", review)
+	}
+
+	// Verify ai.risk_review audit entry was recorded.
+	auditFound := false
+	for _, e := range rec.entries {
+		if e.Action == "ai.risk_review" && e.ResourceID == projID.String() {
+			auditFound = true
+		}
+	}
+	if !auditFound {
+		t.Error("expected ai.risk_review audit entry")
+	}
+}
+
+func TestReviewRisks_NilRisks(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	stub := NewStubClient(nil)
+	svc, sd := newTestService(t, pool, stub)
+	// risks is nil by default in newTestService.
+
+	_, err := svc.ReviewRisks(context.Background(), sd.Principal, sd.ProjectID, nil)
+	if err == nil {
+		t.Fatal("expected error when risk service not wired")
+	}
+	if !strings.Contains(err.Error(), "unavailable") && !strings.Contains(err.Error(), "not wired") {
+		t.Errorf("expected unavailable error, got: %v", err)
+	}
+}
+
+// newTestRiskService creates a risk.Service for use in AI tests.
+func newTestRiskService(pool *pgxpool.Pool, projectSvc *project.Service, log *slog.Logger) *risk.Service {
+	iterSvc := iteration.NewService(pool, projectSvc, audit.Nop{}, log)
+	return risk.NewService(pool, projectSvc, iterSvc, audit.Nop{}, log)
+}
+
+// ensure skills import is used via LoadSkill (already called in tests above)

@@ -274,6 +274,19 @@ func (s *Service) setPIReview(ctx context.Context, id uuid.UUID, flagged bool) (
 	return scanRisk(row)
 }
 
+// ─── ListForReview ────────────────────────────────────────────────────────────
+
+// ListForReview returns risks for a project suitable for AI review.
+// If iterationID is non-nil, only risks for that iteration are returned;
+// otherwise all risks for the project are returned.
+// Authorization is the caller's responsibility.
+func (s *Service) ListForReview(ctx context.Context, projectID uuid.UUID, iterationID *uuid.UUID) ([]*Risk, error) {
+	if iterationID != nil {
+		return s.listByIteration(ctx, *iterationID)
+	}
+	return s.listByProject(ctx, projectID)
+}
+
 // ─── ListFlaggedForPIReviewByWorkspace ────────────────────────────────────────
 
 // ListFlaggedForPIReviewByWorkspace returns risks with flagged_for_pi_review=true

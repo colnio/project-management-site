@@ -77,7 +77,9 @@ func (s *Service) unavailableErr() error {
 // ─── Conversation management ─────────────────────────────────────────────────
 
 // CreateConversation creates a new conversation for a project.
-func (s *Service) CreateConversation(ctx context.Context, p *platform.Principal, projectID uuid.UUID, title string) (*Conversation, error) {
+// skill is an optional skill name (the bare filename without .md) to inject
+// as the system prompt when the conversation receives its first message.
+func (s *Service) CreateConversation(ctx context.Context, p *platform.Principal, projectID uuid.UUID, title string, skill *string) (*Conversation, error) {
 	if !s.available() {
 		return nil, s.unavailableErr()
 	}
@@ -87,7 +89,7 @@ func (s *Service) CreateConversation(ctx context.Context, p *platform.Principal,
 		return nil, err
 	}
 
-	conv, err := createConversation(ctx, s.pool, proj.ID, p.UserID, title)
+	conv, err := createConversation(ctx, s.pool, proj.ID, p.UserID, title, skill)
 	if err != nil {
 		return nil, err
 	}
@@ -362,4 +364,79 @@ func (s *Service) SetProjectAutonomy(ctx context.Context, p *platform.Principal,
 		allowedTools = intersectTools(wsTools, allowedTools)
 	}
 	return UpsertAutonomy(ctx, s.pool, "project", projectID, mode, allowedTools)
+}
+
+// ─── Risk review ─────────────────────────────────────────────────────────────
+
+// ReviewRisks calls the AI to summarise the risk register for a project (or
+// an iteration within it) and return a concise readiness recommendation.
+// The caller is authorised as Viewer; no write scopes are required.
+func (s *Service) ReviewRisks(ctx context.Context, p *platform.Principal, projectID uuid.UUID, iterationID *uuid.UUID) (string, error) {
+	if !s.available() {
+		return "", s.unavailableErr()
+	}
+	if s.risks == nil {
+		return "", platform.Errorf(503, "ai.risks_unavailable", "risk service is not wired")
+	}
+
+	proj, _, err := s.projects.Authorize(ctx, p, projectID, org.RoleViewer)
+	if err != nil {
+		return "", err
+	}
+
+	risks, err := s.risks.ListForReview(ctx, projectID, iterationID)
+	if err != nil {
+		return "", fmt.Errorf("ai: review risks: %w", err)
+	}
+
+	// Build a bullet list of risks for the user message.
+	var riskLines []string
+	for _, r := range risks {
+		iterStr := ""
+		if r.IterationID != nil {
+			iterStr = fmt.Sprintf(" [iter:%s]", r.IterationID.String())
+		}
+		riskLines = append(riskLines, fmt.Sprintf("- %s | likelihood:%s | impact:%s | status:%s%s",
+			r.Title, r.Likelihood, r.ImpactHeadline, r.Status, iterStr))
+	}
+	riskBullets := ""
+	for _, l := range riskLines {
+		riskBullets += l + "\n"
+	}
+
+	iterMsg := ""
+	if iterationID != nil {
+		iterMsg = fmt.Sprintf("\nIteration: %s", iterationID.String())
+	}
+
+	userMsg := fmt.Sprintf(
+		"Project: %s (id: %s)%s\nDate: %s\n\nRisk Register:\n%s",
+		proj.Name,
+		proj.ID.String(),
+		iterMsg,
+		time.Now().Format("2006-01-02"),
+		riskBullets,
+	)
+
+	systemMsg := "You are a scientific risk assessment reviewer. Summarise the risk register, identify the top concerns, and give a concise readiness recommendation."
+
+	resp, err := s.client.Chat(ctx, ChatRequest{
+		Messages: []ChatMessage{
+			{Role: "system", Content: systemMsg},
+			{Role: "user", Content: userMsg},
+		},
+		MaxTokens: 1024,
+	})
+	if err != nil {
+		return "", fmt.Errorf("ai: review risks: chat: %w", err)
+	}
+
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        p.UserID,
+		Action:       "ai.risk_review",
+		ResourceType: "project",
+		ResourceID:   projectID.String(),
+	})
+
+	return resp.Message.Content, nil
 }

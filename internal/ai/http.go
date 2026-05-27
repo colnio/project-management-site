@@ -32,7 +32,7 @@ func Register(api huma.API, svc *Service) {
 		if err != nil {
 			return nil, platform.BadRequest("invalid_project_id", "invalid project id")
 		}
-		conv, err := svc.CreateConversation(ctx, p, projectID, input.Body.Title)
+		conv, err := svc.CreateConversation(ctx, p, projectID, input.Body.Title, input.Body.Skill)
 		if err != nil {
 			return nil, err
 		}
@@ -290,6 +290,42 @@ func Register(api huma.API, svc *Service) {
 		}
 		return &autonomyOutput{Body: cfg}, nil
 	})
+
+	// Risk review endpoint.
+	huma.Register(api, huma.Operation{
+		OperationID: "ai-risk-review",
+		Method:      http.MethodPost,
+		Path:        "/v1/projects/{id}/ai/risk-review",
+		Summary:     "AI risk register review for a project",
+		Tags:        []string{"AI"},
+	}, func(ctx context.Context, input *aiRiskReviewInput) (*aiRiskReviewOutput, error) {
+		p, ok := platform.PrincipalFrom(ctx)
+		if !ok {
+			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeReadAI); err != nil {
+			return nil, err
+		}
+		projectID, err := uuid.Parse(input.ID)
+		if err != nil {
+			return nil, platform.BadRequest("invalid_project_id", "invalid project id")
+		}
+		var iterationID *uuid.UUID
+		if input.Body.IterationID != nil && *input.Body.IterationID != "" {
+			id, err := uuid.Parse(*input.Body.IterationID)
+			if err != nil {
+				return nil, platform.BadRequest("invalid_iteration_id", "invalid iteration id")
+			}
+			iterationID = &id
+		}
+		review, err := svc.ReviewRisks(ctx, p, projectID, iterationID)
+		if err != nil {
+			return nil, err
+		}
+		var out aiRiskReviewOutput
+		out.Body.Review = review
+		return &out, nil
+	})
 }
 
 // ─── Input/Output types ──────────────────────────────────────────────────────
@@ -297,7 +333,8 @@ func Register(api huma.API, svc *Service) {
 type aiCreateConversationInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Title string `json:"title"`
+		Title string  `json:"title"`
+		Skill *string `json:"skill,omitempty"`
 	}
 }
 
@@ -352,6 +389,19 @@ type autonomyOutput struct {
 
 type aiUsageSummaryOutput struct {
 	Body *UsageSummary
+}
+
+type aiRiskReviewInput struct {
+	ID   string `path:"id"`
+	Body struct {
+		IterationID *string `json:"iteration_id,omitempty"`
+	}
+}
+
+type aiRiskReviewOutput struct {
+	Body struct {
+		Review string `json:"review"`
+	}
 }
 
 // ensure org import is used for RoleOwner
