@@ -70,7 +70,7 @@ keeps one HTTP code path for all three.
 | iteration | `iterations`, `iteration_samples` | ordering by position, status, sample links |
 | sample | `samples`, `sample_relations` | freeform JSONB `properties`; lineage graph endpoint traverses relations |
 | experiment | `experiments`, `experiment_samples` | method enum, JSONB params, optional iteration link, sample/method filters |
-| page | `pages`, `page_blobs`, `page_revisions`, `page_presence` | content-addressable (SHA-256 blob), immutable revision graph, ETag/If-Match (412), candidate approve/reject, non-destructive restore, presence heartbeat, auto-save GC |
+| page | `pages`, `page_blobs`, `page_revisions`, `page_presence` | content-addressable (SHA-256 blob), immutable revision graph, ETag/If-Match (412), candidate approve/reject, non-destructive restore, presence heartbeat, auto-save GC; `GET /v1/projects/{id}/pages?parent_type=&parent_id=` returns `{items:[{id,project_id,parent_type,parent_id,title,updated_at,current_revision_id}]}` with titles derived from the markdown export |
 | artifact | `artifacts`, `sample_artifacts`, `experiment_artifacts` | presigned MinIO upload handshake (create → PUT → complete); processing handed to Track D; typed attachment joins |
 | calendar | `project_events`, `calendar_subscriptions` | event CRUD; signed per-user `.ics` feed at `/v1/cal/{user_id}/{token}.ics` (token is the bearer, no auth middleware), re-checking access via a synthetic principal |
 | risk | `risks` | H1 — first-class Risk Register: likelihood/impact/mitigation/Plan B, PI-review flag, per-project `seq`; `source` human/ai with `workflow_run_id` link; AI workflows call `UpsertFromWorkflow` |
@@ -127,12 +127,19 @@ The agentic-chat backend (`internal/ai`, Tracks G1/G2/G5) is implemented:
   `127.0.0.1:<port>/v1/...` with that token (mirroring the MCP server). All
   middleware (auth, audit, rate-limit) applies; the user stays the audited
   principal via `ViaAIConversationID`. No service back door.
+- **System prompt context.** When a message is submitted, `internal/ai/sse.go`
+  injects a system message carrying the current `project_id`, project name,
+  `workspace_id`, and date so the assistant answers project-scoped questions
+  without asking the user to specify a project.
 - **Tools.** Read tools (read/list samples, experiments, pages, artifacts,
-  lineage, `search_project_content`) are always available; write tools
-  (`draft_page`, `update_iteration_status`, `create_reminder`, `flag_for_review`)
-  are gated by `AutonomyConfig` (`read_only` | `suggest_writes` | `auto_routine` |
-  `full`; a project may not exceed its workspace). In `suggest_writes`, writes are
-  recorded as `proposed` tool calls for human approve/reject.
+  lineage, `search_project_content`, `list_projects`) are always available; write
+  tools (`draft_page`, `update_iteration_status`, `create_reminder`,
+  `flag_for_review`) are gated by `AutonomyConfig` (`read_only` | `suggest_writes`
+  | `auto_routine` | `full`; a project may not exceed its workspace). In
+  `suggest_writes`, writes are recorded as `proposed` tool calls for human
+  approve/reject. `allTools`/`gatedTools`/`dispatchTool` in
+  `internal/ai/tools.go` thread both `projectID` and `workspaceID`. The
+  `draft_page` tool now posts valid BlockNote blocks.
 - **Streaming.** `POST /v1/ai/conversations/{id}/messages` is a chi SSE route
   (not huma) emitting `token`/`tool_call`/`tool_result`/`warn`/`done`/`error`
   events; it runs a bounded tool-use loop (≤5 rounds).
@@ -196,36 +203,53 @@ Templates UI can render a step accordion and the schema. Endpoints:
 
 Vite + React + TypeScript + TanStack Router/Query. Auth context holds the access
 token in memory with a one-shot refresh on 401. Implemented against the live API:
-the app shell (sidebar, workspace switcher, project tree, ⌘K palette), C1 project
-list/detail, C2 iteration detail (+ sample-link picker), C4 sample detail (JSONB
-property editor + React Flow lineage graph), C5 experiment detail (method-specific
-parameter forms + sample picker), C6 artifacts (presigned upload widget, PDF.js
-viewer, image lightbox, ipynb iframe, attachment role pickers), C3 the BlockNote
-page editor (custom `@sample`/`@experiment`/`@artifact` reference blocks resolved
-via the API, debounced auto-save, ETag-aware save with a 412 conflict banner,
-presence indicator, and a history panel with diff/restore), and an F1 settings
-page (PAT create/list/revoke + calendar `.ics` subscription with rotate), and the
-E3/E4 calendar views — a FullCalendar month/week/agenda calendar (per-project and
-unified across visible projects, with create/edit) plus a lightweight custom Gantt
-timeline (iterations as date-positioned bars + event markers, per-project and
-unified; FullCalendar's premium timeline is deliberately avoided), and the AI
-frontend (G6/G7/G8): a per-project streaming **chat panel** (a fetch-based SSE
-reader renders token deltas, tool calls/results, citations, spend warnings, and
-approve/reject on proposed write tool-calls), a **workflow runner** (pick a
-workflow + target, run, render rating/mitigations/PI-flag + link to the result
-page), and **autonomy config** (workspace + project mode + allowed tools, with the
-project clamped to the workspace). The **design-parity UX layer (H1–H3)** adds: a
-`RiskRegister` table on the Overview/iteration pages; three Overview layouts
-(Editorial/Dashboard/Stream); a **Tweaks panel** (theme/density/accent persisted
-to `localStorage` and applied via `data-` attributes + CSS vars on `<html>`, with
-a full dark token set); the AI chat panel **docked** as a right rail (reserving
-width via `--ai-w`) with citations and a spend-cap meter; rich entity read views
-with `ArtImage/ArtPDF/ArtNotebook` embeds; the new-project/new-iteration **wizards**
-(the iteration wizard surfaces the HIGH-risk activation gate); a Home **dashboard**
-(project grid + PI-review panel + activity feed); and the workspace pages
+the app shell (sidebar, workspace switcher, project tree, ⌘K palette — now also
+indexes samples/experiments/pages for the active project), C1 project list/detail,
+C2 iteration detail (+ sample-link picker), C4 sample detail (JSONB property
+editor + React Flow lineage graph), C5 experiment detail (method-specific parameter
+forms + sample picker; experiment rows now link to `/experiments/:id`), C6 artifacts
+(presigned upload widget, PDF.js viewer, image lightbox, ipynb iframe, attachment
+role pickers), C3 the BlockNote page editor — split into:
+
+- **`PageEditorCore`** (`web/src/components/editor/PageEditorCore.tsx`) — shared
+  save/ETag/presence/history logic, used by the `/pages/:pageId` route and by
+  `EntityPageEditor`.
+- **`EntityPageEditor`** (`web/src/components/editor/EntityPageEditor.tsx`) —
+  load-or-creates a page for an entity, seeded with an Overview heading, an
+  embedded non-editable `entityDashboard` block (dispatching to per-entity
+  dashboard components in `web/src/components/dashboards/`), and a Notes section.
+  Project, iteration, experiment, and sample detail pages now render this instead
+  of per-tab content sections.
+- Custom blocks: `sampleRef`/`experimentRef`/`artifactRef` (reference cards) and
+  `imageEmbed`/`pdfEmbed`/`htmlEmbed` (inline attachments — HTML in a sandboxed
+  `<iframe sandbox="allow-scripts">` via `ArtHTML`), all in `refBlocks.tsx`,
+  inserted via the slash menu (Attachments group for embed blocks).
+
+The sidebar **Notes** dropdown under each project (`AppShell.tsx`) lists the
+project's pages via `useProjectPages` (backed by the new
+`GET /v1/projects/{id}/pages` endpoint), linking to `/pages/:pageId`.
+
+Also: F1 settings page (PAT create/list/revoke + calendar `.ics` subscription with
+rotate); E3/E4 calendar views — a FullCalendar month/week/agenda calendar
+(per-project and unified) plus a lightweight custom Gantt timeline (iterations as
+date-positioned bars + event markers, per-project and unified; FullCalendar's
+premium timeline is deliberately avoided); and the AI frontend (G6/G7/G8): a
+per-project streaming **chat panel** (a fetch-based SSE reader renders token
+deltas, tool calls/results, citations, spend warnings, and approve/reject on
+proposed write tool-calls), a **workflow runner**, and **autonomy config**.
+The **design-parity UX layer (H1–H3)** adds: a `RiskRegister` table on the
+Overview/iteration pages; three Overview layouts (Editorial/Dashboard/Stream); a
+**Tweaks panel** (theme/density/accent persisted to `localStorage` and applied via
+`data-` attributes + CSS vars on `<html>`, with a full dark token set); the AI
+chat panel **docked** as a right rail (reserving width via `--ai-w`) with citations
+and a spend-cap meter; the new-project/new-iteration **wizards** (the iteration
+wizard surfaces the HIGH-risk activation gate); a Home **dashboard** (project grid
++ PI-review panel + activity feed); and the workspace pages
 (Inbox/People/Meetings/Admin/Templates). A root `errorComponent` keeps a component
-throw from taking down the whole app. OpenAPI TypeScript types are generated by
-`pnpm openapi`. MSW backs the Vitest suite.
+throw from taking down the whole app. Template sidebar links use the correct
+workflow keys (`battery_safety_risk_v1`/`experimental_risk_v1`/`project_risk_v1`).
+OpenAPI TypeScript types are generated by `pnpm openapi`. MSW backs the Vitest
+suite.
 
 ## Status
 

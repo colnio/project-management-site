@@ -39,7 +39,7 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 | C4 | Sample UI (JSONB property editor + React Flow lineage) | ✅ done |
 | C5 | Experiment UI (method param forms + sample picker) | ✅ done |
 | C6 | Artifact UI (presigned upload, PDF.js, image lightbox, ipynb iframe) | ✅ done |
-| C3 | Page editor (BlockNote + @sample/@experiment/@artifact reference blocks) | ✅ done |
+| C3 | Page editor (BlockNote + @sample/@experiment/@artifact reference blocks; entity pages are BlockNote docs; embedded attachment blocks; sidebar Notes dropdown) | ✅ done |
 | D1–D3 | Artifact workers: PDF page count, ipynb render, image thumbnails (River) | ✅ done |
 | E1–E2 | Calendar events + signed `.ics` feed | ✅ done |
 | E3–E4 | In-app calendar (FullCalendar) + custom Gantt timeline UI | ✅ done |
@@ -47,7 +47,7 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 | F2 | OpenAPI descriptions + examples | ✅ done |
 | F3 | MCP server (in-binary SSE at `/mcp`, PAT auth) | ✅ done |
 | F4 | `/llms.txt` generated from OpenAPI | ✅ done |
-| G1, G2, G5 | AI chat backend: orchestrator (OpenAI-compatible client), tool gating by autonomy, conversation store + metering | ✅ done |
+| G1, G2, G5 | AI chat backend: orchestrator (OpenAI-compatible client), tool gating by autonomy, conversation store + metering; project/workspace context injected into system prompt; `list_projects` tool; `draft_page` block fix | ✅ done |
 | G3, G4 | Risk-workflow engine + library (battery/experimental/project) | ✅ done |
 | G6, G7, G8 | AI chat UI (streaming), workflow runner UI, autonomy config UI | ✅ done |
 | H1 | **Risk Register**: first-class `risk` module (likelihood/impact/mitigation/Plan B, PI-review flag, per-project seq); AI workflows upsert AI-sourced risks; register UI on Overview + iterations | ✅ done |
@@ -62,8 +62,12 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 > block-normalizer renders pages authored via the API (seed data, the AI
 > `draft_page` tool) that use the simplified `{type,text}` shape. The editor uses
 > a custom schema with `sampleRef`/`experimentRef`/`artifactRef` card-embed blocks
-> (`web/src/components/editor/refBlocks.tsx`), inserted via the slash menu or an
-> `@`-mention trigger.
+> and `imageEmbed`/`pdfEmbed`/`htmlEmbed` attachment blocks (HTML renders in a
+> sandboxed `<iframe sandbox="allow-scripts">`) — all in
+> `web/src/components/editor/refBlocks.tsx` and inserted via the slash menu.
+> The editor core is now split into `PageEditorCore` (shared save/ETag/presence/
+> history) and `EntityPageEditor` (load-or-create a page seeded with an Overview
+> heading, an embedded `entityDashboard` block, and a Notes section).
 
 > **AI provider:** the orchestrator reads `aiconf.local.json` (gitignored) for an
 > OpenAI-compatible endpoint. Currently a LiteLLM proxy with `gpt-4.1-mini`;
@@ -71,7 +75,7 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 > is contained to `internal/ai/` so swapping providers (OpenRouter, Ollama) is a
 > one-file change.
 
-The backend exposes **100 REST operations** (all described in OpenAPI),
+The backend exposes **100+ REST operations** (all described in OpenAPI),
 River-backed artifact processing, an MCP server wrapping the REST API, and
 server-side permissions + audit on every mutation. The frontend covers the shell,
 projects, iterations, samples (+lineage), experiments, artifacts (gallery +
@@ -83,6 +87,18 @@ layer (H1–H3)** adds the Risk Register, the workspace-level surfaces
 (Inbox/People/Meetings/Admin/Templates), the docked AI panel with a spend-cap
 meter, the Tweaks/theme system (dark mode, density, accent, three Overview
 layouts), rich entity pages with inline embeds, and the creation wizards.
+
+Recent additions: every entity page (project, iteration, experiment, sample) is
+now a live **BlockNote document** (`EntityPageEditor`) with the entity dashboard
+embedded as a non-editable block and editable prose sections above and below;
+`imageEmbed`/`pdfEmbed`/`htmlEmbed` blocks upload via the artifact handshake and
+render inline; a **Notes dropdown** in the sidebar lists a project's pages; the AI
+assistant receives a **project-scoped system prompt** (project_id + name +
+workspace_id + date) and a new `list_projects` tool; and a
+`GET /v1/projects/{id}/pages` endpoint backs the Notes dropdown and Pages tab.
+Critical bug fixes: template sidebar links now use the correct workflow keys;
+sample experiment rows link to `/experiments/:id`; ⌘K indexes samples, experiments,
+and pages for the active project.
 
 ---
 

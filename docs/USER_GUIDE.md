@@ -29,6 +29,9 @@ land in **Mailpit** at <http://localhost:8025>.
   change content; viewers are read-only.
 - Add collaborators to a project by email (they must already have an account /
   have accepted an invite).
+- **⌘K command palette** — search across projects, workspaces, samples,
+  experiments, and pages for the active project. Type any fragment of a name or
+  title to jump directly to an entity.
 
 ## The research data model
 
@@ -51,12 +54,23 @@ land in **Mailpit** at <http://localhost:8025>.
   method-appropriate embeds (SEM micrographs, EIS fit PDFs + notebook cells,
   cycling overlays).
 - **Pages** — block-editor documents (BlockNote) attached to a project, iteration,
-  sample, or experiment. Create/open pages from a project's **Notes / Pages** tab.
+  sample, or experiment. There are two entry points:
+  - **Entity pages**: every project, iteration, experiment, and sample detail view
+    _is_ a BlockNote document. The layout is fixed: editable prose at the top,
+    followed by an embedded (non-editable) **dashboard block** showing the entity's
+    KPIs, risk register, lineage graph, etc., followed by editable **Notes** prose.
+    No need to navigate to a separate tab — everything is in one scrollable document.
+  - **Standalone pages**: create/open additional pages from the project's **Pages**
+    tab or from the **Notes** dropdown in the sidebar (which lists all pages for
+    that project). These open in the full-screen page editor.
   The editor auto-saves (after ~10s idle, on blur, or Ctrl/Cmd-S) and supports
-  **lab reference blocks** — type `/` and insert a `@sample`/`@experiment`/
-  `@artifact` reference that renders a live card linking to the entity. Every save
-  is an immutable revision: open **History** to diff against any revision and
-  restore one (non-destructively). Concurrent edits are guarded by optimistic
+  **lab reference blocks** — type `/` and choose from:
+  - `@sample`/`@experiment`/`@artifact` — inserts a live card linking to the entity.
+  - **Attachments** group — `Image embed`, `PDF embed`, `HTML embed` — uploads the
+    file via the artifact handshake and renders it inline. HTML attachments display
+    in a sandboxed frame (scripts allowed; no network/same-origin access).
+  Every save is an immutable revision: open **History** to diff against any revision
+  and restore one (non-destructively). Concurrent edits are guarded by optimistic
   locking — if the page changed under you, you get a conflict banner to reload or
   overwrite rather than silently clobbering — and a presence indicator shows who
   else is editing.
@@ -173,13 +187,17 @@ configured" and everything else still works).
 
 - **Chat** — open **Ask AI** from a project to dock a Cursor-style assistant panel
   on the right, scoped to that project. Replies **stream** in live. The assistant
-  can call read tools (search the project, read samples/experiments/pages/
-  artifacts, trace lineage) and shows what it used as numbered **citations**. A
-  status strip shows the current **autonomy mode** and a **spend meter** (model +
-  today's spend against the workspace monthly cap). Whether it can make *changes*
-  (draft a page, set an iteration status, create a reminder, flag for review)
-  depends on the project's **autonomy mode** — in `suggest_writes` it proposes a
-  change and you **approve or reject** it inline.
+  is automatically aware of the current project (name, ID) and workspace — you do
+  not need to specify which project you mean. It can answer questions like "what
+  samples are in this project?" or "list all projects in this workspace" without
+  any extra context. Read tools (search the project, read samples/experiments/
+  pages/artifacts, trace lineage, list projects) are always active; the assistant
+  shows what it used as numbered **citations**. A status strip shows the current
+  **autonomy mode** and a **spend meter** (model + today's spend against the
+  workspace monthly cap). Whether it can make *changes* (draft a page, set an
+  iteration status, create a reminder, flag for review) depends on the project's
+  **autonomy mode** — in `suggest_writes` it proposes a change and you **approve
+  or reject** it inline.
 - **Risk-assessment workflows** — the **AI Workflows** tab runs a guided
   assessment (`battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1`)
   against a project/sample/experiment. The result shows an overall rating,

@@ -26,6 +26,14 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
    should go through the owning module's exported Go API (see
    `risk.Service.UpsertFromWorkflow`, wired via `ai.Service.SetRiskService`), not
    cross-module SQL.
+   - The AI system prompt is now injected with `project_id`, project name,
+     `workspace_id`, and the current date by `internal/ai/sse.go` so the assistant
+     answers project-scoped questions without prompting the user to specify a project.
+   - `allTools`/`gatedTools`/`dispatchTool` in `internal/ai/tools.go` all thread
+     both `projectID` and `workspaceID`. When adding new tools, follow this
+     signature and add them to the appropriate gate level.
+   - The `draft_page` tool now posts well-formed BlockNote blocks; if you extend
+     it, validate the block shape against the custom schema (`refBlocks.tsx`).
 
 ## Build & tooling
 
@@ -52,6 +60,8 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
   sample 00060, experiment 00070–71 (+ EX-N codes 00121), page 00080,
   artifact 00090, calendar 00100, AI 00110–115, risk 00120, meetings 00122,
   inbox indexes 00123. Pick the next free range (≥00124) for new modules.
+  The `page` module gained a new `GET /v1/projects/{id}/pages` endpoint (no new
+  migration needed — reads existing `page_revisions`/`page_blobs` tables).
 
 ## huma gotchas (these crash at boot, not in unit tests)
 
@@ -97,6 +107,18 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
   generated from the live spec via `pnpm openapi` (openapi-typescript →
   `src/api/schema.d.ts`). MSW for tests; the app runs against the live API in dev.
 - Work only under `web/`; never commit `node_modules`/`dist`.
+- **Editor architecture:** `PageEditorCore` (`web/src/components/editor/PageEditorCore.tsx`)
+  owns save/ETag/presence/history and is shared by the `/pages/:pageId` route and
+  the new `EntityPageEditor` (`web/src/components/editor/EntityPageEditor.tsx`).
+  Entity detail pages (project/iteration/experiment/sample) now render an
+  `EntityPageEditor` — do not add separate tab-based content sections to those
+  pages; extend the dashboard component (`web/src/components/dashboards/`) instead.
+- The `entityDashboard` custom BlockNote block dispatches to the appropriate
+  dashboard component. It is intentionally non-editable; KPIs, risk registers, and
+  lineage graphs live there, not in the prose body.
+- `imageEmbed`/`pdfEmbed`/`htmlEmbed` blocks upload via the artifact presigned
+  handshake; `htmlEmbed` renders in `<iframe sandbox="allow-scripts">` only —
+  never add `allow-same-origin`.
 
 ## Commits
 
