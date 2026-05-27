@@ -5,6 +5,7 @@ import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState'
 import { StatusPill } from '@/components/StatusPill';
 import { ArtifactUpload } from '@/components/ArtifactUpload';
 import { ArtifactThumbnail, ArtifactDetailModal } from '@/components/ArtifactViewer';
+import { Avatar } from '@/components/Avatar';
 import {
   useProject,
   useProjectSamples,
@@ -14,6 +15,7 @@ import {
   useCreateIteration,
   useCreateSample,
   useCreateExperiment,
+  useWorkspaceMembers,
 } from '@/hooks/useQueries';
 import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import { PagesPanel } from '@/components/PagesPanel';
@@ -22,9 +24,10 @@ import { AIChatPanel } from '@/components/AIChatPanel';
 import { WorkflowRunner } from '@/components/WorkflowRunner';
 import { ProjectAutonomySection } from '@/components/AutonomyConfig';
 import { RiskRegister } from '@/components/RiskRegister';
+import { useOverviewLayout, type OverviewLayout } from '@/hooks/useTweaks';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
-type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows';
+type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
 
 // ─── Tab Bar ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +41,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'iterations', label: 'Iterations' },
   { id: 'timeline', label: 'Timeline' },
+  { id: 'calendar', label: 'Calendar' },
   { id: 'samples', label: 'Samples' },
   { id: 'experiments', label: 'Experiments' },
   { id: 'artifacts', label: 'Artifacts' },
@@ -65,17 +69,175 @@ function TabBar({ active, onChange, counts }: TabBarProps) {
   );
 }
 
-// ─── Overview Tab ─────────────────────────────────────────────────────────────
+// ─── Relative time helper ─────────────────────────────────────────────────────
 
-function OverviewTab({ projectId }: { projectId: string }) {
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+// ─── Layout Switcher ──────────────────────────────────────────────────────────
+
+const LAYOUT_OPTS: { id: OverviewLayout; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'editorial', label: 'Editorial' },
+  { id: 'stream', label: 'Stream' },
+];
+
+function LayoutSwitcher({ value, onChange }: { value: OverviewLayout; onChange: (l: OverviewLayout) => void }) {
+  return (
+    <div className="overview-layout-seg">
+      {LAYOUT_OPTS.map(opt => (
+        <button
+          key={opt.id}
+          className={value === opt.id ? 'active' : ''}
+          onClick={() => onChange(opt.id)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Project Header ───────────────────────────────────────────────────────────
+
+interface ProjectHeaderProps {
+  projectId: string;
+  onToggleAI?: () => void;
+}
+
+function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
   const { data: project } = useProject(projectId);
-  const { data: samples = [] } = useProjectSamples(projectId);
-  const { data: experiments = [] } = useProjectExperiments(projectId);
-  const { data: iterations = [] } = useProjectIterations(projectId);
-  const { data: artifacts = [] } = useProjectArtifacts(projectId);
+  const { data: members = [] } = useWorkspaceMembers(project?.workspace_id);
 
-  if (!project) return <LoadingState />;
+  if (!project) return null;
 
+  const leads = members.filter(m => m.role === 'owner' || m.role === 'admin');
+  const leadNames = leads.length > 0
+    ? leads.map(m => m.user_id.slice(0, 8)).join(', ')
+    : null;
+
+  const visIcon = project.visibility === 'private' ? '🔒' : '🌐';
+  const visLabel = project.visibility === 'private' ? 'Private' : 'Workspace';
+
+  return (
+    <div className="proj-head-rich">
+      <div className="proj-head-row1">
+        {/* Emblem */}
+        <div className="proj-emblem" style={{ width: 52, height: 52, fontSize: 26, flexShrink: 0 }}>
+          {project.name[0]?.toUpperCase()}
+        </div>
+
+        {/* Main text */}
+        <div className="proj-head-meta">
+          <div className="proj-title">{project.name}</div>
+          <div className="proj-meta-line">
+            <span>{visIcon} {visLabel} · all members can read</span>
+            {leadNames && (
+              <>
+                <span className="proj-meta-sep">·</span>
+                <span>Leads: {leadNames}</span>
+              </>
+            )}
+          </div>
+          <div className="proj-updated">
+            Updated {relativeTime(project.updated_at)}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="proj-head-actions">
+          {/* Avatar stack (editors = members with role admin/owner) */}
+          {members.length > 0 && (
+            <div className="avatar-stack" style={{ marginRight: 6 }}>
+              {members.slice(0, 4).map(m => (
+                <Avatar key={m.id} name={m.user_id.slice(0, 8)} size={26} ring />
+              ))}
+              {members.length > 4 && (
+                <div
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: '50%',
+                    background: 'var(--paper-2)',
+                    border: '2px solid var(--paper)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontSize: 10,
+                    color: 'var(--muted)',
+                    fontFamily: 'var(--mono)',
+                    marginLeft: -6,
+                  }}
+                >
+                  +{members.length - 4}
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            className="top-btn"
+            title="Share"
+            onClick={() => console.log('Share')}
+          >
+            Share
+          </button>
+          <button
+            className="icon-btn"
+            title="History"
+            onClick={() => console.log('History')}
+            style={{ fontSize: 15 }}
+          >
+            ⟳
+          </button>
+          <button
+            className="icon-btn"
+            title="More options"
+            onClick={() => console.log('More')}
+            style={{ fontSize: 16, letterSpacing: 1 }}
+          >
+            …
+          </button>
+          {onToggleAI && (
+            <button
+              className="top-btn primary"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+              onClick={onToggleAI}
+              title="Toggle AI panel"
+            >
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff', opacity: 0.85, flexShrink: 0 }} />
+              AI
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dashboard Body (KPI grid + recent records) ───────────────────────────────
+
+function DashboardBody({
+  projectId,
+  samples,
+  experiments,
+  iterations,
+  artifacts,
+}: {
+  projectId: string;
+  samples: Sample[];
+  experiments: Experiment[];
+  iterations: Iteration[];
+  artifacts: Artifact[];
+}) {
   const stats = [
     { label: 'Samples', value: samples.length },
     { label: 'Iterations', value: iterations.length },
@@ -84,57 +246,8 @@ function OverviewTab({ projectId }: { projectId: string }) {
   ];
 
   return (
-    <div className="page-wrap">
-      {/* Project head */}
-      <div className="proj-head">
-        <div
-          className="proj-emblem"
-          style={{
-            width: 48,
-            height: 48,
-            fontSize: 24,
-          }}
-        >
-          {project.name[0]?.toUpperCase()}
-        </div>
-        <div className="proj-main">
-          <div className="proj-title">{project.name}</div>
-          <div className="proj-meta">
-            <span>
-              {project.visibility === 'private' ? '🔒 Private' : '🌐 Workspace'}
-            </span>
-            <span>
-              Updated {new Date(project.updated_at).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-        <div className="proj-right">
-          <span
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10.5,
-              color: 'var(--muted)',
-              padding: '3px 8px',
-              border: '1px solid var(--line)',
-              borderRadius: 99,
-              background: 'var(--paper-2)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            {project.visibility}
-          </span>
-        </div>
-      </div>
-
-      {/* Description */}
-      {project.description && (
-        <div className="summary-prose">
-          <p>{project.description}</p>
-        </div>
-      )}
-
-      {/* Stats */}
+    <>
+      {/* Stats grid */}
       <div
         style={{
           display: 'grid',
@@ -144,7 +257,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
           border: '1px solid var(--line)',
           borderRadius: 8,
           overflow: 'hidden',
-          margin: '24px 0',
+          margin: '0 0 24px',
         }}
       >
         {stats.map(s => (
@@ -158,26 +271,10 @@ function OverviewTab({ projectId }: { projectId: string }) {
               gap: 4,
             }}
           >
-            <div
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 10.5,
-                color: 'var(--muted-2)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-              }}
-            >
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               {s.label}
             </div>
-            <div
-              style={{
-                fontFamily: 'Libre Baskerville, serif',
-                fontSize: 28,
-                letterSpacing: '-0.01em',
-                color: 'var(--ink)',
-                lineHeight: 1,
-              }}
-            >
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 28, letterSpacing: '-0.01em', color: 'var(--ink)', lineHeight: 1 }}>
               {s.value}
             </div>
           </div>
@@ -187,7 +284,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
       {/* Risk Register */}
       <RiskRegister projectId={projectId} />
 
-      {/* Recent samples preview */}
+      {/* Recent samples */}
       {samples.length > 0 && (
         <>
           <div className="section-h">
@@ -202,7 +299,7 @@ function OverviewTab({ projectId }: { projectId: string }) {
         </>
       )}
 
-      {/* Recent experiments preview */}
+      {/* Recent experiments */}
       {experiments.length > 0 && (
         <>
           <div className="section-h">
@@ -214,6 +311,249 @@ function OverviewTab({ projectId }: { projectId: string }) {
               <ExperimentCard key={e.id} experiment={e} />
             ))}
           </div>
+        </>
+      )}
+    </>
+  );
+}
+
+// ─── Editorial Body ───────────────────────────────────────────────────────────
+
+function EditorialBody({
+  projectId,
+  samples,
+  experiments,
+  iterations,
+}: {
+  projectId: string;
+  samples: Sample[];
+  experiments: Experiment[];
+  iterations: Iteration[];
+}) {
+  const { data: project } = useProject(projectId);
+  const activeIteration = iterations.find(it => it.status === 'active') ?? iterations[0];
+
+  return (
+    <>
+      {/* Narrative prose */}
+      {project?.description && (
+        <div className="summary-prose" style={{ marginBottom: 20 }}>
+          <p>{project.description}</p>
+        </div>
+      )}
+      {!project?.description && (
+        <div className="summary-prose" style={{ marginBottom: 20, color: 'var(--muted)', fontStyle: 'italic' }}>
+          <p>No project description yet. Add one to describe the goals and context of this research project.</p>
+        </div>
+      )}
+
+      {/* Lead questions callout */}
+      <div className="editorial-callout">
+        <div className="editorial-callout-label">Lead questions · current iteration</div>
+        {activeIteration ? (
+          <>
+            <div className="editorial-callout-title">{activeIteration.title}</div>
+            {activeIteration.description && (
+              <div className="editorial-callout-desc">{activeIteration.description}</div>
+            )}
+          </>
+        ) : (
+          <div className="editorial-callout-title" style={{ color: 'var(--muted)' }}>
+            No active iteration — what hypothesis does this phase test?
+          </div>
+        )}
+      </div>
+
+      {/* Risk Register */}
+      <RiskRegister projectId={projectId} />
+
+      {/* Key entities compact list */}
+      {(samples.length > 0 || experiments.length > 0 || iterations.length > 0) && (
+        <>
+          <div className="section-h" style={{ marginTop: 28 }}>
+            <h2>Key Entities</h2>
+          </div>
+          <div className="editorial-entities">
+            {iterations.slice(0, 3).map(it => (
+              <div key={it.id} className="editorial-entity-row">
+                <span className="ent-type">Iteration</span>
+                <span className="ent-name">{it.title}</span>
+                <StatusPill status={it.status} />
+                <span className="ent-ts">{relativeTime(it.updated_at ?? it.created_at)}</span>
+              </div>
+            ))}
+            {samples.slice(0, 3).map(s => (
+              <div key={s.id} className="editorial-entity-row">
+                <span className="ent-type">Sample</span>
+                <span className="ent-name">{s.identifier}{s.name ? ` · ${s.name}` : ''}</span>
+                <StatusPill status={s.status} />
+                <span className="ent-ts">{relativeTime(s.created_at)}</span>
+              </div>
+            ))}
+            {experiments.slice(0, 3).map(e => (
+              <div key={e.id} className="editorial-entity-row">
+                <span className="ent-type">Experiment</span>
+                <span className="ent-name">{e.result_summary || e.method}</span>
+                <StatusPill status={e.status} />
+                <span className="ent-ts">{relativeTime(e.performed_at ?? e.created_at)}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+// ─── Stream Body ──────────────────────────────────────────────────────────────
+
+type StreamItem = {
+  id: string;
+  type: 'sample' | 'experiment' | 'iteration';
+  title: string;
+  status: string;
+  ts: string;
+};
+
+const TYPE_ICON: Record<StreamItem['type'], string> = {
+  sample: '⬡',
+  experiment: '⚗',
+  iteration: '↻',
+};
+
+const TYPE_COLOR: Record<StreamItem['type'], string> = {
+  sample: 'var(--ref-sample-fg)',
+  experiment: 'var(--ref-exp-fg)',
+  iteration: 'var(--ember)',
+};
+
+function StreamBody({
+  samples,
+  experiments,
+  iterations,
+}: {
+  samples: Sample[];
+  experiments: Experiment[];
+  iterations: Iteration[];
+}) {
+  const items: StreamItem[] = [
+    ...samples.map(s => ({
+      id: s.id,
+      type: 'sample' as const,
+      title: `${s.identifier}${s.name ? ` · ${s.name}` : ''}`,
+      status: s.status,
+      ts: s.created_at,
+    })),
+    ...experiments.map(e => ({
+      id: e.id,
+      type: 'experiment' as const,
+      title: e.result_summary || e.method,
+      status: e.status,
+      ts: e.performed_at ?? e.created_at,
+    })),
+    ...iterations.map(it => ({
+      id: it.id,
+      type: 'iteration' as const,
+      title: it.title,
+      status: it.status,
+      ts: it.updated_at ?? it.created_at,
+    })),
+  ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+
+  if (items.length === 0) {
+    return <EmptyState message="No activity yet." />;
+  }
+
+  return (
+    <div className="stream-feed">
+      {items.map(item => (
+        <div key={`${item.type}-${item.id}`} className="stream-item">
+          <div className="stream-icon" style={{ color: TYPE_COLOR[item.type] }}>
+            {TYPE_ICON[item.type]}
+          </div>
+          <div className="stream-body">
+            <div className="stream-title">{item.title}</div>
+            <div className="stream-foot">
+              <span
+                className="pill"
+                style={{ fontSize: 10, color: TYPE_COLOR[item.type], background: 'var(--paper-2)' }}
+              >
+                {item.type}
+              </span>
+              <StatusPill status={item.status} />
+              <span className="stream-ts">{relativeTime(item.ts)}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Overview Tab ─────────────────────────────────────────────────────────────
+
+interface OverviewTabProps {
+  projectId: string;
+  onToggleAI?: () => void;
+}
+
+function OverviewTab({ projectId, onToggleAI }: OverviewTabProps) {
+  const { data: project } = useProject(projectId);
+  const { data: samples = [] } = useProjectSamples(projectId);
+  const { data: experiments = [] } = useProjectExperiments(projectId);
+  const { data: iterations = [] } = useProjectIterations(projectId);
+  const { data: artifacts = [] } = useProjectArtifacts(projectId);
+  const [layout, setLayout] = useOverviewLayout();
+
+  if (!project) return <LoadingState />;
+
+  return (
+    <div className="page-wrap">
+      {/* Row: layout switcher aligned to top-right */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, marginTop: 8 }}>
+        <LayoutSwitcher value={layout} onChange={setLayout} />
+      </div>
+
+      {/* Rich header */}
+      <ProjectHeader projectId={projectId} onToggleAI={onToggleAI} />
+
+      {/* Description (shown in dashboard layout; editorial shows its own) */}
+      {layout === 'dashboard' && project.description && (
+        <div className="summary-prose" style={{ marginBottom: 20 }}>
+          <p>{project.description}</p>
+        </div>
+      )}
+
+      {/* Layout body */}
+      {layout === 'dashboard' && (
+        <DashboardBody
+          projectId={projectId}
+          samples={samples}
+          experiments={experiments}
+          iterations={iterations}
+          artifacts={artifacts}
+        />
+      )}
+      {layout === 'editorial' && (
+        <EditorialBody
+          projectId={projectId}
+          samples={samples}
+          experiments={experiments}
+          iterations={iterations}
+        />
+      )}
+      {layout === 'stream' && (
+        <>
+          <RiskRegister projectId={projectId} />
+          <div className="section-h" style={{ marginTop: 20 }}>
+            <h2>Activity Stream</h2>
+            <span className="meta">{samples.length + experiments.length + iterations.length} items</span>
+          </div>
+          <StreamBody
+            samples={samples}
+            experiments={experiments}
+            iterations={iterations}
+          />
         </>
       )}
     </div>
@@ -788,7 +1128,7 @@ export function ProjectDetailPage() {
             counts={counts}
           />
           <div className="content" style={{ padding: 0 }}>
-            {currentTab === 'overview' && <OverviewTab projectId={projectId} />}
+            {currentTab === 'overview' && <OverviewTab projectId={projectId} onToggleAI={() => setAiPanelOpen(o => !o)} />}
             {currentTab === 'samples' && <SamplesTab projectId={projectId} />}
             {currentTab === 'experiments' && <ExperimentsTab projectId={projectId} />}
             {currentTab === 'iterations' && <IterationsTab projectId={projectId} />}
@@ -798,6 +1138,25 @@ export function ProjectDetailPage() {
                 projectId={projectId}
                 projectName={project?.name ?? 'Project'}
               />
+            )}
+            {currentTab === 'calendar' && (
+              <div className="page-wrap">
+                <div className="cal-tab-wrap">
+                  <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 400, color: 'var(--ink)', letterSpacing: '-0.01em' }}>
+                    Project Calendar
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, textAlign: 'center', maxWidth: 380, lineHeight: 1.6 }}>
+                    The full calendar view with event management is available on the workspace Calendar page, scoped to this project.
+                  </p>
+                  <a
+                    href="/calendar"
+                    className="top-btn primary"
+                    style={{ display: 'inline-flex' }}
+                  >
+                    Open Calendar →
+                  </a>
+                </div>
+              </div>
             )}
             {currentTab === 'pages' && (
               <div className="page-wrap">

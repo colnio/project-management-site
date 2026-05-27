@@ -15,12 +15,14 @@ import type { components } from '@/api/schema.d.ts';
 export type LineageGraph = components['schemas']['LineageGraph'];
 export type IterationSample = components['schemas']['IterationSample'];
 export type ExperimentSample = components['schemas']['ExperimentSample'];
+export type Membership = components['schemas']['Membership'];
 
 // ─── Query Keys ──────────────────────────────────────────────────────────────
 
 export const keys = {
   workspaces: ['workspaces'] as const,
   workspace: (id: string) => ['workspaces', id] as const,
+  workspaceMembers: (id: string) => ['workspaces', id, 'members'] as const,
   projects: (workspaceId: string) => ['workspaces', workspaceId, 'projects'] as const,
   project: (id: string) => ['projects', id] as const,
   projectSamples: (id: string) => ['projects', id, 'samples'] as const,
@@ -42,6 +44,17 @@ export function useWorkspaces() {
   return useQuery({
     queryKey: keys.workspaces,
     queryFn: () => api.get<Workspace[] | null>('/v1/workspaces').then(r => r ?? []),
+  });
+}
+
+export function useWorkspaceMembers(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: workspaceId ? keys.workspaceMembers(workspaceId) : ['workspaces', 'none', 'members'],
+    queryFn: () =>
+      api
+        .get<Membership[] | null>(`/v1/workspaces/${workspaceId}/members`)
+        .then(r => r ?? []),
+    enabled: !!workspaceId,
   });
 }
 
