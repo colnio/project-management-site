@@ -667,3 +667,63 @@ func (r *capturingRecorder) Record(_ context.Context, e audit.Entry) error {
 	r.entries = append(r.entries, e)
 	return nil
 }
+
+// TestRunWorkflow_SynthesisError_Returns502 verifies that a model/provider
+// failure on the synthesis step surfaces as a typed 502 (not an opaque 500).
+func TestRunWorkflow_SynthesisError_Returns502(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	testsupport.Truncate(t, pool, "ai_workflow_runs", "ai_usage_records", "internal_ai_tokens")
+
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	authSvc, _ := auth.NewService(ctx, pool, &config.Config{
+		JWTSigningKey:   "wf-502-key",
+		AccessTokenTTL:  time.Minute,
+		RefreshTokenTTL: time.Hour,
+		OIDCIssuer:      "http://localhost:9999/nonexistent",
+	}, audit.Nop{}, logger)
+	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
+	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
+
+	email := fmt.Sprintf("wf-502-%s@example.com", uuid.New().String()[:8])
+	user, _ := authSvc.CreateUser(ctx, email, "WF 502 Test")
+	ws, _ := orgSvc.CreateWorkspace(ctx, "wf502ws"+user.ID.String()[:8], user.ID)
+	projID := uuid.New()
+	_, _ = pool.Exec(ctx,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		projID, ws.ID, "WF 502 Proj", "", "workspace", user.ID,
+	)
+	p := &platform.Principal{UserID: user.ID, Email: email}
+
+	restSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"items": []any{}})
+	}))
+	defer restSrv.Close()
+	port := restSrv.URL[strings.LastIndex(restSrv.URL, ":")+1:]
+
+	// 4 question responses succeed; the synthesis call (5th) errors (nil Response).
+	stub := NewStubClient([]StubResponse{
+		{Response: &ChatResponse{Message: ChatMessage{Role: "assistant", Content: `{"rating": 3, "mitigations": ["m1"]}`}, Usage: Usage{TotalTokens: 50}}},
+		{Response: &ChatResponse{Message: ChatMessage{Role: "assistant", Content: `{"rating": 3, "mitigations": ["m2"]}`}, Usage: Usage{TotalTokens: 50}}},
+		{Response: &ChatResponse{Message: ChatMessage{Role: "assistant", Content: `{"rating": 3, "mitigations": ["m3"]}`}, Usage: Usage{TotalTokens: 50}}},
+		{Response: &ChatResponse{Message: ChatMessage{Role: "assistant", Content: `{"rating": 3, "mitigations": ["m4"]}`}, Usage: Usage{TotalTokens: 50}}},
+		{Response: nil}, // synthesis: provider error
+	})
+
+	svc := NewService(pool, &config.Config{Port: port, SMTPHost: "localhost", SMTPPort: "59999", SMTPFrom: "x@test.example.com"},
+		stub, authSvc, orgSvc, projectSvc, audit.Nop{}, logger)
+	svc.restBase = restSrv.URL
+
+	_, err := svc.RunWorkflow(ctx, p, "battery_safety_risk_v1", WorkflowTarget{ProjectID: projID})
+	if err == nil {
+		t.Fatal("expected an error from a failed synthesis, got nil")
+	}
+	pe, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if pe.GetStatus() != 502 {
+		t.Errorf("expected status 502, got %d", pe.GetStatus())
+	}
+}

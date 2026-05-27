@@ -3,9 +3,12 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/smtp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -13,6 +16,27 @@ import (
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
 )
+
+// workflowRunTimeout bounds a single synchronous workflow run so a stuck model
+// provider returns a clean 504 rather than hanging for minutes.
+const workflowRunTimeout = 150 * time.Second
+
+// mapWorkflowError turns a raw workflow execution error into a typed platform
+// error so huma emits a meaningful status (502/504) instead of an opaque 500.
+// Errors that are already platform errors (e.g. 402 spend cap) pass through.
+func mapWorkflowError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pe *platform.ErrorModel
+	if errors.As(err, &pe) {
+		return err
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return platform.Errorf(504, "ai.upstream_timeout", "AI provider timed out: "+err.Error())
+	}
+	return platform.Errorf(502, "ai.upstream_error", "AI provider error: "+err.Error())
+}
 
 // ─── Workflow runner ──────────────────────────────────────────────────────────
 
@@ -69,8 +93,11 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 
 	restCall := makeRESTCaller(s.restBase, iaiToken)
 
-	// Execute workflow.
-	stepResults, output, resultPageID, runErr := s.executeWorkflow(ctx, wf, target, proj.WorkspaceID, p, run.ID, restCall)
+	// Execute workflow under a bounded deadline (separate from ctx so the
+	// persistence/audit below still runs even if execution times out).
+	execCtx, cancel := context.WithTimeout(ctx, workflowRunTimeout)
+	defer cancel()
+	stepResults, output, resultPageID, runErr := s.executeWorkflow(execCtx, wf, target, proj.WorkspaceID, p, run.ID, restCall)
 
 	stepResultsJSON, _ := json.Marshal(stepResults)
 	var outputJSON json.RawMessage
@@ -122,9 +149,9 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 		run.Output = outputJSON
 		run.ResultPageID = resultPageID
 		run.Error = errMsg
-		return run, runErr
+		return run, mapWorkflowError(runErr)
 	}
-	return final, runErr
+	return final, mapWorkflowError(runErr)
 }
 
 // executeWorkflow runs all steps and returns (stepResults, outputMap, resultPageID, error).
@@ -140,6 +167,45 @@ func (s *Service) executeWorkflow(
 	stepResults := make(map[string]any)
 	var contextBlob string
 	var output map[string]any
+	var mu sync.Mutex // guards stepResults across the parallel question batch
+
+	// Independent ai_question steps depend only on the gathered context, not on
+	// each other, so they run concurrently. They are collected and flushed as a
+	// batch just before the synthesis step (or at the end of the workflow).
+	var pendingQuestions []WorkflowStep
+	flushQuestions := func() error {
+		if len(pendingQuestions) == 0 {
+			return nil
+		}
+		if s.client == nil {
+			return s.unavailableErr()
+		}
+		// Single spend-cap check for the whole batch.
+		if cap, _ := checkSpendCap(ctx, s.pool, workspaceID); !cap.Allowed {
+			return platform.Errorf(402, "ai.spend_cap_exceeded", "workspace AI spend cap exceeded")
+		}
+		var wg sync.WaitGroup
+		for _, step := range pendingQuestions {
+			wg.Add(1)
+			go func(step WorkflowStep) {
+				defer wg.Done()
+				result, usage, err := s.runAIQuestion(ctx, step, contextBlob)
+				mu.Lock()
+				if err != nil {
+					s.log.Warn("ai: workflow: ai_question failed", "step", step.ID, "err", err)
+					stepResults[step.ID] = map[string]any{"error": err.Error()}
+				} else {
+					stepResults[step.ID] = result
+				}
+				mu.Unlock()
+				// Meter usage (concurrent inserts are safe).
+				_ = recordUsage(ctx, s.pool, workspaceID, target.ProjectID, p.UserID, "workflow", "ai", usage)
+			}(step)
+		}
+		wg.Wait()
+		pendingQuestions = nil
+		return nil
+	}
 
 	for _, step := range wf.Steps {
 		switch step.Type {
@@ -153,26 +219,13 @@ func (s *Service) executeWorkflow(
 			stepResults[step.ID] = map[string]any{"context_length": len(blob)}
 
 		case "ai_question":
-			if s.client == nil {
-				return stepResults, nil, nil, s.unavailableErr()
-			}
-			// Check spend cap before each model call.
-			cap, _ := checkSpendCap(ctx, s.pool, workspaceID)
-			if !cap.Allowed {
-				return stepResults, nil, nil, platform.Errorf(402, "ai.spend_cap_exceeded", "workspace AI spend cap exceeded")
-			}
-
-			result, usage, err := s.runAIQuestion(ctx, step, contextBlob)
-			if err != nil {
-				s.log.Warn("ai: workflow: ai_question failed", "step", step.ID, "err", err)
-				stepResults[step.ID] = map[string]any{"error": err.Error()}
-			} else {
-				stepResults[step.ID] = result
-			}
-			// Meter usage.
-			_ = recordUsage(ctx, s.pool, workspaceID, target.ProjectID, p.UserID, "workflow", "ai", usage)
+			pendingQuestions = append(pendingQuestions, step)
 
 		case "ai_synthesis":
+			// Run any collected questions concurrently before synthesizing.
+			if err := flushQuestions(); err != nil {
+				return stepResults, nil, nil, err
+			}
 			if s.client == nil {
 				return stepResults, nil, nil, s.unavailableErr()
 			}
@@ -198,6 +251,10 @@ func (s *Service) executeWorkflow(
 			}
 			return stepResults, output, pageID, nil
 		}
+	}
+	// Flush any trailing questions for workflows without a synthesis step.
+	if err := flushQuestions(); err != nil {
+		return stepResults, nil, nil, err
 	}
 	return stepResults, output, nil, nil
 }

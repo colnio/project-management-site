@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -299,6 +300,7 @@ type StubResponse struct {
 }
 
 type stubClient struct {
+	mu        sync.Mutex // guards idx; workflow runs call Chat concurrently
 	responses []StubResponse
 	idx       int
 }
@@ -310,6 +312,8 @@ func NewStubClient(responses []StubResponse) Client {
 }
 
 func (s *stubClient) Chat(_ context.Context, _ ChatRequest) (*ChatResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.idx >= len(s.responses) {
 		return nil, fmt.Errorf("stub: no more scripted responses (call %d)", s.idx)
 	}
@@ -322,6 +326,8 @@ func (s *stubClient) Chat(_ context.Context, _ ChatRequest) (*ChatResponse, erro
 }
 
 func (s *stubClient) ChatStream(_ context.Context, _ ChatRequest) (<-chan StreamChunk, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.idx >= len(s.responses) {
 		return nil, fmt.Errorf("stub: no more scripted responses (call %d)", s.idx)
 	}
