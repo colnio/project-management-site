@@ -26,14 +26,28 @@ type Principal struct {
 	Scopes []string
 }
 
-// HasScope reports whether the principal carries the given scope. A first-party
-// browser session (no token) is unrestricted and always returns true.
+// HasScope reports whether the principal carries the given scope.
+//
+// Rules:
+//   - A first-party browser session (both Via* fields nil) is unrestricted and
+//     always returns true.
+//   - A token caller (ViaTokenID != nil or ViaAIConversationID != nil) whose
+//     Scopes slice is nil or empty is treated as a legacy unrestricted token and
+//     always returns true. This preserves backward-compatibility for PATs that
+//     were created before scoped enforcement was introduced.
+//   - A token caller with a NON-EMPTY Scopes list is enforced normally: only
+//     scopes present in the list are granted. A PAT scoped to ["read:audit"]
+//     will be denied all other endpoints.
 func (p *Principal) HasScope(scope string) bool {
 	if p == nil {
 		return false
 	}
 	if p.ViaTokenID == nil && p.ViaAIConversationID == nil {
 		return true // interactive human session is not scope-limited
+	}
+	// Token caller: empty Scopes means legacy unrestricted token.
+	if len(p.Scopes) == 0 {
+		return true
 	}
 	for _, s := range p.Scopes {
 		if s == scope {

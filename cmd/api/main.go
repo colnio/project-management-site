@@ -151,7 +151,7 @@ func run() error {
 		// NEVER log aiProvider.Token
 		aiClient = ai.NewHTTPClient(aiProvider)
 	}
-	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, projectSvc, auditRec, logger)
+	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, orgSvc, projectSvc, auditRec, logger)
 	aiSvc.SetRiskService(riskSvc)
 	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projectSvc, logger)
 

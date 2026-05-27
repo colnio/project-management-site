@@ -122,8 +122,12 @@ type createArtifactOutput struct {
 }
 
 func (s *Service) handleCreateArtifact(ctx context.Context, in *createArtifactInput) (*createArtifactOutput, error) {
-	if _, ok := platform.PrincipalFrom(ctx); !ok {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteArtifacts); err != nil {
+		return nil, err
 	}
 
 	projectID, err := uuid.Parse(in.ID)
@@ -161,6 +165,9 @@ func (s *Service) handleListArtifacts(ctx context.Context, in *listArtifactsInpu
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadArtifacts); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -196,6 +203,9 @@ func (s *Service) handleGetArtifact(ctx context.Context, in *getArtifactInput) (
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadArtifacts); err != nil {
+		return nil, err
+	}
 
 	artID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -226,8 +236,12 @@ type completeArtifactOutput struct {
 }
 
 func (s *Service) handleCompleteArtifact(ctx context.Context, in *completeArtifactInput) (*completeArtifactOutput, error) {
-	if _, ok := platform.PrincipalFrom(ctx); !ok {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteArtifacts); err != nil {
+		return nil, err
 	}
 
 	artID, err := uuid.Parse(in.ID)
@@ -254,8 +268,12 @@ type deleteArtifactOutput struct {
 }
 
 func (s *Service) handleDeleteArtifact(ctx context.Context, in *deleteArtifactInput) (*deleteArtifactOutput, error) {
-	if _, ok := platform.PrincipalFrom(ctx); !ok {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteArtifacts); err != nil {
+		return nil, err
 	}
 
 	artID, err := uuid.Parse(in.ID)
@@ -286,8 +304,12 @@ type attachSampleOutput struct {
 }
 
 func (s *Service) handleAttachSample(ctx context.Context, in *attachSampleInput) (*attachSampleOutput, error) {
-	if _, ok := platform.PrincipalFrom(ctx); !ok {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteArtifacts); err != nil {
+		return nil, err
 	}
 
 	sampleID, err := uuid.Parse(in.SID)
@@ -314,8 +336,12 @@ type listSampleArtifactsOutput struct {
 }
 
 func (s *Service) handleListSampleArtifacts(ctx context.Context, in *listSampleArtifactsInput) (*listSampleArtifactsOutput, error) {
-	if _, ok := platform.PrincipalFrom(ctx); !ok {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadArtifacts); err != nil {
+		return nil, err
 	}
 
 	sampleID, err := uuid.Parse(in.SID)
@@ -349,8 +375,12 @@ type attachExperimentOutput struct {
 }
 
 func (s *Service) handleAttachExperiment(ctx context.Context, in *attachExperimentInput) (*attachExperimentOutput, error) {
-	if _, ok := platform.PrincipalFrom(ctx); !ok {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteArtifacts); err != nil {
+		return nil, err
 	}
 
 	experimentID, err := uuid.Parse(in.EID)
@@ -377,8 +407,12 @@ type listExperimentArtifactsOutput struct {
 }
 
 func (s *Service) handleListExperimentArtifacts(ctx context.Context, in *listExperimentArtifactsInput) (*listExperimentArtifactsOutput, error) {
-	if _, ok := platform.PrincipalFrom(ctx); !ok {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadArtifacts); err != nil {
+		return nil, err
 	}
 
 	experimentID, err := uuid.Parse(in.EID)

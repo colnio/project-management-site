@@ -106,6 +106,9 @@ func (s *Service) handleCreateExperiment(ctx context.Context, in *createExperime
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteExperiments); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -149,6 +152,9 @@ func (s *Service) handleListExperiments(ctx context.Context, in *listExperiments
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadExperiments); err != nil {
+		return nil, err
 	}
 
 	projectID, err := uuid.Parse(in.ID)
@@ -203,6 +209,9 @@ func (s *Service) handleGetExperiment(ctx context.Context, in *getExperimentInpu
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadExperiments); err != nil {
+		return nil, err
+	}
 
 	expID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -243,6 +252,9 @@ func (s *Service) handleUpdateExperiment(ctx context.Context, in *updateExperime
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteExperiments); err != nil {
+		return nil, err
 	}
 
 	expID, err := uuid.Parse(in.ID)
@@ -299,6 +311,9 @@ func (s *Service) handleLinkSample(ctx context.Context, in *linkSampleInput) (*l
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteExperiments); err != nil {
+		return nil, err
+	}
 
 	expID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -340,6 +355,9 @@ func (s *Service) handleUnlinkSample(ctx context.Context, in *unlinkSampleInput)
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteExperiments); err != nil {
+		return nil, err
 	}
 
 	expID, err := uuid.Parse(in.ID)
@@ -384,6 +402,9 @@ func (s *Service) handleListSamples(ctx context.Context, in *listSamplesInput) (
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadExperiments); err != nil {
+		return nil, err
 	}
 
 	expID, err := uuid.Parse(in.ID)

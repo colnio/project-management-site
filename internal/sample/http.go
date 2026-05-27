@@ -96,6 +96,9 @@ func (s *Service) handleCreateSample(ctx context.Context, in *createSampleInput)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteSamples); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -146,6 +149,9 @@ func (s *Service) handleListSamples(ctx context.Context, in *listSamplesInput) (
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadSamples); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -180,6 +186,9 @@ func (s *Service) handleGetSample(ctx context.Context, in *getSampleInput) (*get
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadSamples); err != nil {
+		return nil, err
 	}
 
 	sampleID, err := uuid.Parse(in.ID)
@@ -221,6 +230,9 @@ func (s *Service) handlePatchSample(ctx context.Context, in *patchSampleInput) (
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteSamples); err != nil {
+		return nil, err
 	}
 
 	sampleID, err := uuid.Parse(in.ID)
@@ -283,6 +295,9 @@ func (s *Service) handleAddRelation(ctx context.Context, in *addRelationInput) (
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteSamples); err != nil {
+		return nil, err
+	}
 
 	parentID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -329,6 +344,9 @@ func (s *Service) handleGetLineage(ctx context.Context, in *getLineageInput) (*g
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadSamples); err != nil {
+		return nil, err
 	}
 
 	sampleID, err := uuid.Parse(in.ID)

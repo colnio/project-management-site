@@ -113,6 +113,9 @@ func (s *Service) handleCreateIteration(ctx context.Context, in *createIteration
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteIterations); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -149,6 +152,9 @@ func (s *Service) handleListIterations(ctx context.Context, in *listIterationsIn
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadIterations); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -183,6 +189,9 @@ func (s *Service) handleGetIteration(ctx context.Context, in *getIterationInput)
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadIterations); err != nil {
+		return nil, err
 	}
 
 	iterID, err := uuid.Parse(in.ID)
@@ -224,6 +233,9 @@ func (s *Service) handleUpdateIteration(ctx context.Context, in *updateIteration
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteIterations); err != nil {
+		return nil, err
 	}
 
 	iterID, err := uuid.Parse(in.ID)
@@ -268,6 +280,9 @@ func (s *Service) handleDeleteIteration(ctx context.Context, in *deleteIteration
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteIterations); err != nil {
+		return nil, err
 	}
 
 	iterID, err := uuid.Parse(in.ID)
@@ -314,6 +329,9 @@ func (s *Service) handleLinkSample(ctx context.Context, in *linkSampleInput) (*l
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteIterations); err != nil {
+		return nil, err
+	}
 
 	iterID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -353,6 +371,9 @@ func (s *Service) handleUnlinkSample(ctx context.Context, in *unlinkSampleInput)
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteIterations); err != nil {
+		return nil, err
 	}
 
 	iterID, err := uuid.Parse(in.ID)
@@ -397,6 +418,9 @@ func (s *Service) handleListSamples(ctx context.Context, in *listSamplesInput) (
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadIterations); err != nil {
+		return nil, err
 	}
 
 	iterID, err := uuid.Parse(in.ID)

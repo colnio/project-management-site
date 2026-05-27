@@ -97,6 +97,9 @@ func (s *Service) handleCreateRisk(ctx context.Context, in *createRiskInput) (*c
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteRisks); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -165,6 +168,9 @@ func (s *Service) handleListByProject(ctx context.Context, in *listRisksByProjec
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadRisks); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -195,6 +201,9 @@ func (s *Service) handleListByIteration(ctx context.Context, in *listRisksByIter
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadRisks); err != nil {
+		return nil, err
 	}
 
 	iterationID, err := uuid.Parse(in.ID)
@@ -246,6 +255,9 @@ func (s *Service) handlePatchRisk(ctx context.Context, in *patchRiskInput) (*pat
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteRisks); err != nil {
+		return nil, err
 	}
 
 	riskID, err := uuid.Parse(in.ID)
@@ -301,6 +313,9 @@ func (s *Service) handleDeleteRisk(ctx context.Context, in *deleteRiskInput) (*d
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteRisks); err != nil {
+		return nil, err
+	}
 
 	riskID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -350,6 +365,9 @@ func (s *Service) handleSetPIReview(ctx context.Context, in *setPIReviewInput) (
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteRisks); err != nil {
+		return nil, err
 	}
 
 	riskID, err := uuid.Parse(in.ID)

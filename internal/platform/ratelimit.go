@@ -38,9 +38,12 @@ func (rl *RateLimiter) Middleware() func(http.Handler) http.Handler {
 					key = "pat:" + p.ViaTokenID.String()
 				case p.ViaAIConversationID != nil:
 					key = "iai:" + p.ViaAIConversationID.String()
+				default:
+					// First-party JWT session: key by user ID.
+					key = "user:" + p.UserID.String()
 				}
 			}
-			if key == "" { // not a token caller — don't limit
+			if key == "" { // unauthenticated public route — don't limit
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -92,12 +92,18 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 	// Resolve autonomy.
 	mode, allowedTools := ResolveAutonomy(ctx, s.pool, proj.WorkspaceID, proj.ID)
 
-	// Mint internal AI token.
-	scopes := []string{"tools:read"}
-	if mode != ModeReadOnly {
-		scopes = append(scopes, "tools:write")
-	}
-	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, scopes, nil)
+	// Mint internal AI token with the full set of scopes needed by AI tools.
+	// This set must cover every endpoint the AI tools call via the REST API.
+	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, []string{
+		platform.ScopeReadProjects,
+		platform.ScopeReadSamples,
+		platform.ScopeReadExperiments,
+		platform.ScopeReadPages,
+		platform.ScopeReadArtifacts,
+		platform.ScopeWritePages,
+		platform.ScopeWriteIterations,
+		platform.ScopeWriteCalendar,
+	}, nil)
 	if err != nil {
 		writeSSEError(w, "ai.internal_error", "failed to create internal token")
 		return

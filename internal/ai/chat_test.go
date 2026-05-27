@@ -50,7 +50,7 @@ func newTestService(t *testing.T, pool *pgxpool.Pool, client Client) (*Service, 
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
 
-	svc := NewService(pool, cfg, client, authSvc, projectSvc, audit.Nop{}, logger)
+	svc := NewService(pool, cfg, client, authSvc, orgSvc, projectSvc, audit.Nop{}, logger)
 
 	sd := createTestSetup(t, ctx, pool, authSvc, orgSvc)
 	return svc, sd
@@ -210,7 +210,7 @@ func TestChatLoop_ReadToolThenText(t *testing.T) {
 	port := restURL[strings.LastIndex(restURL, ":")+1:]
 	cfg := &config.Config{Port: port}
 
-	svc := NewService(pool, cfg, stub, authSvc, projectSvc, audit.Nop{}, logger)
+	svc := NewService(pool, cfg, stub, authSvc, orgSvc, projectSvc, audit.Nop{}, logger)
 	// Override restBase to point to test server.
 	svc.restBase = restSrv.URL
 
@@ -312,7 +312,7 @@ func TestChatLoop_SpendCapRefusal(t *testing.T) {
 	}
 
 	stub := NewStubClient([]StubResponse{})
-	svc := NewService(pool, &config.Config{Port: "19099"}, stub, authSvc, projectSvc, audit.Nop{}, logger)
+	svc := NewService(pool, &config.Config{Port: "19099"}, stub, authSvc, orgSvc, projectSvc, audit.Nop{}, logger)
 	svc.restBase = "http://127.0.0.1:19099"
 
 	p := &platform.Principal{UserID: user.ID, Email: email}

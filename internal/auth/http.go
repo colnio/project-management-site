@@ -139,7 +139,8 @@ func (s *Service) clearRefreshCookie() string {
 // ─── OIDC login ──────────────────────────────────────────────────────────────
 
 type oidcLoginOutput struct {
-	Body struct {
+	SetCookie string `header:"Set-Cookie"`
+	Body      struct {
 		AuthorizationURL string `json:"authorization_url"`
 		State            string `json:"state"`
 	}
@@ -158,28 +159,44 @@ func (s *Service) handleOIDCLogin(_ context.Context, _ *struct{}) (*oidcLoginOut
 	out := &oidcLoginOutput{}
 	out.Body.AuthorizationURL = url
 	out.Body.State = state
+	// Bind state to browser via HttpOnly cookie so the callback can verify it.
+	stateCookie := &http.Cookie{
+		Name:     "oidc_state",
+		Value:    state,
+		Path:     "/",
+		Domain:   s.cfg.CookieDomain,
+		MaxAge:   300, // 5 minutes is plenty for the OIDC round-trip
+		HttpOnly: true,
+		Secure:   s.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+	}
+	out.SetCookie = stateCookie.String()
 	return out, nil
 }
 
 // ─── OIDC callback ───────────────────────────────────────────────────────────
 
 type oidcCallbackInput struct {
-	Code  string `query:"code"`
-	State string `query:"state"`
+	Code   string `query:"code"`
+	State  string `query:"state"`
+	Cookie string `header:"Cookie"`
 }
 
 type oidcCallbackOutput struct {
 	Status    int
-	Location  string `header:"Location"`
-	SetCookie string `header:"Set-Cookie"`
+	Location  string   `header:"Location"`
+	SetCookie []string `header:"Set-Cookie"`
 }
 
-func (s *Service) handleOIDCCallback(ctx context.Context, in *struct {
-	Code  string `query:"code"`
-	State string `query:"state"`
-}) (*oidcCallbackOutput, error) {
+func (s *Service) handleOIDCCallback(ctx context.Context, in *oidcCallbackInput) (*oidcCallbackOutput, error) {
 	if s.oidc == nil {
 		return nil, platform.Errorf(http.StatusServiceUnavailable, "oidc.unavailable", "OIDC provider not available")
+	}
+
+	// Verify OIDC state to prevent CSRF.
+	cookieState := extractCookieValue(in.Cookie, "oidc_state")
+	if cookieState == "" || cookieState != in.State {
+		return nil, platform.Unauthorized("oidc state mismatch")
 	}
 
 	oauth2Cfg := s.oauth2Config()
@@ -230,10 +247,24 @@ func (s *Service) handleOIDCCallback(ctx context.Context, in *struct {
 		ResourceID:   u.ID.String(),
 	})
 
+	// Clear the oidc_state cookie (MaxAge -1) and set the refresh token cookie.
+	clearState := &http.Cookie{
+		Name:     "oidc_state",
+		Value:    "",
+		Path:     "/",
+		Domain:   s.cfg.CookieDomain,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   s.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+	}
 	out := &oidcCallbackOutput{
-		Status:    http.StatusFound,
-		Location:  s.cfg.WebOrigin,
-		SetCookie: s.refreshCookieValue(refresh),
+		Status:   http.StatusFound,
+		Location: s.cfg.WebOrigin,
+		SetCookie: []string{
+			s.refreshCookieValue(refresh),
+			clearState.String(),
+		},
 	}
 	return out, nil
 }

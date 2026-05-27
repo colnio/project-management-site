@@ -25,6 +25,9 @@ func Register(api huma.API, svc *Service) {
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
 		}
+		if err := platform.RequireScope(p, platform.ScopeWriteAI); err != nil {
+			return nil, err
+		}
 		projectID, err := uuid.Parse(input.ID)
 		if err != nil {
 			return nil, platform.BadRequest("invalid_project_id", "invalid project id")
@@ -46,6 +49,9 @@ func Register(api huma.API, svc *Service) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeReadAI); err != nil {
+			return nil, err
 		}
 		projectID, err := uuid.Parse(input.ID)
 		if err != nil {
@@ -73,6 +79,9 @@ func Register(api huma.API, svc *Service) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeReadAI); err != nil {
+			return nil, err
 		}
 		convID, err := uuid.Parse(input.ID)
 		if err != nil {
@@ -102,6 +111,9 @@ func Register(api huma.API, svc *Service) {
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
 		}
+		if err := platform.RequireScope(p, platform.ScopeWriteAI); err != nil {
+			return nil, err
+		}
 		convID, err := uuid.Parse(input.ID)
 		if err != nil {
 			return nil, platform.BadRequest("invalid_conversation_id", "invalid conversation id")
@@ -127,6 +139,9 @@ func Register(api huma.API, svc *Service) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeWriteAI); err != nil {
+			return nil, err
 		}
 		convID, err := uuid.Parse(input.ID)
 		if err != nil {
@@ -155,6 +170,9 @@ func Register(api huma.API, svc *Service) {
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
 		}
+		if err := platform.RequireScope(p, platform.ScopeReadAI); err != nil {
+			return nil, err
+		}
 		wsID, err := uuid.Parse(input.ID)
 		if err != nil {
 			return nil, platform.BadRequest("invalid_workspace_id", "invalid workspace id")
@@ -178,6 +196,9 @@ func Register(api huma.API, svc *Service) {
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
 		}
+		if err := platform.RequireScope(p, platform.ScopeReadAI); err != nil {
+			return nil, err
+		}
 		wsID, err := uuid.Parse(input.ID)
 		if err != nil {
 			return nil, platform.BadRequest("invalid_workspace_id", "invalid workspace id")
@@ -199,6 +220,9 @@ func Register(api huma.API, svc *Service) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeWriteAI); err != nil {
+			return nil, err
 		}
 		wsID, err := uuid.Parse(input.ID)
 		if err != nil {
@@ -225,6 +249,9 @@ func Register(api huma.API, svc *Service) {
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
 		}
+		if err := platform.RequireScope(p, platform.ScopeReadAI); err != nil {
+			return nil, err
+		}
 		projID, err := uuid.Parse(input.ID)
 		if err != nil {
 			return nil, platform.BadRequest("invalid_project_id", "invalid project id")
@@ -246,6 +273,9 @@ func Register(api huma.API, svc *Service) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeWriteAI); err != nil {
+			return nil, err
 		}
 		projID, err := uuid.Parse(input.ID)
 		if err != nil {

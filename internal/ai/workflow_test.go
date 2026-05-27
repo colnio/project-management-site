@@ -198,7 +198,7 @@ func newWorkflowTestSetup(t *testing.T) (*Service, *setupData, *httptest.Server)
 	}
 
 	// Use nil client for gather-only; tests that need model calls pass their own stub.
-	svc := NewService(pool, cfg, nil, authSvc, projectSvc, audit.Nop{}, logger)
+	svc := NewService(pool, cfg, nil, authSvc, orgSvc, projectSvc, audit.Nop{}, logger)
 	svc.restBase = restSrv.URL
 	t.Cleanup(restSrv.Close)
 
@@ -358,7 +358,7 @@ func TestRunWorkflow_UsageWritten(t *testing.T) {
 		SMTPHost: "localhost",
 		SMTPPort: "1025",
 		SMTPFrom: "no-reply@test.example.com",
-	}, stub, authSvc, projectSvc, audit.Nop{}, logger)
+	}, stub, authSvc, orgSvc, projectSvc, audit.Nop{}, logger)
 	svc.restBase = restSrv.URL
 
 	run, err := svc.RunWorkflow(ctx, p, "battery_safety_risk_v1", WorkflowTarget{ProjectID: projID})
@@ -455,7 +455,7 @@ This sample is HIGH RISK.
 		SMTPHost: "localhost",
 		SMTPPort: "59999", // likely not listening — email failure should be non-fatal
 		SMTPFrom: "no-reply@test.example.com",
-	}, stub, authSvc, projectSvc, rec, logger)
+	}, stub, authSvc, orgSvc, projectSvc, rec, logger)
 	svc.restBase = restSrv.URL
 
 	run, err := svc.RunWorkflow(ctx, p, "battery_safety_risk_v1", WorkflowTarget{ProjectID: projID})
@@ -551,7 +551,7 @@ This sample is LOW RISK.
 		SMTPHost: "localhost",
 		SMTPPort: "1025",
 		SMTPFrom: "no-reply@test.example.com",
-	}, stub, authSvc, projectSvc, rec, logger)
+	}, stub, authSvc, orgSvc, projectSvc, rec, logger)
 	svc.restBase = restSrv.URL
 
 	run, err := svc.RunWorkflow(ctx, p, "battery_safety_risk_v1", WorkflowTarget{ProjectID: projID})
@@ -637,7 +637,7 @@ func TestRunWorkflow_MalformedSynthesisJSON(t *testing.T) {
 		SMTPHost: "localhost",
 		SMTPPort: "1025",
 		SMTPFrom: "no-reply@test.example.com",
-	}, stub, authSvc, projectSvc, audit.Nop{}, logger)
+	}, stub, authSvc, orgSvc, projectSvc, audit.Nop{}, logger)
 	svc.restBase = restSrv.URL
 
 	// Must not panic; run should complete or fail gracefully.

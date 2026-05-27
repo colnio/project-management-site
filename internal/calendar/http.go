@@ -121,6 +121,9 @@ func (s *Service) handleCreateEvent(ctx context.Context, in *createEventInput) (
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteCalendar); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -159,6 +162,9 @@ func (s *Service) handleListEvents(ctx context.Context, in *listEventsInput) (*l
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadCalendar); err != nil {
+		return nil, err
 	}
 
 	projectID, err := uuid.Parse(in.ID)
@@ -201,6 +207,9 @@ func (s *Service) handleGetEvent(ctx context.Context, in *getEventInput) (*getEv
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadCalendar); err != nil {
+		return nil, err
 	}
 
 	eventID, err := uuid.Parse(in.ID)
@@ -247,6 +256,9 @@ func (s *Service) handleUpdateEvent(ctx context.Context, in *updateEventInput) (
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteCalendar); err != nil {
+		return nil, err
+	}
 
 	eventID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -291,6 +303,9 @@ func (s *Service) handleDeleteEvent(ctx context.Context, in *deleteEventInput) (
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteCalendar); err != nil {
+		return nil, err
+	}
 
 	eventID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -333,6 +348,9 @@ func (s *Service) handleGetSubscription(ctx context.Context, _ *struct{}) (*getS
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadCalendar); err != nil {
+		return nil, err
+	}
 
 	sub, err := s.GetOrCreateSubscription(ctx, p.UserID)
 	if err != nil {
@@ -352,6 +370,9 @@ func (s *Service) handleRotateToken(ctx context.Context, _ *struct{}) (*rotateTo
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteCalendar); err != nil {
+		return nil, err
 	}
 
 	// Ensure subscription exists before rotating.
@@ -384,6 +405,9 @@ func (s *Service) handleUpdateSubscription(ctx context.Context, in *updateSubscr
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteCalendar); err != nil {
+		return nil, err
 	}
 
 	// Ensure subscription exists.

@@ -160,6 +160,9 @@ func (s *Service) handleListPages(ctx context.Context, in *listPagesInput) (*lis
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadPages); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -213,6 +216,9 @@ func (s *Service) handleCreatePage(ctx context.Context, in *createPageInput) (*c
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWritePages); err != nil {
+		return nil, err
 	}
 
 	projectID, err := uuid.Parse(in.ID)
@@ -272,6 +278,9 @@ func (s *Service) handleGetPage(ctx context.Context, in *getPageInput) (*getPage
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadPages); err != nil {
+		return nil, err
 	}
 
 	pageID, err := uuid.Parse(in.ID)
@@ -333,6 +342,9 @@ func (s *Service) handleUpdatePage(ctx context.Context, in *updatePageInput) (*u
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWritePages); err != nil {
+		return nil, err
 	}
 
 	pageID, err := uuid.Parse(in.ID)
@@ -408,6 +420,9 @@ func (s *Service) handleListRevisions(ctx context.Context, in *listRevisionsInpu
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadPages); err != nil {
+		return nil, err
 	}
 
 	pageID, err := uuid.Parse(in.ID)
@@ -526,6 +541,9 @@ func (s *Service) handleGetRevision(ctx context.Context, in *getRevisionInput) (
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadPages); err != nil {
+		return nil, err
+	}
 
 	revID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -575,6 +593,9 @@ func (s *Service) handleDiffRevisions(ctx context.Context, in *diffRevisionsInpu
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadPages); err != nil {
+		return nil, err
 	}
 
 	revID, err := uuid.Parse(in.ID)
@@ -701,6 +722,9 @@ func (s *Service) handleRestore(ctx context.Context, in *restoreInput) (*restore
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWritePages); err != nil {
+		return nil, err
+	}
 
 	pageID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -748,6 +772,9 @@ func (s *Service) handleApproveCandidate(ctx context.Context, in *approveCandida
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWritePages); err != nil {
+		return nil, err
 	}
 
 	pageID, err := uuid.Parse(in.ID)
@@ -851,6 +878,9 @@ func (s *Service) handleRejectCandidate(ctx context.Context, in *rejectCandidate
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWritePages); err != nil {
+		return nil, err
+	}
 
 	pageID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -920,6 +950,9 @@ func (s *Service) handlePresenceHeartbeat(ctx context.Context, in *presenceHeart
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWritePages); err != nil {
+		return nil, err
+	}
 
 	pageID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -968,6 +1001,9 @@ func (s *Service) handlePresenceList(ctx context.Context, in *presenceListInput)
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadPages); err != nil {
+		return nil, err
 	}
 
 	pageID, err := uuid.Parse(in.ID)

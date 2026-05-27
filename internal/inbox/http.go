@@ -37,6 +37,9 @@ func (s *Service) handleListInbox(ctx context.Context, in *listInboxInput) (*lis
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadInbox); err != nil {
+		return nil, err
+	}
 
 	wsID, err := uuid.Parse(in.ID)
 	if err != nil {

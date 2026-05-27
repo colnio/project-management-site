@@ -91,6 +91,9 @@ func (s *Service) handleCreateMeeting(ctx context.Context, in *createMeetingInpu
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteMeetings); err != nil {
+		return nil, err
+	}
 
 	wsID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -164,6 +167,9 @@ func (s *Service) handleListMeetings(ctx context.Context, in *listMeetingsInput)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadMeetings); err != nil {
+		return nil, err
+	}
 
 	wsID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -198,6 +204,9 @@ func (s *Service) handleGetMeeting(ctx context.Context, in *getMeetingInput) (*g
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadMeetings); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(in.ID)
@@ -242,6 +251,9 @@ func (s *Service) handlePatchMeeting(ctx context.Context, in *patchMeetingInput)
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteMeetings); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(in.ID)
@@ -297,6 +309,9 @@ func (s *Service) handleDeleteMeeting(ctx context.Context, in *deleteMeetingInpu
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteMeetings); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(in.ID)

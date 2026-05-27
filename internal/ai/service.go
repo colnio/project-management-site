@@ -25,6 +25,7 @@ type Service struct {
 	cfg      *config.Config
 	client   Client   // nil means AI is disabled
 	authSvc  *auth.Service
+	orgSvc   *org.Service
 	projects *project.Service
 	risks    *risk.Service // optional; nil if risk module not wired yet
 	rec      audit.Recorder
@@ -46,6 +47,7 @@ func NewService(
 	cfg *config.Config,
 	client Client,
 	authSvc *auth.Service,
+	orgSvc *org.Service,
 	projects *project.Service,
 	rec audit.Recorder,
 	log *slog.Logger,
@@ -55,6 +57,7 @@ func NewService(
 		cfg:      cfg,
 		client:   client,
 		authSvc:  authSvc,
+		orgSvc:   orgSvc,
 		projects: projects,
 		rec:      rec,
 		log:      log,
@@ -155,7 +158,16 @@ func (s *Service) ApproveToolCall(ctx context.Context, p *platform.Principal, co
 	}
 
 	// Mint an internal token to execute the call.
-	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, []string{"tools:write"}, nil)
+	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, []string{
+		platform.ScopeReadProjects,
+		platform.ScopeReadSamples,
+		platform.ScopeReadExperiments,
+		platform.ScopeReadPages,
+		platform.ScopeReadArtifacts,
+		platform.ScopeWritePages,
+		platform.ScopeWriteIterations,
+		platform.ScopeWriteCalendar,
+	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("ai: mint token for approval: %w", err)
 	}
@@ -230,13 +242,38 @@ func (s *Service) RejectToolCall(ctx context.Context, p *platform.Principal, con
 // ─── Autonomy endpoints ──────────────────────────────────────────────────────
 
 // GetWorkspaceAutonomy returns the autonomy config for a workspace.
+// Requires workspace membership.
 func (s *Service) GetWorkspaceAutonomy(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID) (*AutonomyConfig, error) {
+	if err := s.checkWorkspaceMember(ctx, p, workspaceID); err != nil {
+		return nil, err
+	}
 	return GetAutonomy(ctx, s.pool, "workspace", workspaceID)
 }
 
 // SetWorkspaceAutonomy upserts the autonomy config for a workspace.
+// Requires workspace owner role. Emits an audit entry.
 func (s *Service) SetWorkspaceAutonomy(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID, mode string, allowedTools []string) error {
-	return UpsertAutonomy(ctx, s.pool, "workspace", workspaceID, mode, allowedTools)
+	role, isMember, err := s.orgSvc.WorkspaceRole(ctx, workspaceID, p.UserID)
+	if err != nil {
+		return err
+	}
+	if !isMember && !p.IsSystemAdmin {
+		return platform.Forbidden("not a member of this workspace")
+	}
+	if role != string(org.RoleOwner) && !p.IsSystemAdmin {
+		return platform.Forbidden("workspace owner role required to update autonomy config")
+	}
+	if err := UpsertAutonomy(ctx, s.pool, "workspace", workspaceID, mode, allowedTools); err != nil {
+		return err
+	}
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        p.UserID,
+		ViaTokenID:   p.ViaTokenID,
+		Action:       "ai.workspace_autonomy.update",
+		ResourceType: "workspace",
+		ResourceID:   workspaceID.String(),
+	})
+	return nil
 }
 
 // GetProjectAutonomy returns the autonomy config for a project.
@@ -248,10 +285,25 @@ func (s *Service) GetProjectAutonomy(ctx context.Context, p *platform.Principal,
 }
 
 // GetUsageSummary returns spend metrics for a workspace.
+// Requires workspace membership.
 func (s *Service) GetUsageSummary(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID) (*UsageSummary, error) {
-	// Reuse the same lightweight auth as GetWorkspaceAutonomy — no role required
-	// beyond being authenticated (any workspace member can view spend data).
+	if err := s.checkWorkspaceMember(ctx, p, workspaceID); err != nil {
+		return nil, err
+	}
 	return getUsageSummary(ctx, s.pool, workspaceID)
+}
+
+// checkWorkspaceMember returns a Forbidden error if the principal is not a
+// member of the workspace (and not a system admin).
+func (s *Service) checkWorkspaceMember(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID) error {
+	_, isMember, err := s.orgSvc.WorkspaceRole(ctx, workspaceID, p.UserID)
+	if err != nil {
+		return err
+	}
+	if !isMember && !p.IsSystemAdmin {
+		return platform.Forbidden("not a member of this workspace")
+	}
+	return nil
 }
 
 // ─── ListProposedToolCallsByWorkspace ─────────────────────────────────────────

@@ -111,6 +111,9 @@ func (s *Service) handleCreateProject(ctx context.Context, in *createProjectInpu
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
+	}
 
 	wsID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -149,6 +152,9 @@ func (s *Service) handleListProjects(ctx context.Context, in *listProjectsInput)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeReadProjects); err != nil {
+		return nil, err
+	}
 
 	wsID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -180,6 +186,9 @@ func (s *Service) handleGetProject(ctx context.Context, in *getProjectInput) (*g
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadProjects); err != nil {
+		return nil, err
 	}
 
 	projectID, err := uuid.Parse(in.ID)
@@ -216,6 +225,9 @@ func (s *Service) handleUpdateProject(ctx context.Context, in *updateProjectInpu
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -248,6 +260,9 @@ func (s *Service) handleArchiveProject(ctx context.Context, in *archiveProjectIn
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
+	}
 
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -279,6 +294,9 @@ func (s *Service) handleListCollaborators(ctx context.Context, in *listCollabora
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadProjects); err != nil {
+		return nil, err
 	}
 
 	projectID, err := uuid.Parse(in.ID)
@@ -321,6 +339,9 @@ func (s *Service) handleAddCollaborator(ctx context.Context, in *addCollaborator
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
 	}
 
 	projectID, err := uuid.Parse(in.ID)
@@ -371,6 +392,9 @@ func (s *Service) handleRemoveCollaborator(ctx context.Context, in *removeCollab
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
 	}
 
 	projectID, err := uuid.Parse(in.ID)

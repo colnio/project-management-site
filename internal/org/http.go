@@ -105,6 +105,9 @@ func (s *Service) handleCreateWorkspace(ctx context.Context, in *createWorkspace
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeAdminOrg); err != nil {
+		return nil, err
+	}
 
 	ws, err := s.CreateWorkspace(ctx, in.Body.Name, p.UserID)
 	if err != nil {
@@ -121,6 +124,9 @@ func (s *Service) handleListWorkspaces(ctx context.Context, _ *struct{}) (*listW
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadProjects); err != nil {
+		return nil, err
 	}
 
 	list, err := s.ListWorkspacesForUser(ctx, p.UserID)
@@ -145,6 +151,9 @@ func (s *Service) handleGetWorkspace(ctx context.Context, in *getWorkspaceInput)
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadProjects); err != nil {
+		return nil, err
 	}
 
 	wsID, err := uuid.Parse(in.ID)
@@ -183,6 +192,9 @@ func (s *Service) handleListMembers(ctx context.Context, in *listMembersInput) (
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadProjects); err != nil {
+		return nil, err
 	}
 
 	wsID, err := uuid.Parse(in.ID)
@@ -224,6 +236,9 @@ func (s *Service) handleAddMember(ctx context.Context, in *addMemberInput) (*add
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
 	}
 
 	wsID, err := uuid.Parse(in.ID)
@@ -278,6 +293,9 @@ func (s *Service) handleRemoveMember(ctx context.Context, in *removeMemberInput)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
+	}
 
 	wsID, err := uuid.Parse(in.ID)
 	if err != nil {
@@ -328,6 +346,9 @@ func (s *Service) handleCreateInvite(ctx context.Context, in *createInviteInput)
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
 	}
 
 	wsID, err := uuid.Parse(in.ID)

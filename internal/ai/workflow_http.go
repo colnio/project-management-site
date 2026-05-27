@@ -20,9 +20,12 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 		Summary:     "List available AI risk-assessment workflows",
 		Tags:        []string{"AI"},
 	}, func(ctx context.Context, _ *struct{}) (*workflowListOutput, error) {
-		_, ok := platform.PrincipalFrom(ctx)
+		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeReadAI); err != nil {
+			return nil, err
 		}
 		var items []WorkflowSummary
 		for _, wf := range workflows {
@@ -51,6 +54,9 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeWriteAI); err != nil {
+			return nil, err
 		}
 
 		projectID, err := uuid.Parse(input.Body.ProjectID)
@@ -93,6 +99,9 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
 			return nil, platform.Unauthorized("authentication required")
+		}
+		if err := platform.RequireScope(p, platform.ScopeReadAI); err != nil {
+			return nil, err
 		}
 
 		runID, err := uuid.Parse(input.ID)

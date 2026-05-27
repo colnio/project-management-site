@@ -50,8 +50,17 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 		return nil, err
 	}
 
-	// Mint a run-scoped internal token.
-	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, run.ID, []string{"tools:read", "tools:write"}, nil)
+	// Mint a run-scoped internal token with the full set of scopes needed by AI tools.
+	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, run.ID, []string{
+		platform.ScopeReadProjects,
+		platform.ScopeReadSamples,
+		platform.ScopeReadExperiments,
+		platform.ScopeReadPages,
+		platform.ScopeReadArtifacts,
+		platform.ScopeWritePages,
+		platform.ScopeWriteIterations,
+		platform.ScopeWriteCalendar,
+	}, nil)
 	if err != nil {
 		_ = s.markRunFailed(ctx, run.ID, "{}", "failed to mint internal token: "+err.Error())
 		return nil, fmt.Errorf("ai: workflow: mint token: %w", err)
