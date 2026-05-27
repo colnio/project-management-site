@@ -32,17 +32,13 @@ func newTestService(t *testing.T) (*auth.Service, context.Context) {
 	testsupport.Truncate(t, pool, testTables...)
 
 	cfg := &config.Config{
-		OIDCIssuer:      "http://localhost:19100/nonexistent", // intentionally unreachable
-		OIDCClientID:    "test",
-		OIDCClientSecret: "test",
-		OIDCRedirectURL: "http://localhost/callback",
-		JWTSigningKey:   "test-signing-key-32-bytes-padding",
-		AccessTokenTTL:  15 * time.Minute,
-		RefreshTokenTTL: 24 * time.Hour,
-		CookieDomain:    "localhost",
-		CookieSecure:    false,
+		JWTSigningKey:       "test-signing-key-32-bytes-padding",
+		AccessTokenTTL:      15 * time.Minute,
+		RefreshTokenTTL:     24 * time.Hour,
+		CookieDomain:        "localhost",
+		CookieSecure:        false,
 		AllowedEmailDomains: []string{"graphene-lab.org"},
-		WebOrigin:       "http://localhost:5173",
+		WebOrigin:           "http://localhost:5173",
 	}
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -210,7 +206,6 @@ func TestAccessTokenExpired(t *testing.T) {
 	// Craft a config with negative TTL to immediately expire.
 	pool := testsupport.NewPool(t)
 	cfg := &config.Config{
-		OIDCIssuer:      "http://localhost:19100/none",
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  -1 * time.Second, // already expired
 		RefreshTokenTTL: 24 * time.Hour,
@@ -430,13 +425,12 @@ func TestSeedDevUser(t *testing.T) {
 	}
 }
 
-// ─── OIDC (skip if provider unreachable) ─────────────────────────────────────
+// ─── OIDC removed ────────────────────────────────────────────────────────────
 
 func TestOIDCLoginUnavailable(t *testing.T) {
 	svc, _ := newTestService(t)
+	// OIDC has been removed; OIDCAvailable always returns false.
 	if svc.OIDCAvailable() {
-		t.Skip("OIDC provider is reachable; skipping unavailable test")
+		t.Fatal("expected OIDCAvailable() == false after OIDC removal")
 	}
-	// svc.oidc == nil; the HTTP handler should return 503.
-	// We test this indirectly by confirming OIDCAvailable() is false.
 }

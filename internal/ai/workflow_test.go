@@ -121,7 +121,7 @@ func newWorkflowTestSetup(t *testing.T) (*Service, *setupData, *httptest.Server)
 		JWTSigningKey:   "wf-test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	if err != nil {
 		t.Fatalf("auth service: %v", err)
@@ -314,7 +314,7 @@ func TestRunWorkflow_UsageWritten(t *testing.T) {
 		JWTSigningKey:   "wf-test-key2",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
@@ -396,7 +396,7 @@ func TestRunWorkflow_PIFlag_Flagged(t *testing.T) {
 		JWTSigningKey:   "wf-pi-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
@@ -491,7 +491,7 @@ func TestRunWorkflow_PIFlag_NotFlagged(t *testing.T) {
 		JWTSigningKey:   "wf-noflg-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
@@ -581,7 +581,7 @@ func TestRunWorkflow_MalformedSynthesisJSON(t *testing.T) {
 		JWTSigningKey:   "wf-bad-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
@@ -681,7 +681,7 @@ func TestRunWorkflow_SynthesisError_Returns502(t *testing.T) {
 		JWTSigningKey:   "wf-502-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)

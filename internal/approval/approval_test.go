@@ -149,7 +149,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, log)
 	aiSvc := ai.NewService(pool, cfg, nil, authSvc, orgSvc, projSvc, audit.Nop{}, log)
 

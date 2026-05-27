@@ -108,6 +108,9 @@ func (s *Service) handleCreateWorkspace(ctx context.Context, in *createWorkspace
 	if err := platform.RequireScope(p, platform.ScopeAdminOrg); err != nil {
 		return nil, err
 	}
+	if !p.IsPrivileged() {
+		return nil, platform.Forbidden("only admins or PIs can create workspaces")
+	}
 
 	ws, err := s.CreateWorkspace(ctx, in.Body.Name, p.UserID)
 	if err != nil {
@@ -250,7 +253,7 @@ func (s *Service) handleAddMember(ctx context.Context, in *addMemberInput) (*add
 	if err != nil {
 		return nil, err
 	}
-	if !isMember || (callerRole != "owner" && callerRole != "admin") {
+	if !p.IsPrivileged() && (!isMember || (callerRole != "owner" && callerRole != "admin")) {
 		return nil, platform.Forbidden("only workspace owners and admins may add members")
 	}
 
@@ -310,7 +313,7 @@ func (s *Service) handleRemoveMember(ctx context.Context, in *removeMemberInput)
 	if err != nil {
 		return nil, err
 	}
-	if !isMember || (callerRole != "owner" && callerRole != "admin") {
+	if !p.IsPrivileged() && (!isMember || (callerRole != "owner" && callerRole != "admin")) {
 		return nil, platform.Forbidden("only workspace owners and admins may remove members")
 	}
 

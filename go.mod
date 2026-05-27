@@ -6,7 +6,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.18
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.17
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
-	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/danielgtaylor/huma/v2 v2.38.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/go-chi/chi/v5 v5.3.0
@@ -21,7 +20,6 @@ require (
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.38.0
 	github.com/riverqueue/river/rivertype v0.38.0
 	golang.org/x/crypto v0.52.0
-	golang.org/x/oauth2 v0.36.0
 )
 
 require (
@@ -42,7 +40,6 @@ require (
 	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.2 // indirect

@@ -18,6 +18,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/colnio/project-management-site/internal/admin"
 	"github.com/colnio/project-management-site/internal/ai"
 	"github.com/colnio/project-management-site/internal/approval"
 	"github.com/colnio/project-management-site/internal/artifact"
@@ -164,7 +165,9 @@ func run() error {
 	}
 	logger.Info("ai: workflows loaded", "count", len(workflows))
 
+	adminSvc := admin.NewService(authSvc, auditRec)
 	auth.Register(srv.API, authSvc)
+	admin.Register(srv.API, adminSvc)
 	audit.Register(srv.API, audit.NewService(auditRec))
 	org.Register(srv.API, orgSvc)
 	project.Register(srv.API, projectSvc)

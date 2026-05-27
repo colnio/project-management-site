@@ -44,7 +44,7 @@ func newTestService(t *testing.T, pool *pgxpool.Pool, client Client) (*Service, 
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	if err != nil {
 		t.Fatalf("auth service: %v", err)
@@ -202,7 +202,7 @@ func TestChatLoop_ReadToolThenText(t *testing.T) {
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
@@ -289,7 +289,7 @@ func TestChatLoop_SpendCapRefusal(t *testing.T) {
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
@@ -368,7 +368,7 @@ func TestInternalTokenMintedAndRevoked(t *testing.T) {
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 
 	userID := uuid.New()
@@ -500,7 +500,7 @@ func TestReviewRisks_ReturnsContent(t *testing.T) {
 		JWTSigningKey:   "review-test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)

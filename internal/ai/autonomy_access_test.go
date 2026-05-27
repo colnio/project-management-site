@@ -132,7 +132,7 @@ func TestSetWorkspaceAutonomy_OwnerSucceedsAndEmitsAudit(t *testing.T) {
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		OIDCIssuer:      "http://localhost:9999/nonexistent",
+		
 	}, audit.Nop{}, logger)
 	if err != nil {
 		t.Fatalf("auth service: %v", err)

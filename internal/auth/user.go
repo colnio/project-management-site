@@ -211,6 +211,107 @@ func emailDomainAllowed(email string, allowed []string) bool {
 	return false
 }
 
+// UpdateProfile updates a user's profile fields and marks profile_completed=true.
+// If displayName is empty it is derived from strings.TrimSpace(firstName+" "+lastName).
+func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName, title, description, displayName string) (*User, error) {
+	if strings.TrimSpace(displayName) == "" {
+		displayName = strings.TrimSpace(firstName + " " + lastName)
+	}
+	row := s.pool.QueryRow(ctx,
+		`UPDATE users
+		 SET first_name=$2, last_name=$3, title=$4, description=$5, display_name=$6,
+		     profile_completed=true, updated_at=now()
+		 WHERE id=$1
+		 RETURNING id, email, display_name,
+		           global_role, status,
+		           first_name, last_name, title, description, profile_completed,
+		           created_at, updated_at`,
+		userID, firstName, lastName, title, description, displayName,
+	)
+	u, err := scanUser(row)
+	if err == pgx.ErrNoRows {
+		return nil, platform.NotFound("user.not_found", "user not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("auth: update profile: %w", err)
+	}
+	return u, nil
+}
+
+// ListUsers returns all users ordered by created_at DESC.
+func (s *Service) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, email, display_name,
+		        global_role, status,
+		        first_name, last_name, title, description, profile_completed,
+		        created_at, updated_at
+		 FROM users ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("auth: list users: %w", err)
+	}
+	defer rows.Close()
+	var out []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(
+			&u.ID, &u.Email, &u.DisplayName,
+			&u.GlobalRole, &u.Status,
+			&u.FirstName, &u.LastName, &u.Title, &u.Description, &u.ProfileCompleted,
+			&u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// SetUserStatus sets the status of a user (approved/pending/suspended).
+func (s *Service) SetUserStatus(ctx context.Context, id uuid.UUID, status string) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET status=$2, updated_at=now() WHERE id=$1`,
+		id, status,
+	)
+	if err != nil {
+		return fmt.Errorf("auth: set user status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return platform.NotFound("user.not_found", "user not found")
+	}
+	return nil
+}
+
+// SetUserGlobalRole sets the global_role of a user.
+func (s *Service) SetUserGlobalRole(ctx context.Context, id uuid.UUID, role string) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET global_role=$2, updated_at=now() WHERE id=$1`,
+		id, role,
+	)
+	if err != nil {
+		return fmt.Errorf("auth: set user global role: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return platform.NotFound("user.not_found", "user not found")
+	}
+	return nil
+}
+
+// DeleteUser deletes a user (local_credentials cascade via FK).
+func (s *Service) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM users WHERE id=$1`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("auth: delete user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return platform.NotFound("user.not_found", "user not found")
+	}
+	return nil
+}
+
 // isPgError attempts to unwrap err as a *pgconn.PgError.
 func isPgError(err error, target **pgconn.PgError) bool {
 	if err == nil {

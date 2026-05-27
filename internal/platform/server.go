@@ -49,8 +49,8 @@ func New(deps *ServerDeps) *Server {
 		"Every action available in the UI is available here; the in-app AI assistant " +
 		"uses the same surface. See /llms.txt for an agent-oriented summary.\n\n" +
 		"## Authentication\n\n" +
-		"Most endpoints require a JWT access token issued by `POST /v1/auth/login` (local) " +
-		"or the OIDC flow (`GET /v1/auth/oidc/login`). Pass it as `Authorization: Bearer <token>`. " +
+		"Most endpoints require a JWT access token issued by `POST /v1/auth/login`. " +
+		"Pass it as `Authorization: Bearer <token>`. " +
 		"Tokens expire after a short window; use `POST /v1/auth/refresh` (reads the `refresh_token` " +
 		"HttpOnly cookie) to obtain a fresh access token without re-authenticating. " +
 		"Long-lived integrations should use a Personal Access Token (PAT) created via `POST /v1/tokens`.\n\n" +

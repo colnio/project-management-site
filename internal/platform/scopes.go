@@ -42,6 +42,9 @@ const (
 	ScopeWriteApprovals = "write:approvals"
 
 	ScopeAdminOrg = "admin:org"
+
+	ScopeReadAdmin  = "read:admin"
+	ScopeWriteAdmin = "write:admin"
 )
 
 // RequireScope returns a Forbidden error if the principal does not carry the

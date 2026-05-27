@@ -38,9 +38,9 @@ func ExportEmailDomainAllowed(email string, allowed []string) bool {
 	return emailDomainAllowed(email, allowed)
 }
 
-// OIDCAvailable reports whether the OIDC provider was successfully configured.
+// OIDCAvailable always returns false now that OIDC has been removed.
 func (s *Service) OIDCAvailable() bool {
-	return s.oidc != nil
+	return false
 }
 
 // ExportExtractCookieValue exposes extractCookieValue for tests.

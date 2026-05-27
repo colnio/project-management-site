@@ -8,7 +8,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
-	"golang.org/x/oauth2"
 
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/platform"
@@ -16,25 +15,15 @@ import (
 
 // Register wires auth HTTP endpoints onto the huma API.
 func Register(api huma.API, svc *Service) {
-	// OIDC login initiation.
+	// Registration (no auth required).
 	huma.Register(api, huma.Operation{
-		OperationID: "auth-oidc-login",
-		Method:      http.MethodGet,
-		Path:        "/v1/auth/oidc/login",
-		Summary:     "Begin OIDC login flow",
-		Description: "Returns an authorization URL and state token to start an OIDC login. Redirect the user's browser to the returned `authorization_url`.",
+		OperationID: "auth-register",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/register",
+		Summary:     "Register a new account",
+		Description: "Creates a new user account with status='pending'. The account must be approved by an admin before the user can log in.",
 		Tags:        []string{"auth"},
-	}, svc.handleOIDCLogin)
-
-	// OIDC callback.
-	huma.Register(api, huma.Operation{
-		OperationID: "auth-oidc-callback",
-		Method:      http.MethodGet,
-		Path:        "/v1/auth/oidc/callback",
-		Summary:     "OIDC callback — exchange code for session",
-		Description: "Handled by the OIDC provider redirect. Exchanges the authorization code for a session, sets a `refresh_token` HttpOnly cookie, and redirects to the web origin.",
-		Tags:        []string{"auth"},
-	}, svc.handleOIDCCallback)
+	}, svc.handleRegister)
 
 	// Local login.
 	huma.Register(api, huma.Operation{
@@ -72,9 +61,19 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/me",
 		Summary:     "Get current authenticated user",
-		Description: "Returns the authenticated user's profile (ID, email, display name, admin flag). Requires a valid `Authorization: Bearer <access_token>` header.",
+		Description: "Returns the authenticated user's profile. Requires a valid `Authorization: Bearer <access_token>` header.",
 		Tags:        []string{"auth"},
 	}, svc.handleMe)
+
+	// Profile update.
+	huma.Register(api, huma.Operation{
+		OperationID: "auth-me-profile",
+		Method:      http.MethodPatch,
+		Path:        "/v1/me/profile",
+		Summary:     "Update current user's profile",
+		Description: "Updates the authenticated user's profile fields and marks profile as completed.",
+		Tags:        []string{"auth"},
+	}, svc.handleUpdateProfile)
 
 	// PAT CRUD.
 	huma.Register(api, huma.Operation{
@@ -136,147 +135,63 @@ func (s *Service) clearRefreshCookie() string {
 	return c.String()
 }
 
-// ─── OIDC login ──────────────────────────────────────────────────────────────
+// ─── Registration ────────────────────────────────────────────────────────────
 
-type oidcLoginOutput struct {
-	SetCookie string `header:"Set-Cookie"`
-	Body      struct {
-		AuthorizationURL string `json:"authorization_url"`
-		State            string `json:"state"`
+type registerInput struct {
+	Body struct {
+		Email           string `json:"email" required:"true"`
+		Password        string `json:"password" required:"true"`
+		PasswordConfirm string `json:"password_confirm" required:"true"`
 	}
 }
 
-func (s *Service) handleOIDCLogin(_ context.Context, _ *struct{}) (*oidcLoginOutput, error) {
-	if s.oidc == nil {
-		return nil, platform.Errorf(http.StatusServiceUnavailable, "oidc.unavailable", "OIDC provider is not configured or unreachable")
+type registerOutput struct {
+	Status int
+	Body   struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
 	}
-	state, err := randomBase64url(16)
-	if err != nil {
-		return nil, fmt.Errorf("auth: generate state: %w", err)
-	}
-	oauth2Cfg := s.oauth2Config()
-	url := oauth2Cfg.AuthCodeURL(state, oauth2.AccessTypeOnline)
-	out := &oidcLoginOutput{}
-	out.Body.AuthorizationURL = url
-	out.Body.State = state
-	// Bind state to browser via HttpOnly cookie so the callback can verify it.
-	stateCookie := &http.Cookie{
-		Name:     "oidc_state",
-		Value:    state,
-		Path:     "/",
-		Domain:   s.cfg.CookieDomain,
-		MaxAge:   300, // 5 minutes is plenty for the OIDC round-trip
-		HttpOnly: true,
-		Secure:   s.cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
-	}
-	out.SetCookie = stateCookie.String()
-	return out, nil
 }
 
-// ─── OIDC callback ───────────────────────────────────────────────────────────
-
-type oidcCallbackInput struct {
-	Code   string `query:"code"`
-	State  string `query:"state"`
-	Cookie string `header:"Cookie"`
-}
-
-type oidcCallbackOutput struct {
-	Status    int
-	Location  string   `header:"Location"`
-	SetCookie []string `header:"Set-Cookie"`
-}
-
-func (s *Service) handleOIDCCallback(ctx context.Context, in *oidcCallbackInput) (*oidcCallbackOutput, error) {
-	if s.oidc == nil {
-		return nil, platform.Errorf(http.StatusServiceUnavailable, "oidc.unavailable", "OIDC provider not available")
+func (s *Service) handleRegister(ctx context.Context, in *registerInput) (*registerOutput, error) {
+	// Validate email domain.
+	if !emailDomainAllowed(in.Body.Email, s.cfg.AllowedEmailDomains) {
+		return nil, platform.Errorf(http.StatusBadRequest, "auth.domain_not_allowed", "email domain is not allowed")
+	}
+	// Validate passwords match.
+	if in.Body.Password != in.Body.PasswordConfirm {
+		return nil, platform.Errorf(http.StatusBadRequest, "auth.password_mismatch", "passwords do not match")
+	}
+	// Validate password length.
+	if len(in.Body.Password) < 8 {
+		return nil, platform.Errorf(http.StatusBadRequest, "auth.password_too_short", "password must be at least 8 characters")
+	}
+	// Check email not already taken.
+	if _, err := s.GetUserByEmail(ctx, in.Body.Email); err == nil {
+		return nil, platform.Errorf(http.StatusConflict, "auth.email_taken", "an account with that email already exists")
 	}
 
-	// Verify OIDC state to prevent CSRF.
-	cookieState := extractCookieValue(in.Cookie, "oidc_state")
-	if cookieState == "" || cookieState != in.State {
-		return nil, platform.Unauthorized("oidc state mismatch")
-	}
-
-	oauth2Cfg := s.oauth2Config()
-	oauthToken, err := oauth2Cfg.Exchange(ctx, in.Code)
+	// Create user (defaults: global_role='member', status='pending', profile_completed=false).
+	u, err := s.CreateUser(ctx, in.Body.Email, "")
 	if err != nil {
-		return nil, platform.BadRequest("oidc.exchange_failed", "could not exchange OIDC code")
+		return nil, err
 	}
-
-	rawIDToken, ok := oauthToken.Extra("id_token").(string)
-	if !ok {
-		return nil, platform.BadRequest("oidc.no_id_token", "no id_token in OIDC response")
-	}
-	idToken, err := s.oidc.verifier.Verify(ctx, rawIDToken)
-	if err != nil {
-		return nil, platform.Unauthorized("invalid OIDC id_token")
-	}
-
-	var claims struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
-	}
-	if err := idToken.Claims(&claims); err != nil {
-		return nil, platform.BadRequest("oidc.claims_failed", "cannot extract claims from id_token")
-	}
-
-	if !emailDomainAllowed(claims.Email, s.cfg.AllowedEmailDomains) {
-		return nil, platform.Forbidden("email domain not allowed")
-	}
-
-	// Upsert user.
-	u, err := s.GetUserByEmail(ctx, claims.Email)
-	if err != nil {
-		u, err = s.CreateUser(ctx, claims.Email, claims.Name)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	refresh, err := s.issueRefresh(ctx, u.ID)
-	if err != nil {
+	// Store password.
+	if err := s.SetPassword(ctx, u.ID, in.Body.Password); err != nil {
 		return nil, err
 	}
 
 	_ = s.rec.Record(ctx, audit.Entry{
 		Actor:        u.ID,
-		Action:       "auth.login",
+		Action:       "auth.register",
 		ResourceType: "user",
 		ResourceID:   u.ID.String(),
 	})
 
-	// Clear the oidc_state cookie (MaxAge -1) and set the refresh token cookie.
-	clearState := &http.Cookie{
-		Name:     "oidc_state",
-		Value:    "",
-		Path:     "/",
-		Domain:   s.cfg.CookieDomain,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   s.cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
-	}
-	out := &oidcCallbackOutput{
-		Status:   http.StatusFound,
-		Location: s.cfg.WebOrigin,
-		SetCookie: []string{
-			s.refreshCookieValue(refresh),
-			clearState.String(),
-		},
-	}
+	out := &registerOutput{Status: http.StatusCreated}
+	out.Body.Status = "pending"
+	out.Body.Message = "Your account has been created and is awaiting admin approval before you can log in."
 	return out, nil
-}
-
-func (s *Service) oauth2Config() *oauth2.Config {
-	return &oauth2.Config{
-		ClientID:     s.cfg.OIDCClientID,
-		ClientSecret: s.cfg.OIDCClientSecret,
-		RedirectURL:  s.cfg.OIDCRedirectURL,
-		Endpoint:     s.oidc.provider.Endpoint(),
-		Scopes:       []string{"openid", "email", "profile"},
-	}
 }
 
 // ─── Local login ─────────────────────────────────────────────────────────────
@@ -330,6 +245,13 @@ func (s *Service) handleLogin(ctx context.Context, in *loginInput) (*loginOutput
 	u, err := s.verifyLocalLogin(ctx, in.Body.Email, in.Body.Password)
 	if err != nil {
 		return nil, err
+	}
+	// Approval gate: only approved users may receive tokens.
+	switch u.Status {
+	case "pending":
+		return nil, platform.Errorf(http.StatusForbidden, "auth.pending_approval", "your account is awaiting approval")
+	case "suspended":
+		return nil, platform.Errorf(http.StatusForbidden, "auth.suspended", "your account has been suspended")
 	}
 	accessToken, err := s.issueAccessToken(u)
 	if err != nil {
@@ -436,6 +358,45 @@ func (s *Service) handleMe(ctx context.Context, _ *struct{}) (*meOutput, error) 
 		return nil, err
 	}
 	return &meOutput{Body: userToJSON(u)}, nil
+}
+
+// ─── PATCH /v1/me/profile ────────────────────────────────────────────────────
+
+type updateProfileInput struct {
+	Body struct {
+		FirstName   string `json:"first_name"`
+		LastName    string `json:"last_name"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		DisplayName string `json:"display_name,omitempty"`
+	}
+}
+
+type updateProfileOutput struct {
+	Body userJSON
+}
+
+func (s *Service) handleUpdateProfile(ctx context.Context, in *updateProfileInput) (*updateProfileOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	u, err := s.UpdateProfile(ctx, p.UserID,
+		in.Body.FirstName, in.Body.LastName,
+		in.Body.Title, in.Body.Description,
+		in.Body.DisplayName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        p.UserID,
+		ViaTokenID:   p.ViaTokenID,
+		Action:       "user.profile_update",
+		ResourceType: "user",
+		ResourceID:   p.UserID.String(),
+	})
+	return &updateProfileOutput{Body: userToJSON(u)}, nil
 }
 
 // ─── PAT create ──────────────────────────────────────────────────────────────

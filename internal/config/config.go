@@ -32,12 +32,6 @@ type Config struct {
 	SMTPPort string
 	SMTPFrom string
 
-	// Human SSO (mock-oauth2-server locally, Entra in prod).
-	OIDCIssuer       string
-	OIDCClientID     string
-	OIDCClientSecret string
-	OIDCRedirectURL  string
-
 	// Auth signing + cookies.
 	JWTSigningKey  string
 	InviteSignKey  string
@@ -78,10 +72,6 @@ func Load() (*Config, error) {
 		SMTPHost:        getenv("SMTP_HOST", "localhost"),
 		SMTPPort:        getenv("SMTP_PORT", "1025"),
 		SMTPFrom:        getenv("SMTP_FROM", "no-reply@graphene-lab.org"),
-		OIDCIssuer:      getenv("OIDC_ISSUER", "http://localhost:9100/default"),
-		OIDCClientID:    getenv("OIDC_CLIENT_ID", "lab-app"),
-		OIDCClientSecret: getenv("OIDC_CLIENT_SECRET", "lab-secret"),
-		OIDCRedirectURL: getenv("OIDC_REDIRECT_URL", "http://localhost:5173/auth/callback"),
 		JWTSigningKey:   getenv("JWT_SIGNING_KEY", "dev-insecure-jwt-key-change-me"),
 		InviteSignKey:   getenv("INVITE_SIGN_KEY", "dev-insecure-invite-key-change-me"),
 		AccessTokenTTL:  getdur("ACCESS_TOKEN_TTL", 15*time.Minute),

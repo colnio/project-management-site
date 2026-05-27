@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -135,6 +136,13 @@ func (s *Service) rotateRefresh(ctx context.Context, raw string) (string, *User,
 	u, err := s.GetUserByID(ctx, userID)
 	if err != nil {
 		return "", nil, err
+	}
+	// Approval gate: do not issue new tokens for non-approved users.
+	switch u.Status {
+	case "pending":
+		return "", nil, platform.Errorf(http.StatusForbidden, "auth.pending_approval", "your account is awaiting approval")
+	case "suspended":
+		return "", nil, platform.Errorf(http.StatusForbidden, "auth.suspended", "your account has been suspended")
 	}
 	newRaw, err := s.issueRefresh(ctx, userID)
 	if err != nil {
