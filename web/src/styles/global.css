@@ -9,9 +9,13 @@
   --muted-2: #a8a193;
   --line:  #e8e4dc;
   --line-2:#dad4c7;
-  --ember: #d97757;
-  --ember-soft:#f2dccf;
-  --ember-tint:#fdf2eb;
+
+  /* ── Accent wiring: --accent drives --ember across the whole UI ── */
+  --accent: #d97757;
+  --ember: var(--accent);
+  --ember-soft: color-mix(in srgb, var(--accent) 22%, #fff);
+  --ember-tint: color-mix(in srgb, var(--accent) 10%, #fff);
+
   --good:  #5a7d3a;
   --warn:  #b5841b;
   --bad:   #b94e3c;
@@ -51,12 +55,94 @@
   --side-w: 224px;
   --ai-w: 0px;
 
+  /* ── Density spacing vars (regular = default) ── */
+  --density-pad: 14px;
+  --density-pad-lg: 28px;
+  --density-tab-pad: 9px 14px 10px;
+  --density-rec-pad: 12px 14px;
+
   color-scheme: light;
 }
 
+/* ── Dark theme ── */
+:root[data-theme="dark"] {
+  /* Paper / surfaces — warm dark neutrals */
+  --paper:   #1a1815;
+  --paper-2: #211e1a;
+  --paper-3: #26221d;
+  --ink:     #ece7df;
+  --ink-2:   #d4cdc4;
+  --muted:   #8a8278;
+  --muted-2: #5e5850;
+  --line:    #2e2a25;
+  --line-2:  #38332c;
+
+  /* Ember stays ember-ish but slightly brighter for dark contrast */
+  --accent: #e0875f;
+  --ember: var(--accent);
+  --ember-soft: color-mix(in srgb, var(--accent) 25%, #2a1e18);
+  --ember-tint: color-mix(in srgb, var(--accent) 12%, #1e1a16);
+
+  /* Semantic colors — slightly muted for dark bg legibility */
+  --good:  #6d9a48;
+  --warn:  #c8941e;
+  --bad:   #cc5844;
+  --info:  #6878a0;
+
+  /* Status pills — muted dark tints */
+  --pill-active-bg:  #1e2c18; --pill-active-fg:  #8abb60; --pill-active-bd:  #2e4424;
+  --pill-planned-bg: #1a1e2a; --pill-planned-fg: #7a8eb5; --pill-planned-bd: #282f40;
+  --pill-blocked-bg: #2a1a16; --pill-blocked-fg: #d07060; --pill-blocked-bd: #402820;
+
+  /* Material kind pills — dark tints */
+  --pill-electrode-bg: #152228; --pill-electrode-fg: #60a0b5;
+  --pill-cell-bg:      #281a12; --pill-cell-fg:      #d07060;
+  --pill-precursor-bg: #231e14; --pill-precursor-fg: #b0a060;
+  --pill-deriv-bg:     #1e1828; --pill-deriv-fg:     #9878c0;
+  --pill-module-bg:    #152018; --pill-module-fg:    #70a878;
+
+  /* Reference block tints */
+  --ref-sample-bg: #281a12; --ref-sample-fg: #d07060; --ref-sample-bd: #402820;
+  --ref-exp-bg:    #152228; --ref-exp-fg:    #60a0b5; --ref-exp-bd:    #1e3038;
+  --ref-art-bg:    #1e1c14; --ref-art-fg:    #9a9070; --ref-art-bd:    var(--line-2);
+
+  /* Code + surfaces */
+  --code-fg:   #d07060;
+  --surface:   #211e1a;
+  --surface-2: #1e1b17;
+  --top-bg:    rgba(26,24,21,.90);
+
+  color-scheme: dark;
+}
+
+/* ── Density: compact ── */
+/* Note: data-density is set on <html> (document.documentElement) by useTweaks */
+html[data-density="compact"] {
+  font-size: 13px;
+  --density-pad: 10px;
+  --density-pad-lg: 20px;
+  --density-tab-pad: 6px 11px 7px;
+  --density-rec-pad: 8px 11px;
+}
+
+/* ── Density: comfy ── */
+html[data-density="comfy"] {
+  font-size: 15px;
+  --density-pad: 18px;
+  --density-pad-lg: 36px;
+  --density-tab-pad: 12px 18px 13px;
+  --density-rec-pad: 16px 18px;
+}
+
+/* Density-aware padding on common containers */
+.tab { padding: var(--density-tab-pad, 9px 14px 10px); }
+.rec { padding: var(--density-rec-pad, 12px 14px); }
+.page-wrap { padding: 0 var(--density-pad-lg, 32px); }
+
 /* ── Base reset ── */
 *, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+html { font-size: 14px; } /* overridden by html[data-density="compact"/"comfy"] above */
+html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); line-height: 1.5; -webkit-font-smoothing: antialiased; }
 body { min-height: 100vh; overflow-x: hidden; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: default; padding: 0; text-align: left; }
 a { color: inherit; text-decoration: none; }
@@ -153,6 +239,10 @@ input, select, textarea { font-family: inherit; }
 .risk-pill.high { background: #fce8e4; color: #9a2a1e; border-color: #f0b8b0; }
 .risk-pill.med  { background: #fef4dc; color: #8a5f0a; border-color: #f5dfa0; }
 .risk-pill.low  { background: #eef4e8; color: #3e6022; border-color: #cce0b8; }
+/* dark overrides */
+:root[data-theme="dark"] .risk-pill.high { background: #2a1512; color: #e07060; border-color: #4a2018; }
+:root[data-theme="dark"] .risk-pill.med  { background: #251d0c; color: #d4a040; border-color: #3e2e10; }
+:root[data-theme="dark"] .risk-pill.low  { background: #131e10; color: #7ab858; border-color: #1e3018; }
 
 /* Status dots */
 .dot-s { width: 6px; height: 6px; border-radius: 50%; display: inline-block; vertical-align: 1px; margin-right: 5px; flex: 0 0 6px; }
@@ -162,6 +252,8 @@ input, select, textarea { font-family: inherit; }
 .dot-s.blocked, .dot-s.failed { background: var(--bad); }
 .dot-s.archived { background: var(--muted-2); }
 .dot-s.pending { background: var(--warn); }
+:root[data-theme="dark"] .dot-s.active  { background: #90c060; }
+:root[data-theme="dark"] .dot-s.planned { background: #8898c8; }
 
 /* ── Records (cards) ── */
 .records { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -212,7 +304,7 @@ input, select, textarea { font-family: inherit; }
 .arti .asub { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .arti .ahead .tt { position: absolute; top: 6px; left: 8px; font-family: var(--mono); font-size: 9.5px; color: var(--muted); background: var(--surface); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--line); letter-spacing: .04em; text-transform: uppercase; z-index: 1; }
 
-.ph-stripes { position: absolute; inset: 0; background: repeating-linear-gradient(135deg, #efece5 0 6px, #e8e4dc 6px 12px); }
+.ph-stripes { position: absolute; inset: 0; background: repeating-linear-gradient(135deg, var(--paper-3) 0 6px, var(--line) 6px 12px); }
 
 /* ── Icon btn ── */
 .icon-btn { padding: 4px; border-radius: 5px; color: var(--muted); display: grid; place-items: center; }
@@ -245,6 +337,10 @@ select.field-input { cursor: default; }
 /* ── Pill extras ── */
 .pill.s-in-progress, .pill.s-in_progress { background: #eff4f8; color: #2c5b8a; border-color: #c4d8e8; }
 .dot-s.in-progress, .dot-s.in_progress { background: #4a84b5; }
+:root[data-theme="dark"] .pill.s-in-progress,
+:root[data-theme="dark"] .pill.s-in_progress { background: #152030; color: #6898d0; border-color: #203050; }
+:root[data-theme="dark"] .dot-s.in-progress,
+:root[data-theme="dark"] .dot-s.in_progress { background: #6898d0; }
 
 /* ── Reference blocks (page editor) ── */
 .ref-card-block {
