@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/colnio/project-management-site/internal/ai"
+	"github.com/colnio/project-management-site/internal/approval"
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
 	"github.com/colnio/project-management-site/internal/config"
@@ -86,12 +87,13 @@ func (f *fakeUsers) SetPassword(_ context.Context, _ uuid.UUID, _ string) error 
 // ─── Test environment ─────────────────────────────────────────────────────────
 
 type testEnv struct {
-	pool     *pgxpool.Pool
-	inboxSvc *inbox.Service
-	orgSvc   *org.Service
-	projSvc  *project.Service
-	riskSvc  *risk.Service
-	users    *fakeUsers
+	pool        *pgxpool.Pool
+	inboxSvc    *inbox.Service
+	orgSvc      *org.Service
+	projSvc     *project.Service
+	riskSvc     *risk.Service
+	approvalSvc *approval.Service
+	users       *fakeUsers
 }
 
 var truncateTables = []string{
@@ -126,16 +128,18 @@ func newTestEnv(t *testing.T) *testEnv {
 		OIDCIssuer:      "http://localhost:9999/nonexistent",
 	}, audit.Nop{}, log)
 	aiSvc := ai.NewService(pool, cfg, nil, authSvc, orgSvc, projSvc, audit.Nop{}, log)
+	approvalSvc := approval.NewService(pool, projSvc, orgSvc, audit.Nop{}, cfg, log)
 
-	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projSvc, log)
+	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projSvc, approvalSvc, log)
 
 	return &testEnv{
-		pool:     pool,
-		inboxSvc: inboxSvc,
-		orgSvc:   orgSvc,
-		projSvc:  projSvc,
-		riskSvc:  riskSvc,
-		users:    fu,
+		pool:        pool,
+		inboxSvc:    inboxSvc,
+		orgSvc:      orgSvc,
+		projSvc:     projSvc,
+		riskSvc:     riskSvc,
+		approvalSvc: approvalSvc,
+		users:       fu,
 	}
 }
 

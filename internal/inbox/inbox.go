@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/colnio/project-management-site/internal/ai"
+	"github.com/colnio/project-management-site/internal/approval"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/project"
 	"github.com/colnio/project-management-site/internal/risk"
@@ -36,23 +37,25 @@ type Item struct {
 
 // Service is the inbox module's domain service.
 type Service struct {
-	pool     *pgxpool.Pool
-	org      *org.Service
-	risks    *risk.Service
-	ai       *ai.Service
-	projects *project.Service
-	log      *slog.Logger
+	pool      *pgxpool.Pool
+	org       *org.Service
+	risks     *risk.Service
+	ai        *ai.Service
+	projects  *project.Service
+	approvals *approval.Service
+	log       *slog.Logger
 }
 
 // NewService constructs a Service.
-func NewService(pool *pgxpool.Pool, orgSvc *org.Service, risks *risk.Service, aiSvc *ai.Service, projects *project.Service, log *slog.Logger) *Service {
+func NewService(pool *pgxpool.Pool, orgSvc *org.Service, risks *risk.Service, aiSvc *ai.Service, projects *project.Service, approvals *approval.Service, log *slog.Logger) *Service {
 	return &Service{
-		pool:     pool,
-		org:      orgSvc,
-		risks:    risks,
-		ai:       aiSvc,
-		projects: projects,
-		log:      log,
+		pool:      pool,
+		org:       orgSvc,
+		risks:     risks,
+		ai:        aiSvc,
+		projects:  projects,
+		approvals: approvals,
+		log:       log,
 	}
 }
 
@@ -86,6 +89,14 @@ func (s *Service) AggregateForWorkspace(ctx context.Context, workspaceID uuid.UU
 		return nil, err
 	}
 	items = append(items, auditItems...)
+
+	// Source 4: pending approval requests across workspace projects.
+	approvalItems, err := s.fetchPendingApprovals(ctx, workspaceID)
+	if err != nil {
+		s.log.Warn("inbox: fetch pending approvals failed", "workspace_id", workspaceID, "err", err)
+		return nil, err
+	}
+	items = append(items, approvalItems...)
 
 	// Sort newest-first and cap.
 	sort.Slice(items, func(i, j int) bool {
@@ -194,4 +205,26 @@ func (s *Service) fetchAuditItems(ctx context.Context, wsID uuid.UUID) ([]Item, 
 		})
 	}
 	return items, rows.Err()
+}
+
+// ─── Source: pending approval requests ───────────────────────────────────────
+
+func (s *Service) fetchPendingApprovals(ctx context.Context, workspaceID uuid.UUID) ([]Item, error) {
+	pending, err := s.approvals.ListPendingByWorkspace(ctx, workspaceID, inboxCap)
+	if err != nil {
+		return nil, fmt.Errorf("inbox: pending approvals: %w", err)
+	}
+
+	var items []Item
+	for _, pa := range pending {
+		items = append(items, Item{
+			ID:        pa.ID,
+			Kind:      "approval",
+			Title:     "Approval Request Pending",
+			Body:      "A project approval request is awaiting your decision.",
+			Link:      "/projects/" + pa.ProjectID.String(),
+			CreatedAt: pa.CreatedAt,
+		})
+	}
+	return items, nil
 }

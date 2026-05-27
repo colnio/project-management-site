@@ -19,6 +19,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/colnio/project-management-site/internal/ai"
+	"github.com/colnio/project-management-site/internal/approval"
 	"github.com/colnio/project-management-site/internal/artifact"
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
@@ -138,6 +139,7 @@ func run() error {
 	riskSvc := risk.NewService(pool, projectSvc, iterationSvc, auditRec, logger)
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
 	meetingSvc := meeting.NewService(pool, orgSvc, projectSvc, auditRec, logger)
+	approvalSvc := approval.NewService(pool, projectSvc, orgSvc, auditRec, cfg, logger)
 
 	// AI module (G1/G2/G5): load provider, build client (nil if unavailable).
 	aiProvider, aiProvErr := ai.LoadProvider()
@@ -153,7 +155,7 @@ func run() error {
 	}
 	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, orgSvc, projectSvc, auditRec, logger)
 	aiSvc.SetRiskService(riskSvc)
-	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projectSvc, logger)
+	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projectSvc, approvalSvc, logger)
 
 	// Load workflow definitions from the embedded workflows/ directory.
 	workflows, wfErr := ai.LoadWorkflows()
@@ -174,6 +176,7 @@ func run() error {
 	calendar.Register(srv.API, calendarSvc)
 	risk.Register(srv.API, riskSvc)
 	meeting.Register(srv.API, meetingSvc)
+	approval.Register(srv.API, approvalSvc)
 	inbox.Register(srv.API, inboxSvc)
 	ai.Register(srv.API, aiSvc)
 	ai.RegisterWorkflows(srv.API, aiSvc, workflows)

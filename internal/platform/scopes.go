@@ -38,6 +38,9 @@ const (
 	ScopeReadInbox = "read:inbox"
 	ScopeReadAudit = "read:audit"
 
+	ScopeReadApprovals  = "read:approvals"
+	ScopeWriteApprovals = "write:approvals"
+
 	ScopeAdminOrg = "admin:org"
 )
 
