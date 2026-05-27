@@ -537,6 +537,130 @@ export function ArtNotebook({ artifact }: ArtNotebookProps) {
   );
 }
 
+// ─── ArtHTML ──────────────────────────────────────────────────────────────────
+
+export interface ArtHTMLProps {
+  artifact: Artifact;
+}
+
+export function ArtHTML({ artifact }: ArtHTMLProps) {
+  const src = artifact.rendered_url || artifact.original_url || null;
+  const openUrl = src;
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--line)',
+        borderRadius: 8,
+        overflow: 'hidden',
+        background: 'var(--surface)',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid var(--line)',
+          background: 'var(--paper-2)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 9.5,
+            color: 'var(--muted)',
+            background: 'rgba(250,249,246,0.88)',
+            padding: '1px 5px',
+            borderRadius: 3,
+            border: '1px solid var(--line)',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase' as const,
+            flexShrink: 0,
+          }}
+        >
+          HTML
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 11,
+            color: 'var(--muted)',
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {artifact.filename}
+        </span>
+        {openUrl && (
+          <a
+            href={openUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 10.5,
+              color: 'var(--ember)',
+              textDecoration: 'none',
+              flexShrink: 0,
+            }}
+          >
+            Open in new tab ↗
+          </a>
+        )}
+      </div>
+
+      {/* Sandboxed iframe — no allow-same-origin to prevent sandbox escape */}
+      {src ? (
+        <iframe
+          src={src}
+          sandbox="allow-scripts"
+          style={{
+            width: '100%',
+            height: 400,
+            border: 'none',
+            display: 'block',
+            background: 'var(--paper)',
+          }}
+          title={artifact.filename}
+        />
+      ) : (
+        <div
+          style={{
+            height: 120,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--mono)',
+            fontSize: 11,
+            color: 'var(--muted-2)',
+          }}
+        >
+          {artifact.processing_status === 'pending' || artifact.processing_status === 'processing'
+            ? 'Processing…'
+            : 'No preview available'}
+        </div>
+      )}
+
+      {/* Info row */}
+      <div style={{ padding: '8px 12px', borderTop: '1px solid var(--line)', display: 'flex', gap: 10 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--muted-2)', flex: 1 }}>
+          {formatBytes(artifact.size_bytes)}
+        </span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--muted-2)' }}>
+          {artifact.processing_status}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── ArtEmbed dispatcher ──────────────────────────────────────────────────────
 
 export interface ArtEmbedProps {
@@ -554,6 +678,10 @@ export function ArtEmbed({ artifact, imageProps }: ArtEmbedProps) {
   }
   if (artifact.type === 'ipynb') {
     return <ArtNotebook artifact={artifact} />;
+  }
+  // 'other' with text/html content_type → sandboxed HTML viewer
+  if (artifact.content_type === 'text/html') {
+    return <ArtHTML artifact={artifact} />;
   }
   // 'other' — fall back to PDF card layout (download affordance)
   return <ArtPDF artifact={artifact} />;

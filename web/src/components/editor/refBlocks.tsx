@@ -6,6 +6,11 @@
  *   experimentRef  — experiment method + summary card
  *   artifactRef    — artifact filename + type glyph card
  *
+ * And three inline-embed blocks:
+ *   imageEmbed     — renders an uploaded image artifact inline
+ *   pdfEmbed       — renders an uploaded PDF artifact inline
+ *   htmlEmbed      — renders an uploaded HTML artifact in a sandboxed iframe
+ *
  * Each block renders as a styled card embed. Display data is denormalized
  * into props at insert time so no data query is needed inside the editor.
  *
@@ -14,6 +19,9 @@
 
 import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
 import { createReactBlockSpec } from '@blocknote/react';
+import { EntityDashboard } from '@/components/dashboards/EntityDashboard';
+import { useArtifact } from '@/hooks/useArtifactQueries';
+import { ArtImage, ArtPDF, ArtHTML } from '@/components/embeds/ArtEmbeds';
 
 // ─── sampleRef ────────────────────────────────────────────────────────────────
 
@@ -299,15 +307,192 @@ export const artifactRef = createReactBlockSpec(
   }
 );
 
+// ─── entityDashboard ──────────────────────────────────────────────────────────
+// Non-editable block that renders an EntityDashboard for a given entity type/id.
+
+export const entityDashboard = createReactBlockSpec(
+  {
+    type: 'entityDashboard' as const,
+    propSchema: {
+      entityType: { default: 'project' },
+      entityId:   { default: '' },
+    },
+    content: 'none',
+  },
+  {
+    render: ({ block }) => {
+      const { entityType, entityId } = block.props;
+      return (
+        <div
+          contentEditable={false}
+          style={{
+            userSelect: 'none',
+            border: '1px solid var(--line)',
+            borderRadius: 10,
+            padding: '16px 20px',
+            background: 'var(--paper-2)',
+            margin: '8px 0',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 10,
+              color: 'var(--muted-2)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.07em',
+              marginBottom: 12,
+            }}
+          >
+            {entityType} · dashboard
+          </div>
+          <EntityDashboard
+            entityType={entityType as import('@/components/dashboards/EntityDashboard').EntityType}
+            entityId={entityId}
+          />
+        </div>
+      );
+    },
+  }
+);
+
+// ─── Shared embed placeholder ──────────────────────────────────────────────────
+
+function EmbedPlaceholder({ label }: { label: string }) {
+  return (
+    <div
+      style={{
+        border: '1px dashed var(--line-2)',
+        borderRadius: 8,
+        padding: '18px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        color: 'var(--muted-2)',
+        fontFamily: 'var(--mono)',
+        fontSize: 11,
+        background: 'var(--paper-2)',
+      }}
+    >
+      <span
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: '50%',
+          border: '2px solid var(--line)',
+          borderTopColor: 'var(--ember)',
+          animation: 'spin 0.8s linear infinite',
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
+      {label}
+    </div>
+  );
+}
+
+// ─── imageEmbed ────────────────────────────────────────────────────────────────
+
+export const imageEmbed = createReactBlockSpec(
+  {
+    type: 'imageEmbed' as const,
+    propSchema: {
+      artifactId: { default: '' },
+    },
+    content: 'none',
+  },
+  {
+    render: ({ block }) => {
+      const { artifactId } = block.props;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      const { data: artifact, isLoading } = useArtifact(artifactId || undefined);
+
+      return (
+        <div contentEditable={false} style={{ userSelect: 'none', margin: '4px 0' }}>
+          {!artifactId || isLoading ? (
+            <EmbedPlaceholder label={isLoading ? 'Loading image…' : 'No artifact ID'} />
+          ) : !artifact?.rendered_url && !artifact?.thumbnail_url ? (
+            <EmbedPlaceholder label="Image processing…" />
+          ) : (
+            <ArtImage artifact={artifact} />
+          )}
+        </div>
+      );
+    },
+  }
+);
+
+// ─── pdfEmbed ──────────────────────────────────────────────────────────────────
+
+export const pdfEmbed = createReactBlockSpec(
+  {
+    type: 'pdfEmbed' as const,
+    propSchema: {
+      artifactId: { default: '' },
+    },
+    content: 'none',
+  },
+  {
+    render: ({ block }) => {
+      const { artifactId } = block.props;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      const { data: artifact, isLoading } = useArtifact(artifactId || undefined);
+
+      return (
+        <div contentEditable={false} style={{ userSelect: 'none', margin: '4px 0' }}>
+          {!artifactId || isLoading ? (
+            <EmbedPlaceholder label={isLoading ? 'Loading PDF…' : 'No artifact ID'} />
+          ) : (
+            <ArtPDF artifact={artifact!} />
+          )}
+        </div>
+      );
+    },
+  }
+);
+
+// ─── htmlEmbed ─────────────────────────────────────────────────────────────────
+
+export const htmlEmbed = createReactBlockSpec(
+  {
+    type: 'htmlEmbed' as const,
+    propSchema: {
+      artifactId: { default: '' },
+    },
+    content: 'none',
+  },
+  {
+    render: ({ block }) => {
+      const { artifactId } = block.props;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      const { data: artifact, isLoading } = useArtifact(artifactId || undefined);
+
+      return (
+        <div contentEditable={false} style={{ userSelect: 'none', margin: '4px 0' }}>
+          {!artifactId || isLoading ? (
+            <EmbedPlaceholder label={isLoading ? 'Loading HTML…' : 'No artifact ID'} />
+          ) : (
+            <ArtHTML artifact={artifact!} />
+          )}
+        </div>
+      );
+    },
+  }
+);
+
 // ─── Schema ───────────────────────────────────────────────────────────────────
 // createReactBlockSpec returns a factory function; call it with () to get the spec.
 
 export const refBlockSchema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
-    sampleRef:     sampleRef(),
-    experimentRef: experimentRef(),
-    artifactRef:   artifactRef(),
+    sampleRef:       sampleRef(),
+    experimentRef:   experimentRef(),
+    artifactRef:     artifactRef(),
+    entityDashboard: entityDashboard(),
+    imageEmbed:      imageEmbed(),
+    pdfEmbed:        pdfEmbed(),
+    htmlEmbed:       htmlEmbed(),
   },
 });
 
