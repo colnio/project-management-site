@@ -59,9 +59,10 @@ func makeRESTCaller(baseURL, iaiToken string) restCallFn {
 }
 
 // allTools returns the full list of tool definitions (read + write).
-// The projectID is injected so write tools know their project scope.
-func allTools(projectID string) []toolDef {
+// The projectID and workspaceID are injected so tools know their scope.
+func allTools(projectID, workspaceID string) []toolDef {
 	return []toolDef{
+		listProjectsTool(workspaceID),
 		readSampleTool(),
 		getSampleLineageTool(),
 		listSamplesTool(),
@@ -78,9 +79,9 @@ func allTools(projectID string) []toolDef {
 
 // gatedTools returns the subset of tools the autonomy config allows,
 // filtered to schemas only (for passing to the model).
-func gatedTools(projectID string, mode string, allowedTools []string) []Tool {
+func gatedTools(projectID, workspaceID string, mode string, allowedTools []string) []Tool {
 	var out []Tool
-	for _, td := range allTools(projectID) {
+	for _, td := range allTools(projectID, workspaceID) {
 		if !td.IsWrite {
 			out = append(out, td.Tool)
 			continue
@@ -96,8 +97,8 @@ func gatedTools(projectID string, mode string, allowedTools []string) []Tool {
 
 // dispatchTool finds the tool handler by name and calls it.
 // Returns (result, isWrite, error).
-func dispatchTool(ctx context.Context, name string, argsJSON string, projectID string, rest restCallFn) (string, bool, error) {
-	for _, td := range allTools(projectID) {
+func dispatchTool(ctx context.Context, name string, argsJSON string, projectID, workspaceID string, rest restCallFn) (string, bool, error) {
+	for _, td := range allTools(projectID, workspaceID) {
 		if td.Tool.Function.Name == name {
 			result, err := td.Handler(ctx, json.RawMessage(argsJSON), rest)
 			return result, td.IsWrite, err
@@ -107,6 +108,30 @@ func dispatchTool(ctx context.Context, name string, argsJSON string, projectID s
 }
 
 // ─── Read tools ──────────────────────────────────────────────────────────────
+
+func listProjectsTool(workspaceID string) toolDef {
+	return toolDef{
+		IsWrite: false,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        "list_projects",
+				Description: "List all projects in the workspace. Use this when the user asks about multiple projects or projects other than the current one.",
+				Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			data, status, err := rest("GET", "/v1/workspaces/"+workspaceID+"/projects", nil)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("list_projects: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
 
 func readSampleTool() toolDef {
 	return toolDef{
@@ -447,8 +472,56 @@ func draftPageTool(injectProjectID string) toolDef {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", err
 			}
-			body := map[string]any{"title": p.Title, "content": p.Content}
-			data, status, err := rest("POST", "/v1/projects/"+injectProjectID+"/pages", body)
+
+			// Build BlockNote blocks: heading first, then one paragraph per line.
+			type textContent struct {
+				Type   string `json:"type"`
+				Text   string `json:"text"`
+				Styles struct{} `json:"styles"`
+			}
+			type headingProps struct {
+				Level int `json:"level"`
+			}
+			type headingBlock struct {
+				Type    string        `json:"type"`
+				Props   headingProps  `json:"props"`
+				Content []textContent `json:"content"`
+			}
+			type paragraphBlock struct {
+				Type    string        `json:"type"`
+				Content []textContent `json:"content"`
+			}
+
+			blocks := make([]any, 0)
+			// Heading block for the title.
+			blocks = append(blocks, headingBlock{
+				Type:  "heading",
+				Props: headingProps{Level: 1},
+				Content: []textContent{
+					{Type: "text", Text: p.Title},
+				},
+			})
+			// One paragraph block per non-empty line of content.
+			for _, line := range strings.Split(p.Content, "\n") {
+				blocks = append(blocks, paragraphBlock{
+					Type: "paragraph",
+					Content: []textContent{
+						{Type: "text", Text: line},
+					},
+				})
+			}
+
+			blocksJSON, err := json.Marshal(blocks)
+			if err != nil {
+				return "", fmt.Errorf("draft_page: marshal blocks: %w", err)
+			}
+
+			bodyMap := map[string]any{
+				"parent_type": "project",
+				"parent_id":   injectProjectID,
+				"blocks":      json.RawMessage(blocksJSON),
+			}
+			data, status, err := rest("POST", "/v1/projects/"+injectProjectID+"/pages", bodyMap)
 			if err != nil {
 				return "", err
 			}

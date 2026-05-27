@@ -53,6 +53,7 @@ export const pageKeys = {
   /** List of pages for a given parent (project/sample/experiment/iteration) */
   parentPages: (parentType: string, parentId: string) =>
     ['pages', 'parent', parentType, parentId] as const,
+  projectPages: (projectId: string) => ['projects', projectId, 'pages'] as const,
 };
 
 // ─── Raw fetch helpers that expose ETag ──────────────────────────────────────
@@ -121,6 +122,26 @@ function buildAuthHeaders(): Record<string, string> {
 }
 
 // ─── Query hooks ─────────────────────────────────────────────────────────────
+
+export interface PageListItem {
+  id: string;
+  parent_type: string;
+  parent_id: string;
+  title: string;
+  updated_at: string;
+  current_revision_id?: string;
+}
+
+export function useProjectPages(projectId: string | undefined) {
+  return useQuery({
+    queryKey: projectId ? pageKeys.projectPages(projectId) : ['projects', 'none', 'pages'],
+    queryFn: () =>
+      apiFetch<{ items: PageListItem[] | null }>(`/v1/projects/${projectId}/pages`).then(
+        r => r.items ?? []
+      ),
+    enabled: !!projectId,
+  });
+}
 
 export function usePage(pageId: string | undefined) {
   return useQuery({

@@ -558,6 +558,100 @@ func (s *Service) handleRestoreInternal(ctx context.Context, p *platform.Princip
 	return pg, &rev, nil
 }
 
+// ─── List pages ───────────────────────────────────────────────────────────────
+
+// PageListItem is a lightweight summary of a page, including a derived title
+// from the current revision's markdown_export.
+type PageListItem struct {
+	ID                uuid.UUID  `json:"id"`
+	ProjectID         uuid.UUID  `json:"project_id"`
+	ParentType        string     `json:"parent_type"`
+	ParentID          uuid.UUID  `json:"parent_id"`
+	CurrentRevisionID *uuid.UUID `json:"current_revision_id,omitempty"`
+	Title             string     `json:"title"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+// deriveTitle extracts a human-readable title from a markdown_export string.
+// It uses the first non-empty line, strips a leading '#' sequence and spaces,
+// trims surrounding whitespace, and falls back to "Untitled". Capped at 120 chars.
+func deriveTitle(md string) string {
+	for _, line := range strings.Split(md, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Strip leading '#' characters (heading markers).
+		line = strings.TrimLeft(line, "#")
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if len(line) > 120 {
+			line = line[:120]
+		}
+		return line
+	}
+	return "Untitled"
+}
+
+// listPagesByProject returns PageListItems for a project, optionally filtered
+// by parentType and parentID, ordered by updated_at DESC.
+func (s *Service) listPagesByProject(
+	ctx context.Context,
+	projectID uuid.UUID,
+	parentType string,
+	parentID *uuid.UUID,
+) ([]PageListItem, error) {
+	// Build query dynamically based on optional filters.
+	args := []any{projectID}
+	where := `WHERE p.project_id = $1`
+
+	if parentType != "" {
+		args = append(args, parentType)
+		where += fmt.Sprintf(` AND p.parent_type = $%d`, len(args))
+	}
+	if parentID != nil {
+		args = append(args, *parentID)
+		where += fmt.Sprintf(` AND p.parent_id = $%d`, len(args))
+	}
+
+	q := `SELECT p.id, p.project_id, p.parent_type, p.parent_id,
+	             p.current_revision_id, p.updated_at,
+	             COALESCE(r.markdown_export, '')
+	      FROM pages p
+	      LEFT JOIN page_revisions r ON r.id = p.current_revision_id
+	      ` + where + `
+	      ORDER BY p.updated_at DESC`
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("page: list pages: %w", err)
+	}
+	defer rows.Close()
+
+	var items []PageListItem
+	for rows.Next() {
+		var item PageListItem
+		var md string
+		if err := rows.Scan(
+			&item.ID, &item.ProjectID, &item.ParentType, &item.ParentID,
+			&item.CurrentRevisionID, &item.UpdatedAt, &md,
+		); err != nil {
+			return nil, fmt.Errorf("page: list pages scan: %w", err)
+		}
+		item.Title = deriveTitle(md)
+		items = append(items, item)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("page: list pages rows: %w", rows.Err())
+	}
+	if items == nil {
+		items = []PageListItem{}
+	}
+	return items, nil
+}
+
 // ─── Revision helpers ─────────────────────────────────────────────────────────
 
 // getRevision loads a single revision by id.

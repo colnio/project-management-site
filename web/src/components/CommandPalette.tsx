@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
-import type { Project, Workspace } from '@/api/types';
+import { useNavigate } from '@tanstack/react-router';
+import type { Project, Workspace, Sample, Experiment } from '@/api/types';
+import { useProjectSamples, useProjectExperiments } from '@/hooks/useQueries';
+import { useProjectPages, type PageListItem } from '@/hooks/usePageQueries';
 
 interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
   projects: Project[];
   workspaces: Workspace[];
+  activeProjectId?: string;
   onSelectProject: (projectId: string, workspaceId: string) => void;
   onSelectWorkspace: (workspaceId: string) => void;
 }
@@ -14,8 +18,8 @@ interface PaletteItem {
   id: string;
   label: string;
   sub?: string;
-  kind: 'project' | 'workspace';
-  data: Project | Workspace;
+  kind: 'project' | 'workspace' | 'sample' | 'experiment' | 'page';
+  data: Project | Workspace | Sample | Experiment | PageListItem;
 }
 
 function fuzzyMatch(query: string, text: string): boolean {
@@ -34,12 +38,14 @@ export function CommandPalette({
   onClose,
   projects,
   workspaces,
+  activeProjectId,
   onSelectProject,
   onSelectWorkspace,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (open) {
@@ -48,6 +54,13 @@ export function CommandPalette({
       setTimeout(() => inputRef.current?.focus(), 10);
     }
   }, [open]);
+
+  // Index the active project's samples, experiments, and pages
+  const { data: activeSamples = [] } = useProjectSamples(activeProjectId);
+  const { data: activeExperiments = [] } = useProjectExperiments(activeProjectId);
+  const { data: activePages = [] } = useProjectPages(activeProjectId);
+
+  const activeProject = projects.find(p => p.id === activeProjectId);
 
   const items: PaletteItem[] = [
     ...workspaces.map(w => ({
@@ -63,6 +76,27 @@ export function CommandPalette({
       sub: p.description || 'Project',
       kind: 'project' as const,
       data: p,
+    })),
+    ...activeSamples.map(s => ({
+      id: `smp-${s.id}`,
+      label: s.name || s.identifier || s.id.slice(0, 8),
+      sub: activeProject ? `Sample · ${activeProject.name}` : 'Sample',
+      kind: 'sample' as const,
+      data: s,
+    })),
+    ...activeExperiments.map(e => ({
+      id: `exp-${e.id}`,
+      label: e.code ?? e.result_summary?.slice(0, 40) ?? e.id.slice(0, 8),
+      sub: activeProject ? `Experiment · ${activeProject.name}` : 'Experiment',
+      kind: 'experiment' as const,
+      data: e,
+    })),
+    ...activePages.map(pg => ({
+      id: `pg-${pg.id}`,
+      label: pg.title || 'Untitled page',
+      sub: activeProject ? `Page · ${activeProject.name}` : 'Page',
+      kind: 'page' as const,
+      data: pg,
     })),
   ].filter(item => fuzzyMatch(query, item.label));
 
@@ -81,14 +115,43 @@ export function CommandPalette({
   };
 
   const handleSelect = (item: PaletteItem) => {
-    if (item.kind === 'project') {
-      const p = item.data as Project;
-      onSelectProject(p.id, p.workspace_id);
-    } else {
-      const w = item.data as Workspace;
-      onSelectWorkspace(w.id);
+    switch (item.kind) {
+      case 'project': {
+        const p = item.data as Project;
+        onSelectProject(p.id, p.workspace_id);
+        break;
+      }
+      case 'workspace': {
+        const w = item.data as Workspace;
+        onSelectWorkspace(w.id);
+        break;
+      }
+      case 'sample': {
+        const s = item.data as Sample;
+        void navigate({ to: '/samples/$sampleId', params: { sampleId: s.id } });
+        break;
+      }
+      case 'experiment': {
+        const exp = item.data as Experiment;
+        void navigate({ to: '/experiments/$experimentId', params: { experimentId: exp.id } });
+        break;
+      }
+      case 'page': {
+        const pg = item.data as PageListItem;
+        void navigate({ to: '/pages/$pageId', params: { pageId: pg.id } });
+        break;
+      }
     }
     onClose();
+  };
+
+  // Kind → badge colour config
+  const kindStyle: Record<PaletteItem['kind'], { bg: string; color: string; radius: number }> = {
+    workspace: { bg: 'var(--ink)', color: 'var(--paper)', radius: 7 },
+    project: { bg: 'var(--ember-tint)', color: 'var(--ember)', radius: 6 },
+    sample: { bg: 'var(--teal-tint, #e6f4f1)', color: 'var(--teal, #2a7a6a)', radius: 5 },
+    experiment: { bg: 'var(--violet-tint, #ede9f7)', color: 'var(--violet, #5b3fa8)', radius: 5 },
+    page: { bg: 'var(--paper-2)', color: 'var(--muted)', radius: 5 },
   };
 
   if (!open) return null;
@@ -142,7 +205,7 @@ export function CommandPalette({
             value={query}
             onChange={e => { setQuery(e.target.value); setSelected(0); }}
             onKeyDown={handleKeyDown}
-            placeholder="Jump to project or workspace…"
+            placeholder="Jump to project, sample, experiment, page…"
             style={{
               flex: 1,
               border: 0,
@@ -182,88 +245,91 @@ export function CommandPalette({
               No results for "{query}"
             </div>
           ) : (
-            items.map((item, i) => (
-              <button
-                key={item.id}
-                onClick={() => handleSelect(item)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  width: '100%',
-                  padding: '9px 16px',
-                  background: i === selected ? 'var(--paper-2)' : 'transparent',
-                  border: 0,
-                  cursor: 'default',
-                  textAlign: 'left',
-                }}
-                onMouseEnter={() => setSelected(i)}
-              >
-                <span
+            items.map((item, i) => {
+              const ks = kindStyle[item.kind];
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleSelect(item)}
                   style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: item.kind === 'workspace' ? 7 : 6,
-                    background: item.kind === 'workspace' ? 'var(--ink)' : 'var(--ember-tint)',
-                    color: item.kind === 'workspace' ? 'var(--paper)' : 'var(--ember)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    flexShrink: 0,
-                    border: item.kind === 'project' ? '1px solid var(--ember-soft)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    width: '100%',
+                    padding: '9px 16px',
+                    background: i === selected ? 'var(--paper-2)' : 'transparent',
+                    border: 0,
+                    cursor: 'default',
+                    textAlign: 'left',
                   }}
+                  onMouseEnter={() => setSelected(i)}
                 >
-                  {item.label[0]?.toUpperCase()}
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
                   <span
                     style={{
-                      display: 'block',
-                      fontSize: 13.5,
-                      fontWeight: 500,
-                      color: 'var(--ink)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      width: 28,
+                      height: 28,
+                      borderRadius: ks.radius,
+                      background: ks.bg,
+                      color: ks.color,
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                      border: item.kind === 'project' ? '1px solid var(--ember-soft)' : 'none',
                     }}
                   >
-                    {item.label}
+                    {item.label[0]?.toUpperCase()}
                   </span>
-                  {item.sub && (
+                  <span style={{ flex: 1, minWidth: 0 }}>
                     <span
                       style={{
                         display: 'block',
-                        fontFamily: 'var(--mono)',
-                        fontSize: 11,
-                        color: 'var(--muted)',
+                        fontSize: 13.5,
+                        fontWeight: 500,
+                        color: 'var(--ink)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        marginTop: 1,
                       }}
                     >
-                      {item.sub}
+                      {item.label}
                     </span>
-                  )}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--mono)',
-                    fontSize: 10,
-                    color: 'var(--muted-2)',
-                    background: 'var(--paper-2)',
-                    border: '1px solid var(--line)',
-                    padding: '1px 5px',
-                    borderRadius: 3,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  {item.kind}
-                </span>
-              </button>
-            ))
+                    {item.sub && (
+                      <span
+                        style={{
+                          display: 'block',
+                          fontFamily: 'var(--mono)',
+                          fontSize: 11,
+                          color: 'var(--muted)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          marginTop: 1,
+                        }}
+                      >
+                        {item.sub}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--mono)',
+                      fontSize: 10,
+                      color: 'var(--muted-2)',
+                      background: 'var(--paper-2)',
+                      border: '1px solid var(--line)',
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {item.kind}
+                  </span>
+                </button>
+              );
+            })
           )}
         </div>
 

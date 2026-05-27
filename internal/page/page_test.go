@@ -701,3 +701,111 @@ type presenceEntryExport struct {
 	Since         time.Time
 	LastHeartbeat time.Time
 }
+
+// ─── List pages tests ─────────────────────────────────────────────────────────
+
+func TestDeriveTitle_HeadingLine(t *testing.T) {
+	cases := []struct {
+		md   string
+		want string
+	}{
+		{"# My Page\nsome body", "My Page"},
+		{"## Section", "Section"},
+		{"### Deep", "Deep"},
+		{"plain text", "plain text"},
+		{"  \n\n# Spaced\n", "Spaced"},
+		{"", "Untitled"},
+		{"   ", "Untitled"},
+		{"# ", "Untitled"}, // heading with no text
+	}
+	for _, tc := range cases {
+		got := page.ExportDeriveTitle(tc.md)
+		if got != tc.want {
+			t.Errorf("deriveTitle(%q) = %q, want %q", tc.md, got, tc.want)
+		}
+	}
+}
+
+func TestListPagesByProject_BasicFiltering(t *testing.T) {
+	env := newTestEnv(t)
+	userID, projectID := setupProject(t, env)
+
+	// Create a page with parent_type="project".
+	blocksA := json.RawMessage(`[{"type":"p","text":"# Alpha Page"}]`)
+	pgA, _ := createPageHelper(t, env, projectID, userID, blocksA)
+	_ = pgA
+
+	// Create a second page with parent_type="iteration" using a different parent_id.
+	iterID := uuid.New()
+	_, _, _, err := page.ExportCreatePage(env.pageSvc, env.ctx, projectID, "iteration", iterID,
+		json.RawMessage(`[{"type":"p","text":"# Beta Iter"}]`), userID)
+	if err != nil {
+		t.Fatalf("create iteration page: %v", err)
+	}
+
+	// List all pages for the project — expect 2.
+	all, err := page.ExportListPagesByProject(env.pageSvc, env.ctx, projectID, "", nil)
+	if err != nil {
+		t.Fatalf("list all pages: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 pages, got %d", len(all))
+	}
+
+	// Filter by parent_type="project" — expect 1.
+	projPages, err := page.ExportListPagesByProject(env.pageSvc, env.ctx, projectID, "project", nil)
+	if err != nil {
+		t.Fatalf("list project pages: %v", err)
+	}
+	if len(projPages) != 1 {
+		t.Errorf("expected 1 project page, got %d", len(projPages))
+	}
+
+	// Filter by parent_type="iteration" — expect 1.
+	iterPages, err := page.ExportListPagesByProject(env.pageSvc, env.ctx, projectID, "iteration", nil)
+	if err != nil {
+		t.Fatalf("list iteration pages: %v", err)
+	}
+	if len(iterPages) != 1 {
+		t.Errorf("expected 1 iteration page, got %d", len(iterPages))
+	}
+
+	// Filter by parent_type and parent_id — should match exactly the iter page.
+	byParentID, err := page.ExportListPagesByProject(env.pageSvc, env.ctx, projectID, "iteration", &iterID)
+	if err != nil {
+		t.Fatalf("list by parent_id: %v", err)
+	}
+	if len(byParentID) != 1 {
+		t.Errorf("expected 1 page by parent_id, got %d", len(byParentID))
+	}
+
+	// Unknown project — expect 0.
+	none, err := page.ExportListPagesByProject(env.pageSvc, env.ctx, uuid.New(), "", nil)
+	if err != nil {
+		t.Fatalf("list unknown project: %v", err)
+	}
+	if len(none) != 0 {
+		t.Errorf("expected 0 pages for unknown project, got %d", len(none))
+	}
+}
+
+func TestListPagesByProject_TitleDerived(t *testing.T) {
+	env := newTestEnv(t)
+	userID, projectID := setupProject(t, env)
+
+	// The markdown_export is derived from block text; create a page with a heading block.
+	blocks := json.RawMessage(`[{"type":"heading","text":"# My Heading"}]`)
+	createPageHelper(t, env, projectID, userID, blocks)
+
+	items, err := page.ExportListPagesByProject(env.pageSvc, env.ctx, projectID, "", nil)
+	if err != nil {
+		t.Fatalf("list pages: %v", err)
+	}
+	if len(items) == 0 {
+		t.Fatal("expected at least one page")
+	}
+	// Title must be non-empty and not "Untitled" (block text is non-empty).
+	if items[0].Title == "" {
+		t.Error("expected non-empty title")
+	}
+}

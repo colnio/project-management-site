@@ -140,7 +140,8 @@ func (s *Service) ApproveToolCall(ctx context.Context, p *platform.Principal, co
 	if err != nil || conv == nil {
 		return nil, platform.NotFound("ai.conversation_not_found", "conversation not found")
 	}
-	if _, _, err := s.projects.Authorize(ctx, p, conv.ProjectID, org.RoleEditor); err != nil {
+	proj, _, err := s.projects.Authorize(ctx, p, conv.ProjectID, org.RoleEditor)
+	if err != nil {
 		return nil, err
 	}
 
@@ -162,7 +163,7 @@ func (s *Service) ApproveToolCall(ctx context.Context, p *platform.Principal, co
 	restCall := makeRESTCaller(s.restBase, iaiToken)
 
 	inputJSON, _ := json.Marshal(tc.InputJSON)
-	result, _, execErr := dispatchTool(ctx, tc.Tool, string(inputJSON), convID.String(), restCall)
+	result, _, execErr := dispatchTool(ctx, tc.Tool, string(inputJSON), proj.ID.String(), proj.WorkspaceID.String(), restCall)
 
 	status := "executed"
 	if execErr != nil {

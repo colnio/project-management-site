@@ -374,9 +374,9 @@ function Sidebar({
       </div>
       <div style={{ padding: '0 6px', display: 'flex', flexDirection: 'column', gap: 1 }}>
         {[
-          { key: 'battery-safety-risk', label: 'Battery Safety Risk' },
-          { key: 'experimental-risk', label: 'Experimental Risk' },
-          { key: 'project-risk', label: 'Project Risk' },
+          { key: 'battery_safety_risk_v1', label: 'Battery Safety Risk' },
+          { key: 'experimental_risk_v1', label: 'Experimental Risk' },
+          { key: 'project_risk_v1', label: 'Project Risk' },
         ].map(tpl => (
           <Link
             key={tpl.key}
@@ -603,6 +603,7 @@ export function AppShell({ children, activeProjectId, topBarCrumbs = [], topBarA
         onClose={() => setPaletteOpen(false)}
         projects={projects}
         workspaces={workspaces}
+        activeProjectId={activeProjectId}
         onSelectProject={handleSelectProject}
         onSelectWorkspace={handleSelectWorkspace}
       />

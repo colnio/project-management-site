@@ -5,7 +5,7 @@
  * lineage graph from /v1/samples/{id}/lineage.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useParams } from '@tanstack/react-router';
+import { useParams, Link } from '@tanstack/react-router';
 import ReactFlow, {
   addEdge,
   Background,
@@ -565,15 +565,23 @@ function LinkedExperimentsSection({ projectId }: { projectId: string }) {
         }}
       >
         {experiments.slice(0, 8).map((exp, i, arr) => (
-          <div
+          <Link
             key={exp.id}
+            to="/experiments/$experimentId"
+            params={{ experimentId: exp.id }}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 10,
               padding: '9px 14px',
               borderBottom: i < arr.length - 1 ? '1px solid var(--line)' : undefined,
+              textDecoration: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              transition: 'background 0.1s',
             }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'var(--paper-2)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = ''; }}
           >
             <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)', flexShrink: 0 }}>
               {(exp.code as string | undefined) ?? exp.id.slice(0, 6)}
@@ -583,7 +591,7 @@ function LinkedExperimentsSection({ projectId }: { projectId: string }) {
               {(exp.result_summary as string | undefined) ?? '—'}
             </span>
             <StatusPill status={exp.status as string} />
-          </div>
+          </Link>
         ))}
         {experiments.length > 8 && (
           <div style={{ padding: '8px 14px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>

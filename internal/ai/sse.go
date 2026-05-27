@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -127,7 +128,28 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build the full message history for the model.
-	history := make([]ChatMessage, 0, len(existingMsgs)+1)
+	// Compose a system message with project context (not persisted to DB).
+	systemMsg := ChatMessage{
+		Role: "system",
+		Content: fmt.Sprintf(
+			"You are an AI assistant embedded in a research project management tool.\n"+
+				"Current context:\n"+
+				"  project_id: %s\n"+
+				"  project_name: %s\n"+
+				"  workspace_id: %s\n"+
+				"  today: %s\n\n"+
+				"Instructions:\n"+
+				"- When a tool requires a project_id and the user has not specified one, default to the current project_id above.\n"+
+				"- Use the list_projects tool when the user asks about multiple projects or projects outside the current one.\n"+
+				"- Be concise and factual in your responses.",
+			proj.ID.String(),
+			proj.Name,
+			proj.WorkspaceID.String(),
+			time.Now().Format("2006-01-02"),
+		),
+	}
+	history := make([]ChatMessage, 0, len(existingMsgs)+2)
+	history = append(history, systemMsg)
 	for _, m := range existingMsgs {
 		history = append(history, ChatMessage{
 			Role:       m.Role,
@@ -161,7 +183,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 
 	// Tool-use loop.
 	restCall := makeRESTCaller(s.restBase, iaiToken)
-	tools := gatedTools(proj.ID.String(), mode, allowedTools)
+	tools := gatedTools(proj.ID.String(), proj.WorkspaceID.String(), mode, allowedTools)
 
 	var finalAssistantContent string
 	seq := userSeq + 1
@@ -243,7 +265,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		// Execute tool calls.
 		for _, tc := range toolCalls {
 			isWrite := false
-			for _, td := range allTools(proj.ID.String()) {
+			for _, td := range allTools(proj.ID.String(), proj.WorkspaceID.String()) {
 				if td.Tool.Function.Name == tc.Function.Name {
 					isWrite = td.IsWrite
 					break
@@ -291,7 +313,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 					if rErr != nil {
 						s.log.Warn("ai: record executed tool call", "err", rErr)
 					}
-					resultJSON, _, toolErr = dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, proj.ID.String(), restCall)
+					resultJSON, _, toolErr = dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, proj.ID.String(), proj.WorkspaceID.String(), restCall)
 					if toolErr != nil {
 						resultJSON = fmt.Sprintf(`{"error":%q}`, toolErr.Error())
 					}
@@ -307,7 +329,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 				if rErr != nil {
 					s.log.Warn("ai: record read tool call", "err", rErr)
 				}
-				resultJSON, _, toolErr = dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, proj.ID.String(), restCall)
+				resultJSON, _, toolErr = dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, proj.ID.String(), proj.WorkspaceID.String(), restCall)
 				if toolErr != nil {
 					resultJSON = fmt.Sprintf(`{"error":%q}`, toolErr.Error())
 				}

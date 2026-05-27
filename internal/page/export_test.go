@@ -193,6 +193,22 @@ func ExportDiff(s *Service, ctx context.Context, revID, otherID uuid.UUID) ([]di
 	return lineDiff(rev.MarkdownExport, other.MarkdownExport), nil
 }
 
+// ExportListPagesByProject calls the internal listPagesByProject store function.
+func ExportListPagesByProject(
+	s *Service,
+	ctx context.Context,
+	projectID uuid.UUID,
+	parentType string,
+	parentID *uuid.UUID,
+) ([]PageListItem, error) {
+	return s.listPagesByProject(ctx, projectID, parentType, parentID)
+}
+
+// ExportDeriveTitle exposes the title derivation helper for unit tests.
+func ExportDeriveTitle(md string) string {
+	return deriveTitle(md)
+}
+
 // ExportPresenceHeartbeat upserts a presence row.
 func ExportPresenceHeartbeat(s *Service, ctx context.Context, pageID, userID uuid.UUID, clientID string) error {
 	_, err := s.pool.Exec(ctx,

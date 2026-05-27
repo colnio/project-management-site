@@ -28,6 +28,15 @@ import (
 func Register(api huma.API, svc *Service) {
 	// Pages under a project.
 	huma.Register(api, huma.Operation{
+		OperationID: "page-list",
+		Method:      http.MethodGet,
+		Path:        "/v1/projects/{id}/pages",
+		Summary:     "List pages for a project",
+		Description: "Returns a list of page summaries (including derived title) for a project. Optionally filter by `parent_type` and `parent_id`. Results are ordered by updated_at descending. Requires viewer role on the project.",
+		Tags:        []string{"pages"},
+	}, svc.handleListPages)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "page-create",
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/pages",
@@ -130,6 +139,54 @@ func Register(api huma.API, svc *Service) {
 		Description: "Returns users who have sent a heartbeat for this page in the last 30 seconds, useful for showing concurrent editors. Requires viewer role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handlePresenceList)
+}
+
+// ─── List pages ───────────────────────────────────────────────────────────────
+
+type listPagesInput struct {
+	ID         string `path:"id"`
+	ParentType string `query:"parent_type" enum:"project,iteration,sample,experiment"`
+	ParentID   string `query:"parent_id"`
+}
+
+type listPagesOutput struct {
+	Body struct {
+		Items []PageListItem `json:"items"`
+	}
+}
+
+func (s *Service) handleListPages(ctx context.Context, in *listPagesInput) (*listPagesOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+
+	projectID, err := uuid.Parse(in.ID)
+	if err != nil {
+		return nil, platform.BadRequest("project.invalid_id", "invalid project ID")
+	}
+
+	if _, _, err := s.projects.Authorize(ctx, p, projectID, org.RoleViewer); err != nil {
+		return nil, err
+	}
+
+	var parentID *uuid.UUID
+	if in.ParentID != "" {
+		parsed, err := uuid.Parse(in.ParentID)
+		if err != nil {
+			return nil, platform.BadRequest("page.invalid_parent_id", "invalid parent_id")
+		}
+		parentID = &parsed
+	}
+
+	items, err := s.listPagesByProject(ctx, projectID, in.ParentType, parentID)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &listPagesOutput{}
+	out.Body.Items = items
+	return out, nil
 }
 
 // ─── Create page ──────────────────────────────────────────────────────────────
