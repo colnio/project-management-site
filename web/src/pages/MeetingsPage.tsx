@@ -16,7 +16,7 @@ const KIND_COLORS: Record<string, string> = {
   sync: 'var(--pill-planned-fg)',
   review: 'var(--ember)',
   planning: 'var(--good)',
-  retrospective: 'var(--info)',
+  retro: 'var(--info)',
   kickoff: '#8c3f1f',
 };
 
@@ -142,7 +142,7 @@ function NewMeetingModal({ workspaceId, onClose }: NewMeetingModalProps) {
               Kind
             </div>
             <select className="field-input" value={kind} onChange={e => setKind(e.target.value)}>
-              {['sync', 'review', 'planning', 'retrospective', 'kickoff'].map(k => (
+              {['sync', 'review', 'planning', 'retro', 'kickoff'].map(k => (
                 <option key={k} value={k}>{k}</option>
               ))}
             </select>

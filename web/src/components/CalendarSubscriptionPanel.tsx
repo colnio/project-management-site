@@ -67,7 +67,7 @@ export function CalendarSubscriptionPanel() {
   if (isError) return <ErrorState message="Failed to load calendar subscription." />;
   if (!sub) return <EmptyState message="No subscription found." />;
 
-  const icsAbsUrl = `http://localhost:8080${sub.ics_url}`;
+  const icsAbsUrl = `${window.location.origin}${sub.ics_url}`;
 
   const handleRotate = async () => {
     await rotate.mutateAsync();
@@ -121,14 +121,14 @@ export function CalendarSubscriptionPanel() {
       <div>
         <FieldLabel>Scope</FieldLabel>
         <div style={{ display: 'flex', gap: 8 }}>
-          {['all', 'selected'].map(scope => (
+          {(['all_visible_projects', 'per_project'] as const).map(scope => (
             <button
               key={scope}
               className={`status-opt${sub.scope === scope ? ' sel' : ''}`}
               onClick={() => void patchSub.mutate({ scope })}
               disabled={patchSub.isPending}
             >
-              {scope === 'all' ? 'All visible projects' : 'Selected projects'}
+              {scope === 'all_visible_projects' ? 'All visible projects' : 'Selected projects'}
             </button>
           ))}
         </div>

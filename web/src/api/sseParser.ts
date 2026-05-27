@@ -29,7 +29,7 @@ export type SSEToolCallEvent = {
 };
 export type SSEToolResultEvent = {
   type: 'tool_result';
-  id?: string;
+  id: string;
   name?: string;
   result?: unknown;
 };
@@ -94,7 +94,7 @@ function buildSSEEvent(
     case 'tool_call':
       return {
         type: 'tool_call',
-        id: String(payload.id ?? ''),
+        id: String(payload.tool_call_id ?? payload.id ?? ''),
         name: String(payload.name ?? ''),
         arguments: (payload.arguments ?? {}) as Record<string, unknown>,
         status: payload.status as string | undefined,
@@ -102,7 +102,7 @@ function buildSSEEvent(
     case 'tool_result':
       return {
         type: 'tool_result',
-        id: payload.id as string | undefined,
+        id: String(payload.tool_call_id ?? payload.id ?? ''),
         name: payload.name as string | undefined,
         result: payload.result,
       };

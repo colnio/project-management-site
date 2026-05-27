@@ -42,7 +42,7 @@ describe('parseSSEChunk', () => {
 
   it('parses a tool_call event', () => {
     const payload = {
-      id: 'tc_001',
+      tool_call_id: 'tc_001',
       name: 'search_project_content',
       arguments: { q: 'cycling failures' },
       status: 'proposed',
@@ -59,12 +59,13 @@ describe('parseSSEChunk', () => {
   });
 
   it('parses a tool_result event', () => {
-    const payload = { id: 'tc_001', name: 'search_project_content', result: ['match1', 'match2'] };
+    const payload = { tool_call_id: 'tc_001', name: 'search_project_content', result: ['match1', 'match2'] };
     const text = `event: tool_result\ndata: ${JSON.stringify(payload)}\n\n`;
     const events = parseSSEChunk(text);
     expect(events).toHaveLength(1);
     const ev = events[0] as Extract<SSEEvent, { type: 'tool_result' }>;
     expect(ev.type).toBe('tool_result');
+    expect(ev.id).toBe('tc_001');
     expect(ev.result).toEqual(['match1', 'match2']);
   });
 
@@ -118,7 +119,7 @@ describe('parseSSEChunk', () => {
   it('parses mixed event types in one chunk', () => {
     const text =
       'event: token\ndata: {"delta":"Starting "}\n\n' +
-      'event: tool_call\ndata: {"id":"tc_1","name":"search_project_content","arguments":{}}\n\n' +
+      'event: tool_call\ndata: {"tool_call_id":"tc_1","name":"search_project_content","arguments":{}}\n\n' +
       'event: token\ndata: {"delta":"result"}\n\n' +
       'event: warn\ndata: {"message":"rate limit"}\n\n' +
       'event: done\ndata: {"conversation_id":"conv_1"}\n\n';

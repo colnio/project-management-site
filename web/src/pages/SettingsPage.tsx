@@ -13,7 +13,7 @@ import {
   useRevokeToken,
 } from '@/hooks/useArtifactQueries';
 import type { PATInfo, CreateTokenOutput } from '@/hooks/useArtifactQueries';
-import { useWorkspaces } from '@/hooks/useQueries';
+import { useCurrentWorkspace } from '@/hooks/useQueries';
 import { useAuth } from '@/hooks/useAuth';
 import { WorkspaceAutonomySection } from '@/components/AutonomyConfig';
 import { CalendarSubscriptionPanel } from '@/components/CalendarSubscriptionPanel';
@@ -465,13 +465,13 @@ function SecuritySection() {
 // ─── Workspace Autonomy wrapper ───────────────────────────────────────────────
 
 function WorkspaceAutonomyWrapper() {
-  const { data: workspaces = [], isLoading } = useWorkspaces();
-  const ws = workspaces[0];
+  const { workspaceId, workspaces } = useCurrentWorkspace();
+  const isLoading = workspaces.length === 0;
 
   if (isLoading) return <LoadingState message="Loading workspace…" />;
-  if (!ws) return <ErrorState message="No workspace found." />;
+  if (!workspaceId) return <ErrorState message="No workspace found." />;
 
-  return <WorkspaceAutonomySection workspaceId={ws.id} />;
+  return <WorkspaceAutonomySection workspaceId={workspaceId} />;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────

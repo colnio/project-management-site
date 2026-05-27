@@ -67,7 +67,7 @@ type createMeetingInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		Title       string          `json:"title" required:"true" minLength:"1"`
-		Kind        string          `json:"kind,omitempty" enum:"sync,review,planning,retro,other"`
+		Kind        string          `json:"kind,omitempty" enum:"sync,review,planning,retro,kickoff,other"`
 		ProjectID   string          `json:"project_id,omitempty"`
 		Chair       string          `json:"chair,omitempty"`
 		StartAt     time.Time       `json:"start_at" required:"true"`

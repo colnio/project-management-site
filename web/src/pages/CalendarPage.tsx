@@ -11,6 +11,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -30,7 +31,8 @@ import {
   useDeleteEvent,
   useAllProjectsIterations,
 } from '@/hooks/useEventQueries';
-import { useWorkspaces, useProjects } from '@/hooks/useQueries';
+import { api } from '@/api/client';
+import { useWorkspaces, keys as queryKeys } from '@/hooks/useQueries';
 import {
   projectColor,
   eventKindColor,
@@ -424,20 +426,25 @@ const labelStyle: React.CSSProperties = {
 
 function useAllProjects() {
   const { data: workspaces = [] } = useWorkspaces();
-  const ws0Id = workspaces[0]?.id;
-  const { data: projects0 = [] } = useProjects(ws0Id);
-  const ws1Id = workspaces[1]?.id;
-  const { data: projects1 = [] } = useProjects(ws1Id);
-  const ws2Id = workspaces[2]?.id;
-  const { data: projects2 = [] } = useProjects(ws2Id);
+
+  // useQueries handles any number of workspaces without violating rules-of-hooks.
+  const projectResults = useQueries({
+    queries: workspaces.map(ws => ({
+      queryKey: queryKeys.projects(ws.id),
+      queryFn: () =>
+        api.get<Project[] | null>(`/v1/workspaces/${ws.id}/projects`).then(r => r ?? []),
+      enabled: !!ws.id,
+    })),
+  });
 
   const projectsByWorkspace = useMemo(() => {
     const map = new Map<string, Project[]>();
-    if (ws0Id) map.set(ws0Id, projects0);
-    if (ws1Id) map.set(ws1Id, projects1);
-    if (ws2Id) map.set(ws2Id, projects2);
+    workspaces.forEach((ws, i) => {
+      const data = projectResults[i]?.data;
+      if (data) map.set(ws.id, data);
+    });
     return map;
-  }, [ws0Id, projects0, ws1Id, projects1, ws2Id, projects2]);
+  }, [workspaces, projectResults]);
 
   const allProjects = useMemo(() => {
     const seen = new Set<string>();
@@ -822,7 +829,7 @@ export function CalendarPage() {
   const isLoading = scopeProjectId === 'all' ? unifiedLoading : singleLoading;
 
   const selectedProjectForCreate =
-    scopeProjectId !== 'all' ? scopeProjectId : allProjects[0]?.id;
+    scopeProjectId !== 'all' ? scopeProjectId : undefined;
 
   return (
     <AppShell

@@ -8,7 +8,6 @@ import { Avatar } from '@/components/Avatar';
 import { useWorkspaceMembers, useCurrentWorkspace } from '@/hooks/useQueries';
 import { useAIUsage, useWorkflows } from '@/hooks/useAIQueries';
 import { useAuditLog } from '@/hooks/useWorkspaceQueries';
-import { useWorkspaces } from '@/hooks/useQueries';
 import type { MemberView } from '@/hooks/useWorkspaceQueries';
 import type { AuditEntry } from '@/hooks/useWorkspaceQueries';
 
@@ -31,9 +30,10 @@ function SectionCard({ title, children }: { title: string; children: React.React
 
 // ─── Workspace info ───────────────────────────────────────────────────────────
 
-function WorkspaceInfoSection() {
-  const { data: workspaces = [], isLoading } = useWorkspaces();
-  const ws = workspaces[0];
+function WorkspaceInfoSection({ workspaceId }: { workspaceId: string | undefined }) {
+  const { workspaces } = useCurrentWorkspace();
+  const isLoading = workspaces.length === 0;
+  const ws = workspaces.find(w => w.id === workspaceId) ?? workspaces[0];
 
   if (isLoading) return <LoadingState message="Loading workspace…" />;
   if (!ws) return <ErrorState message="No workspace found." />;
@@ -212,7 +212,7 @@ export function AdminPage() {
         </h1>
 
         <SectionCard title="Workspace Settings">
-          <WorkspaceInfoSection />
+          <WorkspaceInfoSection workspaceId={workspaceId} />
         </SectionCard>
 
         {workspaceId && (

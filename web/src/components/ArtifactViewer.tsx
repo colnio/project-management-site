@@ -174,7 +174,7 @@ function NotebookViewer({ artifact }: { artifact: Artifact }) {
   return (
     <iframe
       src={artifact.rendered_url}
-      sandbox="allow-scripts allow-same-origin"
+      sandbox="allow-scripts"
       style={{ width: '100%', height: '100%', border: 'none' }}
       title={artifact.filename}
     />
