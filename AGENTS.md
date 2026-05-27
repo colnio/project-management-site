@@ -25,7 +25,12 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
    correct `read:<domain>` or `write:<domain>` scope. The full scope taxonomy is
    defined in `internal/platform/scopes.go`. A token with a non-empty scope list
    is fully restricted; empty/nil is legacy-unrestricted. Do not add a new handler
-   without a matching `RequireScope` call.
+   without a matching `RequireScope` call. Admin endpoints use `read:admin`/`write:admin`.
+   **Auth/roles:** email/password only (OIDC removed). `users.global_role` ∈
+   {admin,pi,member} replaces `is_system_admin` — use `Principal.IsPrivileged()`
+   (admin∥pi), `IsAdmin()`, `IsPI()` for global checks. Self-registration is
+   domain-allowlisted and starts `status='pending'`; the approval gate lives at
+   token issuance (`handleLogin`/`rotateRefresh`), not in middleware.
 5. **AI calls the public API as the user.** Track G is built (`internal/ai`). The
    orchestrator never reaches into other modules' tables: it mints a short-lived
    internal token (`iai_`) and calls the public REST API at `127.0.0.1:<port>/v1`,
@@ -68,8 +73,9 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
   sample 00060, experiment 00070–71 (+ EX-N codes 00121), page 00080,
   artifact 00090, calendar 00100, AI 00110–115, risk 00120, meetings 00122,
   inbox indexes 00123, meetings kickoff 00124, pages.slot 00125,
-  ai_conversations.skill 00126, approval_requests 00127.
-  Pick the next free range (≥00128) for new modules.
+  ai_conversations.skill 00126, approval_requests 00127,
+  user accounts (global_role/status/profile) 00128.
+  Pick the next free range (≥00129) for new modules.
   Embeddable assets follow the `//go:embed` pattern: `workflows/` (workflow JSON)
   and `skills/` (skill markdown via `skills.LoadSkill`).
   The `page` module gained a new `GET /v1/projects/{id}/pages` endpoint (no new

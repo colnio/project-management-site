@@ -19,8 +19,8 @@ processing (River) and the AI orchestrator (`internal/ai`) are both in-process.
 ```
 
 All external dependencies are reached through endpoint overrides in
-`internal/config`, so the same code runs locally (MinIO/Mailpit/mock-OIDC) and in
-production (S3/SES/Entra).
+`internal/config`, so the same code runs locally (MinIO/Mailpit) and in
+production (S3/SES).
 
 ## Request lifecycle & middleware (`internal/platform`)
 
@@ -50,14 +50,23 @@ keeps one HTTP code path for all three.
 ## Identity & permissions
 
 - **auth** owns users, Argon2id local credentials, refresh sessions, PATs, and
-  internal-AI tokens. Access tokens are HS256 JWTs; refresh tokens are opaque,
-  hashed, and delivered as an httpOnly cookie. OIDC (mock locally / Entra in
-  prod) provisions users from allow-listed email domains. Invite acceptance
-  provisions a local-password user.
-  - **OIDC CSRF protection.** Login initiation sets an `HttpOnly; Secure;
-    SameSite=Lax` `oidc_state` cookie. The callback verifies the `state` query
-    parameter equals the cookie value before code exchange, then clears the
-    cookie (`internal/auth/http.go`).
+  internal-AI tokens. Access tokens are HS256 JWTs (carrying a `role` claim);
+  refresh tokens are opaque, hashed, httpOnly cookies. Auth is **email/password
+  only** (OIDC/Entra was removed). Users **self-register** via
+  `POST /v1/auth/register` against an email-domain allowlist (`ALLOWED_EMAIL_DOMAINS`,
+  default `nus.edu.sg,u.nus.edu`); new accounts are `status='pending'` and **cannot
+  obtain a token** until approved. The **approval gate** is enforced at token
+  issuance — `handleLogin` and `rotateRefresh` reject non-`approved` users with a
+  typed 403 (`auth.pending_approval` / `auth.suspended`). On first login an
+  approved user still gets a token but the SPA forces `/profile/setup`
+  (`PATCH /v1/me/profile`) before app access.
+- **Global roles.** `users.global_role` ∈ {`admin`,`pi`,`member`} replaces the old
+  `is_system_admin` bool. `Principal.IsPrivileged()` (= admin∥pi) is the override
+  used across modules (audit access, workspace/meeting/AI membership bypass) and
+  gates workspace creation and the Risk-Assessment PI-review flag. The **admin**
+  module (`/v1/admin/users`, scopes `read:admin`/`write:admin`, privileged-only)
+  lists users and lets admins/PIs approve/suspend, change global role, and reject
+  (delete) pending registrations, with self-lockout guards.
 - **org** owns workspaces, memberships, project collaborations, admin overrides,
   and invites. `ResolveAccess(user, workspace, projectVisibility, project)`
   returns the effective role = **max** of (admin override → viewer, workspace
@@ -73,7 +82,7 @@ keeps one HTTP code path for all three.
   `read:risks`, `write:risks`, `read:artifacts`, `write:artifacts`, `read:pages`,
   `write:pages`, `read:meetings`, `write:meetings`, `read:calendar`,
   `write:calendar`, `read:ai`, `write:ai`, `read:inbox`, `read:approvals`,
-  `write:approvals`, `read:audit`,
+  `write:approvals`, `read:audit`, `read:admin`, `write:admin`,
   `admin:org`. The helper `platform.RequireScope(p, scope)` is called immediately
   after `platform.PrincipalFrom` in every authenticated huma handler. Enforcement
   rule: a token whose scope list is **non-empty** is fully restricted to those

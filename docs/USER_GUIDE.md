@@ -12,17 +12,28 @@ available today; sections marked _(coming soon)_ are planned but not yet built.
    - **Email:** `dev@graphene-lab.org`
    - **Password:** `devpassword`
 
-University users will sign in via Microsoft SSO and external collaborators via an
-emailed invite link; locally, SSO is backed by a mock provider and invite emails
-land in **Mailpit** at <http://localhost:8025>.
+**New accounts** self-register from the login page's **Create an account** link.
+Registration requires an allowed email domain (`@nus.edu.sg` or `@u.nus.edu` by
+default, configurable via `ALLOWED_EMAIL_DOMAINS`) and a password. A new account
+is **pending** — it cannot log in until an **admin or PI approves** it (Admin →
+Users). On first successful login the user must complete a short **profile**
+(first/last name, title, bio) before reaching the app; it stays editable in
+Settings. Accounts can also be **suspended** by an admin/PI. (Invite emails land in
+**Mailpit** at <http://localhost:8025> locally.)
+
+**Global roles:** `member` (default), `pi`, and `admin`. **Admins and PIs** (the
+"privileged" tier) approve/suspend/reject users, change global roles, manage
+workspace membership, and **create workspaces**. The PI role specifically governs
+Risk-Assessment PI sign-off.
 
 ## Workspaces and projects
 
-- A **workspace** is your lab or collaboration group. Create one from the
-  workspace switcher in the sidebar; you become its owner.
+- A **workspace** is your lab or collaboration group. **Only admins/PIs can create
+  workspaces** (the "+ New workspace" button is hidden for regular members); the
+  creator becomes its owner.
 - A **project** lives inside a workspace and can be **workspace-visible** (any
-  member can see it) or **private** (only invited collaborators). Create projects
-  from the workspace view.
+  member can see it) or **private** (only invited collaborators). **Any workspace
+  member can create projects** from the workspace view.
 - **Roles**: workspace owner/admin/member; per-project owner/editor/viewer. Your
   effective permission on a project is the highest of your workspace role, any
   explicit project collaboration, and admin override. Editors and owners can

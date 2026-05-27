@@ -1,6 +1,8 @@
 # auth — Identity & Auth module (A1)
 
-Local-password login, OIDC SSO, JWT access tokens, refresh sessions, personal access tokens (PATs), and internal AI tokens.
+Local email/password auth with domain-allowlisted self-registration and an
+admin/PI approval gate, JWT access tokens (with a `role` claim), refresh sessions,
+personal access tokens (PATs), and internal AI tokens. (OIDC/Entra was removed.)
 
 ## Public Go API
 
@@ -16,7 +18,9 @@ func NewService(
 ) (*Service, error)
 ```
 
-Attempts OIDC provider discovery at `cfg.OIDCIssuer`; logs a warning and continues with `oidc == nil` if unreachable (local-password + token paths still work).
+Constructs synchronously (no network I/O). Registration is gated by
+`cfg.AllowedEmailDomains`; new users are created `status='pending'` and cannot
+obtain a token until an admin/PI approves them.
 
 ### HTTP registration
 
@@ -81,15 +85,15 @@ TTL is hard-coded to 15 minutes. Revokes all tokens for the given conversation/r
 func (s *Service) SeedDevUser(ctx context.Context) error
 ```
 
-Upserts `dev@graphene-lab.org` / `Dev User` / `is_system_admin=true` / password `devpassword`. Idempotent.
+Upserts `dev@graphene-lab.org` / `Dev User` / `global_role='admin'` / `status='approved'` / `profile_completed=true` / password `devpassword`. Idempotent.
 
 ## HTTP Endpoints
 
 | Method | Path | Auth required | Description |
 |--------|------|:---:|-------------|
-| GET | `/v1/auth/oidc/login` | No | Returns `{authorization_url, state}`. 503 if OIDC unavailable. |
-| GET | `/v1/auth/oidc/callback` | No | Exchanges OIDC code, upserts user, sets refresh cookie, redirects to `WebOrigin`. |
-| POST | `/v1/auth/login` | No | `{email, password}` → `{access_token, user}` + httpOnly refresh cookie. |
+| POST | `/v1/auth/register` | No | `{email, password, password_confirm}` → 201 `{status:"pending"}`. Domain-allowlisted; no token. |
+| POST | `/v1/auth/login` | No | `{email, password}` → `{access_token, user}` + httpOnly refresh cookie. 403 if pending/suspended. |
+| PATCH | `/v1/me/profile` | Bearer | `{first_name, last_name, title, description, display_name?}` → updated user; sets `profile_completed`. |
 | POST | `/v1/auth/refresh` | Cookie | Rotates refresh token, returns new `{access_token}` + new cookie. |
 | POST | `/v1/auth/logout` | Cookie | Revokes refresh session, clears cookie. |
 | GET | `/v1/me` | Principal on ctx | Returns current user JSON. |
