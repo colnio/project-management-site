@@ -617,3 +617,76 @@ func TestCollaborator_AddListRoleRemove(t *testing.T) {
 		t.Errorf("A should no longer be a collaborator, got role=%s", role2)
 	}
 }
+
+// ─── handleCreateWorkspace privilege gate ─────────────────────────────────────
+
+func TestHandleCreateWorkspace_MemberForbidden(t *testing.T) {
+	svc, _, fu := newTestSvc(t)
+	ctx := context.Background()
+
+	member := fu.seed(t, "member-ws@example.com", "Member")
+
+	// A plain member (not admin/PI) should be rejected.
+	p := &platform.Principal{
+		UserID:     member.ID,
+		Email:      member.Email,
+		GlobalRole: "member",
+	}
+	ctxWithP := platform.WithPrincipal(ctx, p)
+
+	_, err := org.ExportHandleCreateWorkspace(t, svc, ctxWithP, "Forbidden WS")
+	if err == nil {
+		t.Fatal("expected forbidden error for member creating workspace")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if em.GetStatus() != 403 {
+		t.Errorf("expected HTTP 403, got %d", em.GetStatus())
+	}
+}
+
+func TestHandleCreateWorkspace_AdminSucceeds(t *testing.T) {
+	svc, _, fu := newTestSvc(t)
+	ctx := context.Background()
+
+	adminUser := fu.seed(t, "admin-ws@example.com", "Admin WS")
+
+	p := &platform.Principal{
+		UserID:     adminUser.ID,
+		Email:      adminUser.Email,
+		GlobalRole: "admin",
+	}
+	ctxWithP := platform.WithPrincipal(ctx, p)
+
+	out, err := org.ExportHandleCreateWorkspace(t, svc, ctxWithP, "Admin's Workspace")
+	if err != nil {
+		t.Fatalf("expected admin to create workspace successfully: %v", err)
+	}
+	if out.Body.Name != "Admin's Workspace" {
+		t.Errorf("expected name=Admin's Workspace, got %q", out.Body.Name)
+	}
+}
+
+func TestHandleCreateWorkspace_PISucceeds(t *testing.T) {
+	svc, _, fu := newTestSvc(t)
+	ctx := context.Background()
+
+	piUser := fu.seed(t, "pi-ws@example.com", "PI WS")
+
+	p := &platform.Principal{
+		UserID:     piUser.ID,
+		Email:      piUser.Email,
+		GlobalRole: "pi",
+	}
+	ctxWithP := platform.WithPrincipal(ctx, p)
+
+	out, err := org.ExportHandleCreateWorkspace(t, svc, ctxWithP, "PI's Workspace")
+	if err != nil {
+		t.Fatalf("expected PI to create workspace successfully: %v", err)
+	}
+	if out.Body.Name != "PI's Workspace" {
+		t.Errorf("expected name=PI's Workspace, got %q", out.Body.Name)
+	}
+}

@@ -11,6 +11,37 @@ import (
 // Compile-time check to keep uuid import used.
 var _ = uuid.Nil
 
+// ExportHandleRegister exposes handleRegister for external tests.
+func ExportHandleRegister(t *testing.T, svc *Service, ctx context.Context, email, password, passwordConfirm string) (*registerOutput, error) {
+	t.Helper()
+	in := &registerInput{}
+	in.Body.Email = email
+	in.Body.Password = password
+	in.Body.PasswordConfirm = passwordConfirm
+	return svc.handleRegister(ctx, in)
+}
+
+// ExportHandleLogin exposes handleLogin for external tests.
+func ExportHandleLogin(t *testing.T, svc *Service, ctx context.Context, email, password string) (*loginOutput, error) {
+	t.Helper()
+	in := &loginInput{}
+	in.Body.Email = email
+	in.Body.Password = password
+	return svc.handleLogin(ctx, in)
+}
+
+// ExportHandleUpdateProfile exposes handleUpdateProfile for external tests.
+func ExportHandleUpdateProfile(t *testing.T, svc *Service, ctx context.Context, firstName, lastName, title, description, displayName string) (*updateProfileOutput, error) {
+	t.Helper()
+	in := &updateProfileInput{}
+	in.Body.FirstName = firstName
+	in.Body.LastName = lastName
+	in.Body.Title = title
+	in.Body.Description = description
+	in.Body.DisplayName = displayName
+	return svc.handleUpdateProfile(ctx, in)
+}
+
 // ExportIssueAccessToken exposes issueAccessToken for tests.
 func ExportIssueAccessToken(t *testing.T, svc *Service, u *User) string {
 	t.Helper()
