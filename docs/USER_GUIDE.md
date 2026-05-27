@@ -56,9 +56,7 @@ land in **Mailpit** at <http://localhost:8025>.
   restore one (non-destructively). Concurrent edits are guarded by optimistic
   locking — if the page changed under you, you get a conflict banner to reload or
   overwrite rather than silently clobbering — and a presence indicator shows who
-  else is editing. _Note: in the current build the rich editor falls back to a
-  read-only view of the page content (an upstream editor-dependency issue is
-  being resolved); page history and the API are unaffected._
+  else is editing.
 - **Artifacts** — files (PDF, Jupyter notebook, image, other) scoped to a project.
   Upload from the project's Artifacts tab: the file goes directly to object
   storage via a presigned URL and is then processed in the background — PDFs get a

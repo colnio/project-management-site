@@ -67,15 +67,12 @@ function useClientId(): string {
 }
 
 // ─── Reference insertion ──────────────────────────────────────────────────────
-// NOTE: Custom React block specs (`createReactBlockSpec`) are incompatible with
-// the installed BlockNote 0.51 + @blocknote/mantine + @tiptap/react 3.x stack in
-// this environment — mounting an editor whose schema contains them throws
-// "render2 is not a function" inside @tiptap/react's ReactNodeViewRenderer
-// (a Context.Consumer is rendered with a non-function child), crashing the page.
-// Until the dependency mismatch is resolved, the editor uses the default schema
-// and `@sample` / `@experiment` references are inserted as an inline text
-// representation instead of bespoke cards, so the editor mounts and stays
-// editable rather than crashing.
+// The editor uses the default BlockNote schema; `@sample` / `@experiment`
+// references are inserted as an inline text representation rather than bespoke
+// custom React block specs (`createReactBlockSpec`). The earlier mount crash was
+// caused by the @mantine v9 / React 18 mismatch (now fixed by pinning Mantine to
+// v8), not by custom blocks — but the inline-ref approach is retained as the
+// simplest reliable representation for now.
 
 // ─── Conflict UI ──────────────────────────────────────────────────────────────
 
@@ -483,13 +480,15 @@ function RefPickerModal({
 }
 
 // ─── Editor error boundary + read-only fallback ───────────────────────────────
-// The BlockNote rich editor (@blocknote/mantine) currently throws at mount in
-// this environment due to an upstream @blocknote 0.51 ↔ @tiptap/react 3.x
-// incompatibility ("render2 is not a function" inside tiptap's React renderer).
-// Rather than crash the whole route, we catch the mount error and render the
-// page's saved content read-only, so /pages/:id is always usable. When the
-// dependency mismatch is resolved, the live editor renders and this fallback
-// stays dormant.
+// The BlockNote rich editor (@blocknote/mantine) previously threw at mount
+// ("render2 is not a function" inside React's reconciler) because @mantine/core
+// v9 — pulled in transitively via @blocknote/mantine — requires React 19 and
+// renders contexts using the React 19 API, which React 18 cannot consume. That
+// is now fixed by pinning @mantine/core / @mantine/hooks to v8 (React 18
+// compatible) and the tiptap stack to a single 3.13.x via pnpm overrides, so
+// the live editor mounts. This boundary is kept as a safety net: if a future
+// dependency change re-breaks editor mount, we catch it and render the page's
+// saved content read-only so /pages/:id is always usable.
 
 class EditorBoundary extends Component<
   { fallback: ReactNode; children: ReactNode },
@@ -522,6 +521,28 @@ function blockText(block: unknown): string {
       .join('');
   }
   return '';
+}
+
+// normalizeBlocks coerces simplified API/seed blocks (`{type, text}`) into the
+// BlockNote inline-content shape (`{type, content:[{type:'text', text, styles}]}`)
+// so pages created outside the editor — seed data, external agents, and the AI
+// `draft_page` tool — render their text. Pages saved from the editor already use
+// the full shape and pass through unchanged.
+function normalizeBlocks(blocks: unknown): unknown[] {
+  if (!Array.isArray(blocks)) return [];
+  return blocks.map(b => {
+    if (b && typeof b === 'object') {
+      const blk = b as Record<string, unknown>;
+      if (typeof blk.text === 'string' && blk.content === undefined) {
+        const { text, ...rest } = blk;
+        return { ...rest, content: [{ type: 'text', text, styles: {} }] };
+      }
+      if (typeof blk.content === 'string') {
+        return { ...blk, content: [{ type: 'text', text: blk.content, styles: {} }] };
+      }
+    }
+    return b;
+  });
 }
 
 function ReadonlyPageFallback({ page }: { page?: GetPageResponse }) {
@@ -592,8 +613,8 @@ export function PageEditorPage() {
     if (!pageData || loadedRef.current) return;
     loadedRef.current = true;
     try {
-      const blocks = pageData.blocks;
-      if (Array.isArray(blocks) && blocks.length > 0) {
+      const blocks = normalizeBlocks(pageData.blocks);
+      if (blocks.length > 0) {
         editor.replaceBlocks(
           editor.document,
           blocks as Parameters<typeof editor.replaceBlocks>[1]
@@ -687,8 +708,8 @@ export function PageEditorPage() {
     const fresh = await fetchPage(pageId);
     etagRef.current = fresh._etag ?? '';
     try {
-      const blocks = fresh.blocks;
-      if (Array.isArray(blocks) && blocks.length > 0) {
+      const blocks = normalizeBlocks(fresh.blocks);
+      if (blocks.length > 0) {
         editor.replaceBlocks(
           editor.document,
           blocks as Parameters<typeof editor.replaceBlocks>[1]

@@ -1,3 +1,22 @@
 allowBuilds:
   esbuild: true
   msw: true
+minimumReleaseAgeExclude:
+  - '@blocknote/core@0.51.3'
+  - '@blocknote/mantine@0.51.3'
+  - '@blocknote/react@0.51.3'
+overrides:
+  "@tiptap/core": "3.13.0"
+  "@tiptap/pm": "3.13.0"
+  "@tiptap/react": "3.13.0"
+  "@tiptap/extensions": "3.13.0"
+  "@tiptap/extension-bold": "3.13.0"
+  "@tiptap/extension-code": "3.13.0"
+  "@tiptap/extension-horizontal-rule": "3.13.0"
+  "@tiptap/extension-italic": "3.13.0"
+  "@tiptap/extension-paragraph": "3.13.0"
+  "@tiptap/extension-strike": "3.13.0"
+  "@tiptap/extension-text": "3.13.0"
+  "@tiptap/extension-underline": "3.13.0"
+  "@tiptap/extension-bubble-menu": "3.13.0"
+  "@tiptap/extension-floating-menu": "3.13.0"
