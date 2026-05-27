@@ -98,7 +98,7 @@ func TestSetWorkspaceAutonomy_NonOwnerForbidden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create member: %v", err)
 	}
-	if err := svc.orgSvc.AddMember(ctx, sd.WorkspaceID, member.ID, string(org.RoleEditor), sd.UserID); err != nil {
+	if err := svc.orgSvc.AddMember(ctx, sd.WorkspaceID, member.ID, "member", sd.UserID); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 

@@ -6,9 +6,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/colnio/project-management-site/internal/audit"
 )
 
-// CreateMeetingForTest exposes createMeeting for use in external test files.
+// CreateMeetingForTest mirrors the handler's create flow (createMeeting + audit)
+// so tests can assert the audit entry without the huma wiring.
 func (s *Service) CreateMeetingForTest(
 	ctx context.Context,
 	workspaceID uuid.UUID,
@@ -27,5 +30,11 @@ func (s *Service) CreateMeetingForTest(
 	if err != nil {
 		return nil, err
 	}
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        createdBy,
+		Action:       "meeting.create",
+		ResourceType: "meeting",
+		ResourceID:   m.ID.String(),
+	})
 	return m, nil
 }

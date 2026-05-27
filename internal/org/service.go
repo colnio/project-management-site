@@ -563,8 +563,8 @@ func (s *Service) uniqueSlug(ctx context.Context, base string) (string, error) {
 		if !exists {
 			return candidate, nil
 		}
-		// Append a short random suffix.
-		suffix, err := generateToken(3)
+		// Append a short random suffix (6 bytes -> 8 base64 chars; take 6).
+		suffix, err := generateToken(6)
 		if err != nil {
 			return "", err
 		}

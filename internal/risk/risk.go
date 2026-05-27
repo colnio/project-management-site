@@ -102,6 +102,14 @@ const riskCols = `id, project_id, iteration_id, seq, title, likelihood,
 	status, flagged_for_pi_review, source, workflow_run_id,
 	created_by, created_at, updated_at`
 
+// riskColsR is riskCols with every column qualified by the `r` alias, for
+// queries that JOIN another table (e.g. projects) where id/project_id would
+// otherwise be ambiguous. Column order matches riskCols so collectRisks scans it.
+const riskColsR = `r.id, r.project_id, r.iteration_id, r.seq, r.title, r.likelihood,
+	r.impact_headline, r.impact_description, r.mitigation, r.plan_b,
+	r.status, r.flagged_for_pi_review, r.source, r.workflow_run_id,
+	r.created_by, r.created_at, r.updated_at`
+
 // ─── GetRisk ─────────────────────────────────────────────────────────────────
 
 // GetRisk loads a risk by id. Returns platform.NotFound if absent.
@@ -272,7 +280,7 @@ func (s *Service) setPIReview(ctx context.Context, id uuid.UUID, flagged bool) (
 // across all projects in the workspace, ordered created_at DESC, limited to limit rows.
 func (s *Service) ListFlaggedForPIReviewByWorkspace(ctx context.Context, workspaceID uuid.UUID, limit int) ([]*Risk, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT `+riskCols+`
+		`SELECT `+riskColsR+`
 		 FROM risks r
 		 JOIN projects p ON p.id = r.project_id
 		 WHERE p.workspace_id = $1

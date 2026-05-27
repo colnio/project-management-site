@@ -230,7 +230,7 @@ func TestAggregateForWorkspace_AuditItems(t *testing.T) {
 	// what the pg recorder writes).
 	var auditID uuid.UUID
 	err := env.pool.QueryRow(ctx,
-		`INSERT INTO audit_log (actor_id, action, resource_type, resource_id)
+		`INSERT INTO audit_log (actor, action, resource_type, resource_id)
 		 VALUES ($1, 'project.create', 'project', $2)
 		 RETURNING id`,
 		owner.ID, proj.ID.String(),
