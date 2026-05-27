@@ -116,6 +116,60 @@ describe('parseSSEChunk', () => {
     expect(parseSSEChunk('\n\n')).toHaveLength(0);
   });
 
+  // ─── Finding 11 regression: tool_call_id is the real backend field ────────
+
+  it('[regression F11] tool_call event with only tool_call_id (no "id") yields populated id', () => {
+    // Backend sends tool_call_id, NOT id. The fix maps tool_call_id → id.
+    const payload = {
+      tool_call_id: 'tc_regression_001',
+      name: 'search_project_content',
+      arguments: { q: 'NMC cycling' },
+      status: 'proposed',
+    };
+    // Deliberately omit any "id" field to mirror the real backend payload
+    expect(Object.prototype.hasOwnProperty.call(payload, 'id')).toBe(false);
+
+    const text = `event: tool_call\ndata: ${JSON.stringify(payload)}\n\n`;
+    const events = parseSSEChunk(text);
+    expect(events).toHaveLength(1);
+    const ev = events[0] as Extract<SSEEvent, { type: 'tool_call' }>;
+    expect(ev.type).toBe('tool_call');
+    // id must be populated from tool_call_id
+    expect(ev.id).toBe('tc_regression_001');
+    expect(ev.id).not.toBe('');
+  });
+
+  it('[regression F11] tool_result event with only tool_call_id (no "id") yields populated id', () => {
+    const payload = {
+      tool_call_id: 'tc_regression_002',
+      name: 'search_project_content',
+      result: [{ match: 'cycling data' }],
+    };
+    expect(Object.prototype.hasOwnProperty.call(payload, 'id')).toBe(false);
+
+    const text = `event: tool_result\ndata: ${JSON.stringify(payload)}\n\n`;
+    const events = parseSSEChunk(text);
+    expect(events).toHaveLength(1);
+    const ev = events[0] as Extract<SSEEvent, { type: 'tool_result' }>;
+    expect(ev.type).toBe('tool_result');
+    expect(ev.id).toBe('tc_regression_002');
+    expect(ev.id).not.toBe('');
+  });
+
+  it('[regression F11] tool_call_id takes precedence over "id" when both are present', () => {
+    // If the backend ever sends both, tool_call_id wins (it's the canonical field)
+    const payload = {
+      tool_call_id: 'tc_canonical',
+      id: 'tc_legacy',
+      name: 'draft_page',
+      arguments: {},
+    };
+    const text = `event: tool_call\ndata: ${JSON.stringify(payload)}\n\n`;
+    const events = parseSSEChunk(text);
+    const ev = events[0] as Extract<SSEEvent, { type: 'tool_call' }>;
+    expect(ev.id).toBe('tc_canonical');
+  });
+
   it('parses mixed event types in one chunk', () => {
     const text =
       'event: token\ndata: {"delta":"Starting "}\n\n' +

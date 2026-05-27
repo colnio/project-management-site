@@ -2,7 +2,7 @@
  * Login form rendering and submit tests.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoginPage } from '../pages/LoginPage';
 
@@ -76,6 +76,11 @@ describe('LoginPage', () => {
       expect(screen.getByRole('button', { name: /signing in/i })).toBeDisabled();
     });
 
-    resolve();
+    // Wrap resolve() in act so the setLoading(false) state update that fires
+    // when the promise resolves is properly flushed inside React's scheduler —
+    // this eliminates the "not wrapped in act(...)" warning.
+    await act(async () => {
+      resolve();
+    });
   });
 });

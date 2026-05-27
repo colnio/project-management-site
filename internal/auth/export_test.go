@@ -42,3 +42,8 @@ func ExportEmailDomainAllowed(email string, allowed []string) bool {
 func (s *Service) OIDCAvailable() bool {
 	return s.oidc != nil
 }
+
+// ExportExtractCookieValue exposes extractCookieValue for tests.
+func ExportExtractCookieValue(cookieHeader, name string) string {
+	return extractCookieValue(cookieHeader, name)
+}
