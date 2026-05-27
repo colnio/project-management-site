@@ -147,6 +147,12 @@ input, select, textarea { font-family: inherit; }
 .pill.k-derivative { background: var(--pill-deriv-bg); color: var(--pill-deriv-fg); }
 .pill.k-module { background: var(--pill-module-bg); color: var(--pill-module-fg); }
 
+/* ── Risk likelihood pills ── */
+.risk-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: 10.5px; font-family: var(--mono); font-weight: 600; border: 1px solid transparent; line-height: 1.5; white-space: nowrap; letter-spacing: 0.04em; text-transform: uppercase; }
+.risk-pill.high { background: #fce8e4; color: #9a2a1e; border-color: #f0b8b0; }
+.risk-pill.med  { background: #fef4dc; color: #8a5f0a; border-color: #f5dfa0; }
+.risk-pill.low  { background: #eef4e8; color: #3e6022; border-color: #cce0b8; }
+
 /* Status dots */
 .dot-s { width: 6px; height: 6px; border-radius: 50%; display: inline-block; vertical-align: 1px; margin-right: 5px; flex: 0 0 6px; }
 .dot-s.active { background: #7da653; }

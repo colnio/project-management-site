@@ -33,6 +33,7 @@ import (
 	"github.com/colnio/project-management-site/internal/page"
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
+	"github.com/colnio/project-management-site/internal/risk"
 	"github.com/colnio/project-management-site/internal/sample"
 )
 
@@ -132,6 +133,7 @@ func run() error {
 	// Wire the River-backed enqueuer into the artifact service.
 	artifactSvc.SetEnqueuer(artifact.NewRiverEnqueuer(riverClient))
 
+	riskSvc := risk.NewService(pool, projectSvc, auditRec, logger)
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
 
 	// AI module (G1/G2/G5): load provider, build client (nil if unavailable).
@@ -147,6 +149,7 @@ func run() error {
 		aiClient = ai.NewHTTPClient(aiProvider)
 	}
 	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, projectSvc, auditRec, logger)
+	aiSvc.SetRiskService(riskSvc)
 
 	// Load workflow definitions from the embedded workflows/ directory.
 	workflows, wfErr := ai.LoadWorkflows()
@@ -165,6 +168,7 @@ func run() error {
 	page.Register(srv.API, pageSvc)
 	artifact.Register(srv.API, artifactSvc)
 	calendar.Register(srv.API, calendarSvc)
+	risk.Register(srv.API, riskSvc)
 	ai.Register(srv.API, aiSvc)
 	ai.RegisterWorkflows(srv.API, aiSvc, workflows)
 	// SSE streaming chat — chi route (not huma) because it's Server-Sent Events.

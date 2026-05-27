@@ -21,6 +21,7 @@ import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
 import { AIChatPanel } from '@/components/AIChatPanel';
 import { WorkflowRunner } from '@/components/WorkflowRunner';
 import { ProjectAutonomySection } from '@/components/AutonomyConfig';
+import { RiskRegister } from '@/components/RiskRegister';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
 type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows';
@@ -182,6 +183,9 @@ function OverviewTab({ projectId }: { projectId: string }) {
           </div>
         ))}
       </div>
+
+      {/* Risk Register */}
+      <RiskRegister projectId={projectId} />
 
       {/* Recent samples preview */}
       {samples.length > 0 && (

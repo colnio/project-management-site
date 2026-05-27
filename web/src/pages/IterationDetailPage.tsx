@@ -19,6 +19,7 @@ import {
 } from '@/hooks/useQueries';
 import type { Sample } from '@/api/types';
 import type { IterationSample } from '@/hooks/useQueries';
+import { RiskRegister } from '@/components/RiskRegister';
 
 // ─── Local field editor ───────────────────────────────────────────────────────
 
@@ -301,6 +302,9 @@ export function IterationDetailPage() {
             </div>
           ))}
         </div>
+
+        {/* Risk Register */}
+        <RiskRegister projectId={iteration.project_id} iterationId={iterationId} />
 
         {/* Linked Samples */}
         <div className="section-h">

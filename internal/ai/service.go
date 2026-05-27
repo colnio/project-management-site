@@ -15,6 +15,7 @@ import (
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
+	"github.com/colnio/project-management-site/internal/risk"
 )
 
 // Service is the AI module's domain service.
@@ -24,9 +25,17 @@ type Service struct {
 	client   Client   // nil means AI is disabled
 	authSvc  *auth.Service
 	projects *project.Service
+	risks    *risk.Service // optional; nil if risk module not wired yet
 	rec      audit.Recorder
 	log      *slog.Logger
 	restBase string // http://127.0.0.1:{port}
+}
+
+// SetRiskService wires the risk service into the AI service so that completed
+// risk-assessment workflow runs can populate the risk register. Call this in
+// main.go after both services are constructed.
+func (s *Service) SetRiskService(risks *risk.Service) {
+	s.risks = risks
 }
 
 // NewService constructs the AI service. If client is nil, all AI endpoints

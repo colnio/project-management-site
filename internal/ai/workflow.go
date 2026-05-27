@@ -82,6 +82,13 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 	// Handle PI flagging (even on error, if we have output).
 	if output != nil && status == "completed" {
 		s.handlePIFlag(ctx, output, proj.WorkspaceID, target.ProjectID, p, run.ID)
+
+		// Populate the risk register from workflow output.
+		if s.risks != nil {
+			if upsertErr := s.risks.UpsertFromWorkflow(ctx, target.ProjectID, nil, key, run.ID, output, p.UserID); upsertErr != nil {
+				s.log.Warn("ai: workflow: risk upsert failed", "run_id", run.ID, "err", upsertErr)
+			}
+		}
 	}
 
 	// Persist final state.
