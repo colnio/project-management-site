@@ -9,6 +9,7 @@ import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState'
 import { StatusPill } from '@/components/StatusPill';
 import {
   useExperiment,
+  useUpdateExperiment,
   useExperimentSamples,
 } from '@/hooks/useQueries';
 import {
@@ -91,11 +92,16 @@ function ParamsDisplay({ params }: { params: Record<string, unknown> }) {
   );
 }
 
+const STATUSES = ['planned', 'in_progress', 'completed', 'failed'] as const;
+type ExpStatus = typeof STATUSES[number];
+const METHODS = ['cycling', 'synthesis', 'SEM', 'XRD', 'EIS', 'weighing', 'drying', 'custom'] as const;
+
 // ─── ExperimentDashboard ──────────────────────────────────────────────────────
 
 export function ExperimentDashboard({ experimentId }: { experimentId: string }) {
   const { data: experiment, isLoading, isError } = useExperiment(experimentId);
   const { data: linkedSamples = [] } = useExperimentSamples(experimentId);
+  const updateExp = useUpdateExperiment(experimentId, experiment?.project_id ?? '');
 
   if (isLoading) return <LoadingState message="Loading experiment dashboard…" />;
   if (isError || !experiment) return <ErrorState message="Failed to load experiment." />;
@@ -105,6 +111,10 @@ export function ExperimentDashboard({ experimentId }: { experimentId: string }) 
       ? experiment.parameters as Record<string, unknown>
       : {}
   );
+
+  const handleStatusChange = (s: ExpStatus) => {
+    void updateExp.mutateAsync({ status: s });
+  };
 
   return (
     <div>
@@ -122,6 +132,29 @@ export function ExperimentDashboard({ experimentId }: { experimentId: string }) 
             {experiment.result_summary}
           </div>
         )}
+      </div>
+
+      {/* Interactive status toggle */}
+      <div className="section-h" style={{ marginTop: 0 }}><h2>Status</h2></div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        {STATUSES.map(s => (
+          <button
+            key={s}
+            onClick={() => handleStatusChange(s)}
+            className={`status-opt${experiment.status === s ? ' sel' : ''}`}
+            disabled={updateExp.isPending}
+          >
+            <StatusPill status={s} />
+          </button>
+        ))}
+      </div>
+
+      {/* Method chips (display only) */}
+      <div className="section-h"><h2>Method</h2></div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        {METHODS.map(m => (
+          <span key={m} className="pill" style={{ opacity: experiment.method === m ? 1 : 0.4 }}>{m}</span>
+        ))}
       </div>
 
       {/* Artifact embeds */}

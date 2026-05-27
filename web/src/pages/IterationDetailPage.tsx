@@ -1,27 +1,21 @@
 /**
  * C2 — Iteration Detail Page
  * Route: /iterations/:iterationId
- * Shows iteration fields, status controls, and linked samples with
- * input/output/passthrough role picker.
+ * Shows iteration header + BlockNote editor (entityDashboard block inside).
+ * Linking/unlinking samples and artifacts is available via IterationDashboard
+ * (read-only view) inside the entityDashboard block. The Edit dialog remains
+ * for quick field edits without opening the full editor.
  */
 import { useState } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { AppShell } from '@/components/AppShell';
-import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
+import { LoadingState, ErrorState } from '@/components/LoadingState';
 import { StatusPill } from '@/components/StatusPill';
 import {
   useIteration,
   useUpdateIteration,
-  useIterationSamples,
-  useLinkIterationSample,
-  useUnlinkIterationSample,
-  useProjectSamples,
-  useProjectArtifacts,
 } from '@/hooks/useQueries';
-import { ArtEmbed } from '@/components/embeds/ArtEmbeds';
-import type { Sample } from '@/api/types';
-import type { IterationSample } from '@/hooks/useQueries';
-import { RiskRegister } from '@/components/RiskRegister';
+import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
 
 // ─── Local field editor ───────────────────────────────────────────────────────
 
@@ -117,160 +111,13 @@ function EditDialog({ iterationId, projectId, initial, onClose }: EditDialogProp
   );
 }
 
-// ─── Sample Link Picker ───────────────────────────────────────────────────────
-
-interface SampleLinkPickerProps {
-  iterationId: string;
-  projectId: string;
-  alreadyLinked: IterationSample[];
-  onClose: () => void;
-}
-
-function SampleLinkPicker({ iterationId, projectId, alreadyLinked, onClose }: SampleLinkPickerProps) {
-  const { data: projectSamples = [] } = useProjectSamples(projectId);
-  const [selectedId, setSelectedId] = useState('');
-  const [role, setRole] = useState('input');
-  const [note, setNote] = useState('');
-  const link = useLinkIterationSample(iterationId);
-
-  const linkedIds = new Set(alreadyLinked.map(s => s.sample_id));
-  const available = projectSamples.filter((s: Sample) => !linkedIds.has(s.id));
-
-  const handleLink = async () => {
-    if (!selectedId) return;
-    await link.mutateAsync({ sample_id: selectedId, role, note: note || undefined });
-    onClose();
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-head">
-          <span className="modal-title">Link Sample</span>
-          <button className="icon-btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          <FieldGroup label="Sample">
-            {available.length === 0 ? (
-              <div style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 12 }}>
-                All project samples are already linked.
-              </div>
-            ) : (
-              <select className="field-input" value={selectedId} onChange={e => setSelectedId(e.target.value)}>
-                <option value="">— select sample —</option>
-                {available.map((s: Sample) => (
-                  <option key={s.id} value={s.id}>{s.identifier} · {s.name || s.kind}</option>
-                ))}
-              </select>
-            )}
-          </FieldGroup>
-          <FieldGroup label="Role">
-            <div style={{ display: 'flex', gap: 8 }}>
-              {['input', 'output', 'passthrough'].map(r => (
-                <button key={r} onClick={() => setRole(r)} className={`status-opt${role === r ? ' sel' : ''}`}>
-                  {r}
-                </button>
-              ))}
-            </div>
-          </FieldGroup>
-          <FieldGroup label="Note (optional)">
-            <input className="field-input" value={note} onChange={e => setNote(e.target.value)} placeholder="optional note" />
-          </FieldGroup>
-        </div>
-        <div className="modal-foot">
-          <button className="top-btn" onClick={onClose}>Cancel</button>
-          <button className="top-btn primary" onClick={handleLink} disabled={!selectedId || link.isPending}>
-            {link.isPending ? 'Linking…' : 'Link sample'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Linked samples list ──────────────────────────────────────────────────────
-
-function LinkedSampleRow({ item, iterationId }: { item: IterationSample; iterationId: string }) {
-  const unlink = useUnlinkIterationSample(iterationId);
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
-      <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)', flex: '0 0 auto' }}>
-        {item.sample_id.slice(0, 8)}
-      </span>
-      {item.role && (
-        <span className="pill">{item.role}</span>
-      )}
-      {item.note && (
-        <span style={{ fontSize: 12.5, color: 'var(--muted)', flex: 1 }}>{item.note}</span>
-      )}
-      <button
-        className="icon-btn"
-        style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--bad)' }}
-        onClick={() => unlink.mutate(item.sample_id)}
-        title="Unlink sample"
-      >
-        ✕
-      </button>
-    </div>
-  );
-}
-
-// ─── Iteration artifact embeds (light-touch) ──────────────────────────────────
-
-/**
- * There is no iteration-specific artifact API endpoint.
- * We use project-level artifacts as a best-effort display, degrading
- * gracefully when none are available.
- */
-function IterationArtifactsSection({ projectId }: { projectId: string }) {
-  const { data: artifacts = [], isLoading } = useProjectArtifacts(projectId);
-  if (isLoading || artifacts.length === 0) return null;
-
-  // Show at most 4 artifacts as a preview
-  const preview = artifacts.slice(0, 4);
-
-  return (
-    <div style={{ marginBottom: 32 }}>
-      <div className="section-h" style={{ marginBottom: 12 }}>
-        <h2>Project Artifacts</h2>
-        <span className="meta">{artifacts.length}</span>
-      </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-          gap: 14,
-        }}
-      >
-        {preview.map(artifact => (
-          <ArtEmbed key={artifact.id} artifact={artifact} />
-        ))}
-      </div>
-      {artifacts.length > 4 && (
-        <div
-          style={{
-            marginTop: 8,
-            fontFamily: 'var(--mono)',
-            fontSize: 11,
-            color: 'var(--muted-2)',
-          }}
-        >
-          +{artifacts.length - 4} more in project
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function IterationDetailPage() {
   const { iterationId } = useParams({ strict: false }) as { iterationId: string };
   const { data: iteration, isLoading, isError } = useIteration(iterationId);
-  const { data: linkedSamples = [] } = useIterationSamples(iterationId);
 
   const [editOpen, setEditOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   const crumbs = [
     { label: 'Project', href: iteration ? `/projects/${iteration.project_id}?tab=iterations` : '/workspaces' },
@@ -294,14 +141,6 @@ export function IterationDetailPage() {
             end_at: iteration.end_at,
           }}
           onClose={() => setEditOpen(false)}
-        />
-      )}
-      {pickerOpen && (
-        <SampleLinkPicker
-          iterationId={iterationId}
-          projectId={iteration.project_id}
-          alreadyLinked={linkedSamples}
-          onClose={() => setPickerOpen(false)}
         />
       )}
 
@@ -334,56 +173,12 @@ export function IterationDetailPage() {
           </div>
         </div>
 
-        {/* Meta grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', marginBottom: 32 }}>
-          {[
-            { label: 'Start', value: iteration.start_at ? new Date(iteration.start_at).toLocaleDateString() : '—' },
-            { label: 'End', value: iteration.end_at ? new Date(iteration.end_at).toLocaleDateString() : '—' },
-            { label: 'Samples Linked', value: linkedSamples.length },
-          ].map(m => (
-            <div key={m.label} style={{ background: 'var(--surface)', padding: '14px 18px' }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                {m.label}
-              </div>
-              <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', lineHeight: 1 }}>
-                {m.value}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Risk Register */}
-        <RiskRegister projectId={iteration.project_id} iterationId={iterationId} />
-
-        {/* Artifact embeds (project-level, graceful degradation) */}
-        <IterationArtifactsSection projectId={iteration.project_id} />
-
-        {/* Linked Samples */}
-        <div className="section-h">
-          <h2>Linked Samples</h2>
-          <span className="meta">{linkedSamples.length} linked</span>
-          <div className="right">
-            <button className="top-btn primary" onClick={() => setPickerOpen(true)}>
-              + Link sample
-            </button>
-          </div>
-        </div>
-
-        {linkedSamples.length === 0 ? (
-          <EmptyState message="No samples linked to this iteration." />
-        ) : (
-          <div style={{ border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', marginTop: 8 }}>
-            {linkedSamples.map(item => (
-              <LinkedSampleRow key={item.id} item={item} iterationId={iterationId} />
-            ))}
-          </div>
-        )}
-
-        {/* Timestamps */}
-        <div style={{ marginTop: 40, display: 'flex', gap: 24, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>
-          <span>Created {new Date(iteration.created_at).toLocaleDateString()}</span>
-          <span>Updated {new Date(iteration.updated_at).toLocaleDateString()}</span>
-        </div>
+        {/* Entity page editor (contains entityDashboard block with meta/risks/samples + notes) */}
+        <EntityPageEditor
+          parentType="iteration"
+          parentId={iterationId}
+          projectId={iteration.project_id}
+        />
       </div>
     </AppShell>
   );

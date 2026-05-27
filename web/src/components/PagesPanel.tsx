@@ -1,36 +1,22 @@
 /**
  * PagesPanel — lists pages for a given parent and provides a "New page" action.
  * Used in ProjectDetailPage (and can be reused in Sample/ExperimentDetailPage).
+ *
+ * Uses useProjectPages (real API) instead of the old local-cache stub.
+ * Newly created pages appear after query invalidation via useCreatePage's
+ * onSuccess handler (which invalidates parentPages) plus an explicit projectPages
+ * invalidation below.
  */
 
 import { useRouter } from '@tanstack/react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
-import { useCreatePage, pageKeys } from '@/hooks/usePageQueries';
-import type { Page } from '@/hooks/usePageQueries';
+import { useProjectPages, useCreatePage, pageKeys } from '@/hooks/usePageQueries';
+import type { PageListItem } from '@/hooks/usePageQueries';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type ParentType = 'project' | 'iteration' | 'sample' | 'experiment';
-
-// ─── Stub API: list pages for a parent ───────────────────────────────────────
-// The backend spec doesn't have GET /v1/projects/:id/pages returning a list,
-// so we call GET /v1/projects/:id with pages stored in a local stub list.
-// We use a client-side store keyed by (parentType, parentId).
-
-const localPageCache: Map<string, Page[]> = new Map();
-
-function usePagesForParent(parentType: ParentType, parentId: string | undefined) {
-  const cacheKey = `${parentType}:${parentId}`;
-  return useQuery({
-    queryKey: pageKeys.parentPages(parentType, parentId ?? ''),
-    queryFn: async (): Promise<Page[]> => {
-      // Return from local cache (pages are created by useCreatePage and stored locally)
-      return localPageCache.get(cacheKey) ?? [];
-    },
-    enabled: !!parentId,
-  });
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -43,7 +29,15 @@ interface PagesPanelProps {
 export function PagesPanel({ projectId, parentType, parentId }: PagesPanelProps) {
   const router = useRouter();
   const qc = useQueryClient();
-  const { data: pages = [], isLoading, isError } = usePagesForParent(parentType, parentId);
+
+  // Use the real project pages endpoint, filtered by parent if needed.
+  // useProjectPages fetches GET /v1/projects/{id}/pages which returns all pages
+  // for the project. We filter client-side by parentType + parentId.
+  const { data: allPages = [], isLoading, isError } = useProjectPages(projectId);
+  const pages = allPages.filter(
+    p => p.parent_type === parentType && p.parent_id === parentId
+  );
+
   const createPage = useCreatePage();
 
   const handleNewPage = async () => {
@@ -53,12 +47,9 @@ export function PagesPanel({ projectId, parentType, parentId }: PagesPanelProps)
       parentId,
       blocks: [],
     });
-    // Store in local cache
-    const cacheKey = `${parentType}:${parentId}`;
-    const existing = localPageCache.get(cacheKey) ?? [];
-    localPageCache.set(cacheKey, [...existing, result.page]);
-    void qc.invalidateQueries({ queryKey: pageKeys.parentPages(parentType, parentId) });
-    // Navigate to editor
+    // Invalidate project-level pages query so the list refreshes.
+    void qc.invalidateQueries({ queryKey: pageKeys.projectPages(projectId) });
+    // Navigate to the new page's editor.
     void router.navigate({ to: '/pages/$pageId', params: { pageId: result.page.id } });
   };
 
@@ -94,7 +85,7 @@ export function PagesPanel({ projectId, parentType, parentId }: PagesPanelProps)
   );
 }
 
-function PageCard({ page }: { page: Page }) {
+function PageCard({ page }: { page: PageListItem }) {
   const router = useRouter();
   return (
     <div
@@ -132,11 +123,11 @@ function PageCard({ page }: { page: Page }) {
         )}
       </div>
       <div className="name" style={{ fontFamily: 'var(--serif)' }}>
-        Page
+        {page.title || 'Untitled'}
       </div>
       <div className="foot">
         <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>
-          {new Date(page.created_at).toLocaleDateString()}
+          {new Date(page.updated_at).toLocaleDateString()}
         </span>
         <span
           style={{

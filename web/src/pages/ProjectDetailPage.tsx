@@ -23,8 +23,7 @@ import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
 import { AIChatPanel } from '@/components/AIChatPanel';
 import { WorkflowRunner } from '@/components/WorkflowRunner';
 import { ProjectAutonomySection } from '@/components/AutonomyConfig';
-import { RiskRegister } from '@/components/RiskRegister';
-import { useOverviewLayout, type OverviewLayout } from '@/hooks/useTweaks';
+import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
 type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
@@ -81,30 +80,6 @@ function relativeTime(iso: string): string {
   const days = Math.floor(hrs / 24);
   if (days < 30) return `${days}d ago`;
   return new Date(iso).toLocaleDateString();
-}
-
-// ─── Layout Switcher ──────────────────────────────────────────────────────────
-
-const LAYOUT_OPTS: { id: OverviewLayout; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'editorial', label: 'Editorial' },
-  { id: 'stream', label: 'Stream' },
-];
-
-function LayoutSwitcher({ value, onChange }: { value: OverviewLayout; onChange: (l: OverviewLayout) => void }) {
-  return (
-    <div className="overview-layout-seg">
-      {LAYOUT_OPTS.map(opt => (
-        <button
-          key={opt.id}
-          className={value === opt.id ? 'active' : ''}
-          onClick={() => onChange(opt.id)}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 // ─── Project Header ───────────────────────────────────────────────────────────
@@ -223,273 +198,6 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
   );
 }
 
-// ─── Dashboard Body (KPI grid + recent records) ───────────────────────────────
-
-function DashboardBody({
-  projectId,
-  samples,
-  experiments,
-  iterations,
-  artifacts,
-}: {
-  projectId: string;
-  samples: Sample[];
-  experiments: Experiment[];
-  iterations: Iteration[];
-  artifacts: Artifact[];
-}) {
-  const stats = [
-    { label: 'Samples', value: samples.length },
-    { label: 'Iterations', value: iterations.length },
-    { label: 'Experiments', value: experiments.length },
-    { label: 'Artifacts', value: artifacts.length },
-  ];
-
-  return (
-    <>
-      {/* Stats grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 1,
-          background: 'var(--line)',
-          border: '1px solid var(--line)',
-          borderRadius: 8,
-          overflow: 'hidden',
-          margin: '0 0 24px',
-        }}
-      >
-        {stats.map(s => (
-          <div
-            key={s.label}
-            style={{
-              background: 'var(--surface)',
-              padding: '14px 18px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
-            }}
-          >
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {s.label}
-            </div>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 28, letterSpacing: '-0.01em', color: 'var(--ink)', lineHeight: 1 }}>
-              {s.value}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Risk Register */}
-      <RiskRegister projectId={projectId} />
-
-      {/* Recent samples */}
-      {samples.length > 0 && (
-        <>
-          <div className="section-h">
-            <h2>Recent Samples</h2>
-            <span className="meta">{samples.length} total</span>
-          </div>
-          <div className="records">
-            {samples.slice(0, 4).map(s => (
-              <SampleCard key={s.id} sample={s} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Recent experiments */}
-      {experiments.length > 0 && (
-        <>
-          <div className="section-h">
-            <h2>Recent Experiments</h2>
-            <span className="meta">{experiments.length} total</span>
-          </div>
-          <div className="records">
-            {experiments.slice(0, 4).map(e => (
-              <ExperimentCard key={e.id} experiment={e} />
-            ))}
-          </div>
-        </>
-      )}
-    </>
-  );
-}
-
-// ─── Editorial Body ───────────────────────────────────────────────────────────
-
-function EditorialBody({
-  projectId,
-  samples,
-  experiments,
-  iterations,
-}: {
-  projectId: string;
-  samples: Sample[];
-  experiments: Experiment[];
-  iterations: Iteration[];
-}) {
-  const { data: project } = useProject(projectId);
-  const activeIteration = iterations.find(it => it.status === 'active') ?? iterations[0];
-
-  return (
-    <>
-      {/* Narrative prose */}
-      {project?.description && (
-        <div className="summary-prose" style={{ marginBottom: 20 }}>
-          <p>{project.description}</p>
-        </div>
-      )}
-      {!project?.description && (
-        <div className="summary-prose" style={{ marginBottom: 20, color: 'var(--muted)', fontStyle: 'italic' }}>
-          <p>No project description yet. Add one to describe the goals and context of this research project.</p>
-        </div>
-      )}
-
-      {/* Lead questions callout */}
-      <div className="editorial-callout">
-        <div className="editorial-callout-label">Lead questions · current iteration</div>
-        {activeIteration ? (
-          <>
-            <div className="editorial-callout-title">{activeIteration.title}</div>
-            {activeIteration.description && (
-              <div className="editorial-callout-desc">{activeIteration.description}</div>
-            )}
-          </>
-        ) : (
-          <div className="editorial-callout-title" style={{ color: 'var(--muted)' }}>
-            No active iteration — what hypothesis does this phase test?
-          </div>
-        )}
-      </div>
-
-      {/* Risk Register */}
-      <RiskRegister projectId={projectId} />
-
-      {/* Key entities compact list */}
-      {(samples.length > 0 || experiments.length > 0 || iterations.length > 0) && (
-        <>
-          <div className="section-h" style={{ marginTop: 28 }}>
-            <h2>Key Entities</h2>
-          </div>
-          <div className="editorial-entities">
-            {iterations.slice(0, 3).map(it => (
-              <div key={it.id} className="editorial-entity-row">
-                <span className="ent-type">Iteration</span>
-                <span className="ent-name">{it.title}</span>
-                <StatusPill status={it.status} />
-                <span className="ent-ts">{relativeTime(it.updated_at ?? it.created_at)}</span>
-              </div>
-            ))}
-            {samples.slice(0, 3).map(s => (
-              <div key={s.id} className="editorial-entity-row">
-                <span className="ent-type">Sample</span>
-                <span className="ent-name">{s.identifier}{s.name ? ` · ${s.name}` : ''}</span>
-                <StatusPill status={s.status} />
-                <span className="ent-ts">{relativeTime(s.created_at)}</span>
-              </div>
-            ))}
-            {experiments.slice(0, 3).map(e => (
-              <div key={e.id} className="editorial-entity-row">
-                <span className="ent-type">Experiment</span>
-                <span className="ent-name">{e.result_summary || e.method}</span>
-                <StatusPill status={e.status} />
-                <span className="ent-ts">{relativeTime(e.performed_at ?? e.created_at)}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </>
-  );
-}
-
-// ─── Stream Body ──────────────────────────────────────────────────────────────
-
-type StreamItem = {
-  id: string;
-  type: 'sample' | 'experiment' | 'iteration';
-  title: string;
-  status: string;
-  ts: string;
-};
-
-const TYPE_ICON: Record<StreamItem['type'], string> = {
-  sample: '⬡',
-  experiment: '⚗',
-  iteration: '↻',
-};
-
-const TYPE_COLOR: Record<StreamItem['type'], string> = {
-  sample: 'var(--ref-sample-fg)',
-  experiment: 'var(--ref-exp-fg)',
-  iteration: 'var(--ember)',
-};
-
-function StreamBody({
-  samples,
-  experiments,
-  iterations,
-}: {
-  samples: Sample[];
-  experiments: Experiment[];
-  iterations: Iteration[];
-}) {
-  const items: StreamItem[] = [
-    ...samples.map(s => ({
-      id: s.id,
-      type: 'sample' as const,
-      title: `${s.identifier}${s.name ? ` · ${s.name}` : ''}`,
-      status: s.status,
-      ts: s.created_at,
-    })),
-    ...experiments.map(e => ({
-      id: e.id,
-      type: 'experiment' as const,
-      title: e.result_summary || e.method,
-      status: e.status,
-      ts: e.performed_at ?? e.created_at,
-    })),
-    ...iterations.map(it => ({
-      id: it.id,
-      type: 'iteration' as const,
-      title: it.title,
-      status: it.status,
-      ts: it.updated_at ?? it.created_at,
-    })),
-  ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-
-  if (items.length === 0) {
-    return <EmptyState message="No activity yet." />;
-  }
-
-  return (
-    <div className="stream-feed">
-      {items.map(item => (
-        <div key={`${item.type}-${item.id}`} className="stream-item">
-          <div className="stream-icon" style={{ color: TYPE_COLOR[item.type] }}>
-            {TYPE_ICON[item.type]}
-          </div>
-          <div className="stream-body">
-            <div className="stream-title">{item.title}</div>
-            <div className="stream-foot">
-              <span
-                className="pill"
-                style={{ fontSize: 10, color: TYPE_COLOR[item.type], background: 'var(--paper-2)' }}
-              >
-                {item.type}
-              </span>
-              <StatusPill status={item.status} />
-              <span className="stream-ts">{relativeTime(item.ts)}</span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
 interface OverviewTabProps {
@@ -499,63 +207,20 @@ interface OverviewTabProps {
 
 function OverviewTab({ projectId, onToggleAI }: OverviewTabProps) {
   const { data: project } = useProject(projectId);
-  const { data: samples = [] } = useProjectSamples(projectId);
-  const { data: experiments = [] } = useProjectExperiments(projectId);
-  const { data: iterations = [] } = useProjectIterations(projectId);
-  const { data: artifacts = [] } = useProjectArtifacts(projectId);
-  const [layout, setLayout] = useOverviewLayout();
 
   if (!project) return <LoadingState />;
 
   return (
     <div className="page-wrap">
-      {/* Row: layout switcher aligned to top-right */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, marginTop: 8 }}>
-        <LayoutSwitcher value={layout} onChange={setLayout} />
-      </div>
-
       {/* Rich header */}
       <ProjectHeader projectId={projectId} onToggleAI={onToggleAI} />
 
-      {/* Description (shown in dashboard layout; editorial shows its own) */}
-      {layout === 'dashboard' && project.description && (
-        <div className="summary-prose" style={{ marginBottom: 20 }}>
-          <p>{project.description}</p>
-        </div>
-      )}
-
-      {/* Layout body */}
-      {layout === 'dashboard' && (
-        <DashboardBody
-          projectId={projectId}
-          samples={samples}
-          experiments={experiments}
-          iterations={iterations}
-          artifacts={artifacts}
-        />
-      )}
-      {layout === 'editorial' && (
-        <EditorialBody
-          projectId={projectId}
-          samples={samples}
-          experiments={experiments}
-          iterations={iterations}
-        />
-      )}
-      {layout === 'stream' && (
-        <>
-          <RiskRegister projectId={projectId} />
-          <div className="section-h" style={{ marginTop: 20 }}>
-            <h2>Activity Stream</h2>
-            <span className="meta">{samples.length + experiments.length + iterations.length} items</span>
-          </div>
-          <StreamBody
-            samples={samples}
-            experiments={experiments}
-            iterations={iterations}
-          />
-        </>
-      )}
+      {/* Entity page editor (contains entityDashboard block + notes) */}
+      <EntityPageEditor
+        parentType="project"
+        parentId={projectId}
+        projectId={projectId}
+      />
     </div>
   );
 }

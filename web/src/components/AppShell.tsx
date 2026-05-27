@@ -3,6 +3,7 @@ import { Link, useRouter } from '@tanstack/react-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkspaces, useProjects } from '@/hooks/useQueries';
 import { useInbox } from '@/hooks/useWorkspaceQueries';
+import { useProjectPages } from '@/hooks/usePageQueries';
 import { Avatar } from './Avatar';
 import { CommandPalette } from './CommandPalette';
 import { TweaksPanel } from './TweaksPanel';
@@ -151,6 +152,62 @@ function TemplatesIcon({ size = 13 }: { size?: number }) {
   );
 }
 
+function NotesIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <path d="M3 2H11L13 4V14H3V2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M11 2V4H13" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M5.5 7H10.5M5.5 10H8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ─── ProjectNotesTree ─────────────────────────────────────────────────────────
+// One instance per expanded project. Calls useProjectPages once (no hook-in-loop).
+
+interface ProjectNotesTreeProps {
+  projectId: string;
+}
+
+function ProjectNotesTree({ projectId }: ProjectNotesTreeProps) {
+  const router = useRouter();
+  const { data: pages = [], isLoading } = useProjectPages(projectId);
+
+  if (isLoading) {
+    return (
+      <div className="tree-item" style={{ paddingLeft: 28, color: 'var(--muted-2)', fontStyle: 'italic', fontSize: 11 }}>
+        Loading…
+      </div>
+    );
+  }
+
+  if (pages.length === 0) {
+    return (
+      <div className="tree-item" style={{ paddingLeft: 28, color: 'var(--muted-2)', fontStyle: 'italic', fontSize: 11 }}>
+        No notes yet
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {pages.map(page => (
+        <button
+          key={page.id}
+          className="tree-item"
+          onClick={() => void router.navigate({ to: '/pages/$pageId', params: { pageId: page.id } })}
+          style={{ paddingLeft: 28 }}
+        >
+          <span className="dot" />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>
+            {page.title || 'Untitled'}
+          </span>
+        </button>
+      ))}
+    </>
+  );
+}
+
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 interface SidebarProps {
@@ -179,12 +236,22 @@ function Sidebar({
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
     new Set(activeProjectId ? [activeProjectId] : [])
   );
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [wsSwitcherOpen, setWsSwitcherOpen] = useState(false);
 
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
 
   const toggleProject = (id: string) => {
     setExpandedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleNotes = (id: string) => {
+    setExpandedNotes(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -442,6 +509,24 @@ function Sidebar({
                       {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     </Link>
                   ))}
+
+                  {/* Notes / Pages group */}
+                  <button
+                    className="tree-item"
+                    onClick={() => toggleNotes(p.id)}
+                  >
+                    <span className="chev">
+                      {expandedNotes.has(p.id) ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                    </span>
+                    <span className="ic" style={{ color: 'var(--muted-2)' }}>
+                      <NotesIcon size={12} />
+                    </span>
+                    Notes
+                  </button>
+
+                  {expandedNotes.has(p.id) && (
+                    <ProjectNotesTree projectId={p.id} />
+                  )}
                 </div>
               )}
             </div>
