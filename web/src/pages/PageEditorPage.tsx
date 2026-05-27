@@ -31,8 +31,8 @@ import {
 } from '@/hooks/usePageQueries';
 import type { GetPageResponse, Revision, DiffLine } from '@/hooks/usePageQueries';
 import { useQueryClient } from '@tanstack/react-query';
-import { useProjectSamples, useProjectExperiments } from '@/hooks/useQueries';
-import type { Sample, Experiment } from '@/api/types';
+import { useProjectSamples, useProjectExperiments, useProjectArtifacts } from '@/hooks/useQueries';
+import type { Sample, Experiment, Artifact } from '@/api/types';
 
 // ─── BlockNote imports ────────────────────────────────────────────────────────
 
@@ -49,6 +49,10 @@ import {
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
+
+// ─── Custom ref block schema ──────────────────────────────────────────────────
+
+import { refBlockSchema } from '@/components/editor/refBlocks';
 
 // ─── Stable random client ID ──────────────────────────────────────────────────
 
@@ -67,12 +71,10 @@ function useClientId(): string {
 }
 
 // ─── Reference insertion ──────────────────────────────────────────────────────
-// The editor uses the default BlockNote schema; `@sample` / `@experiment`
-// references are inserted as an inline text representation rather than bespoke
-// custom React block specs (`createReactBlockSpec`). The earlier mount crash was
-// caused by the @mantine v9 / React 18 mismatch (now fixed by pinning Mantine to
-// v8), not by custom blocks — but the inline-ref approach is retained as the
-// simplest reliable representation for now.
+// The editor uses `refBlockSchema` (custom schema) which adds sampleRef,
+// experimentRef, and artifactRef block types. Insertions use insertOrUpdateBlock
+// with the typed custom block payload rather than the previous bold-paragraph
+// text fallback.
 
 // ─── Conflict UI ──────────────────────────────────────────────────────────────
 
@@ -604,8 +606,8 @@ export function PageEditorPage() {
     }
   }, [pageData]);
 
-  // Initialize BlockNote (default schema — see note above on custom block specs)
-  const editor = useCreateBlockNote();
+  // Initialize BlockNote with the custom ref-block schema
+  const editor = useCreateBlockNote({ schema: refBlockSchema });
 
   // Load page content into editor once
   const loadedRef = useRef(false);
@@ -734,40 +736,56 @@ export function PageEditorPage() {
   // ─── Reference insertion ──────────────────────────────────────────────────────
 
   const [refPickerOpen, setRefPickerOpen] = useState<
-    'sample' | 'experiment' | null
+    'sample' | 'experiment' | 'artifact' | null
   >(null);
 
   const projectId = pageData?.project_id;
   const { data: samples = [] } = useProjectSamples(projectId);
   const { data: experiments = [] } = useProjectExperiments(projectId);
+  const { data: artifacts = [] } = useProjectArtifacts(projectId);
 
-  // Degraded inline-text representation (custom ref blocks disabled — see note).
   const insertSampleRef = (sample: Sample) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'text',
-          text: `@sample ${sample.identifier}${sample.name ? ` — ${sample.name}` : ''}`,
-          styles: { bold: true },
-        },
-      ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      type: 'sampleRef',
+      props: {
+        refId:      sample.id,
+        identifier: sample.identifier ?? '',
+        name:       sample.name ?? '',
+        kind:       sample.kind ?? '',
+        status:     sample.status ?? '',
+      },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
     setRefPickerOpen(null);
   };
 
   const insertExperimentRef = (exp: Experiment) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'text',
-          text: `@experiment ${exp.method} (${exp.id.slice(0, 8)})`,
-          styles: { bold: true },
-        },
-      ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      type: 'experimentRef',
+      props: {
+        refId:   exp.id,
+        method:  exp.method ?? '',
+        summary: exp.result_summary ?? '',
+        status:  exp.status ?? '',
+      },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    setRefPickerOpen(null);
+  };
+
+  const insertArtifactRef = (art: Artifact) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {
+      type: 'artifactRef',
+      props: {
+        refId:       art.id,
+        filename:    art.filename ?? '',
+        contentType: art.content_type ?? '',
+        artType:     art.type ?? '',
+      },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
     setRefPickerOpen(null);
   };
@@ -794,8 +812,85 @@ export function PageEditorPage() {
         subtext: 'Embed an experiment card',
         onItemClick: () => setRefPickerOpen('experiment'),
       },
+      {
+        title: 'Artifact reference',
+        aliases: ['@artifact', 'artifact ref', 'file ref'],
+        group: 'Lab references',
+        icon: <span style={{ fontFamily: 'var(--serif)', fontSize: 14, fontStyle: 'italic' }}>a</span>,
+        subtext: 'Embed an artifact/file card',
+        onItemClick: () => setRefPickerOpen('artifact'),
+      },
     ],
     []
+  );
+
+  // ─── @ mention items (samples + experiments + artifacts combined) ─────────────
+
+  const getMentionItems = useCallback(
+    async (query: string): Promise<DefaultReactSuggestionItem[]> => {
+      const q = query.toLowerCase();
+
+      const sampleItems: DefaultReactSuggestionItem[] = samples
+        .filter(s =>
+          !q ||
+          s.identifier?.toLowerCase().includes(q) ||
+          s.name?.toLowerCase().includes(q)
+        )
+        .slice(0, 10)
+        .map(s => ({
+          title: `${s.identifier ?? ''}${s.name ? ' — ' + s.name : ''}`,
+          group: 'Samples',
+          subtext: s.kind ?? undefined,
+          icon: (
+            <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ref-sample-fg)' }}>
+              s
+            </span>
+          ),
+          onItemClick: () => insertSampleRef(s),
+        }));
+
+      const experimentItems: DefaultReactSuggestionItem[] = experiments
+        .filter(e =>
+          !q ||
+          e.method?.toLowerCase().includes(q) ||
+          e.id?.toLowerCase().includes(q)
+        )
+        .slice(0, 10)
+        .map(e => ({
+          title: e.method ?? e.id.slice(0, 8),
+          group: 'Experiments',
+          subtext: e.status ?? undefined,
+          icon: (
+            <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ref-exp-fg)' }}>
+              e
+            </span>
+          ),
+          onItemClick: () => insertExperimentRef(e),
+        }));
+
+      const artifactItems: DefaultReactSuggestionItem[] = artifacts
+        .filter(a =>
+          !q ||
+          a.filename?.toLowerCase().includes(q) ||
+          a.type?.toLowerCase().includes(q)
+        )
+        .slice(0, 10)
+        .map(a => ({
+          title: a.filename ?? a.id.slice(0, 8),
+          group: 'Artifacts',
+          subtext: a.type ?? undefined,
+          icon: (
+            <span style={{ fontSize: 13 }}>📎</span>
+          ),
+          onItemClick: () => insertArtifactRef(a),
+        }));
+
+      return filterSuggestionItems(
+        [...sampleItems, ...experimentItems, ...artifactItems],
+        query
+      );
+    },
+    [samples, experiments, artifacts, insertSampleRef, insertExperimentRef, insertArtifactRef]
   );
 
   // ─── Breadcrumbs ─────────────────────────────────────────────────────────────
@@ -952,6 +1047,46 @@ export function PageEditorPage() {
         </RefPickerModal>
       )}
 
+      {refPickerOpen === 'artifact' && (
+        <RefPickerModal
+          title="Insert artifact reference"
+          onClose={() => setRefPickerOpen(null)}
+        >
+          {artifacts.length === 0 ? (
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+              No artifacts in this project.
+            </div>
+          ) : (
+            artifacts.map(a => (
+              <button
+                key={a.id}
+                className="ref-picker-item"
+                onClick={() => insertArtifactRef(a)}
+              >
+                <span className="ref-glyph" style={{ color: 'var(--ref-art-fg)' }}>
+                  a
+                </span>
+                <span
+                  style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)' }}
+                >
+                  {a.id.slice(0, 8)}…
+                </span>
+                <span style={{ flex: 1 }}>{a.filename}</span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontFamily: 'var(--mono)',
+                    color: 'var(--muted)',
+                  }}
+                >
+                  {a.type}
+                </span>
+              </button>
+            ))
+          )}
+        </RefPickerModal>
+      )}
+
       {/* Editor content area */}
       <div
         style={{
@@ -1013,6 +1148,11 @@ export function PageEditorPage() {
               getItems={async (query: string) =>
                 filterSuggestionItems(getCustomItems(editor), query)
               }
+            />
+            {/* @ mention trigger — inserts sampleRef / experimentRef / artifactRef blocks */}
+            <SuggestionMenuController
+              triggerCharacter="@"
+              getItems={getMentionItems}
             />
           </BlockNoteView>
         </EditorBoundary>
