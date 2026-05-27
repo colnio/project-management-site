@@ -17,8 +17,16 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
    **every mutation, server-side** — UI checks don't count.
 3. **Audit every mutation.** Accept an `audit.Recorder` and record an
    `audit.Entry` (action, resource_type, resource_id) for each write. Tests
-   assert it (use a capturing fake recorder).
-4. **AI calls the public API as the user.** Track G is built (`internal/ai`). The
+   assert it (use a capturing fake recorder). This includes AI-driven mutations:
+   the workspace-autonomy write was previously missing an audit entry — every
+   write path, regardless of whether it is human- or AI-initiated, must emit one.
+4. **Enforce scopes on every authenticated handler.** Immediately after
+   `platform.PrincipalFrom`, call `platform.RequireScope(p, <scope>)` with the
+   correct `read:<domain>` or `write:<domain>` scope. The full scope taxonomy is
+   defined in `internal/platform/scopes.go`. A token with a non-empty scope list
+   is fully restricted; empty/nil is legacy-unrestricted. Do not add a new handler
+   without a matching `RequireScope` call.
+5. **AI calls the public API as the user.** Track G is built (`internal/ai`). The
    orchestrator never reaches into other modules' tables: it mints a short-lived
    internal token (`iai_`) and calls the public REST API at `127.0.0.1:<port>/v1`,
    so auth/audit/rate-limit/permissions apply uniformly. Write tools are gated by
@@ -98,6 +106,9 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
   cleanly if Postgres is down. The DB name comes from `TEST_DATABASE_URL`; give
   each package a distinct one (e.g. `lab_test_sample`) so parallel runs don't
   race on migrations. The full suite runs serialized: `go test ./... -p 1`.
+- `make test` runs `go test ./... -p 1` and the frontend test step without `|| true`,
+  so any failure in either backend or frontend fails the target. Do not suppress
+  test failures.
 - A package `README.md` documenting the public interface.
 
 ## Frontend (`web/`)

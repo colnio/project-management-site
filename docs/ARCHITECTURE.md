@@ -33,8 +33,9 @@ RateLimiter → Idempotency → huma operation`.
   *missing* token is allowed (public routes); a *present but invalid* token is
   401. The `TokenVerifier` interface (satisfied by `auth.Service`) keeps
   `platform` free of an import cycle.
-- **RateLimiter**: in-memory sliding window, per-token only (first-party browser
-  sessions are unlimited).
+- **RateLimiter**: in-memory sliding window. Now covers all three caller kinds:
+  PATs and internal-AI tokens are keyed by token value; first-party JWT browser
+  sessions are keyed by user ID (`internal/platform/ratelimit.go`).
 - **Idempotency**: for write methods carrying `Idempotency-Key`, captures the
   response and replays it on retry (Postgres-backed, 24h TTL).
 - **Errors**: every error is the envelope `{code, message, details}` via a custom
@@ -53,6 +54,10 @@ keeps one HTTP code path for all three.
   hashed, and delivered as an httpOnly cookie. OIDC (mock locally / Entra in
   prod) provisions users from allow-listed email domains. Invite acceptance
   provisions a local-password user.
+  - **OIDC CSRF protection.** Login initiation sets an `HttpOnly; Secure;
+    SameSite=Lax` `oidc_state` cookie. The callback verifies the `state` query
+    parameter equals the cookie value before code exchange, then clears the
+    cookie (`internal/auth/http.go`).
 - **org** owns workspaces, memberships, project collaborations, admin overrides,
   and invites. `ResolveAccess(user, workspace, projectVisibility, project)`
   returns the effective role = **max** of (admin override → viewer, workspace
@@ -61,6 +66,22 @@ keeps one HTTP code path for all three.
 - **Enforcement** is server-side on every mutation. For tokens, effective
   capability = `intersect(token scopes, owner's resolved permissions)`, re-checked
   per request. `project.Authorize` is the single helper every domain module uses.
+- **Scope taxonomy and enforcement** (`internal/platform/scopes.go`). Every
+  resource domain has a `read:<domain>` and `write:<domain>` scope. The full list
+  is: `read:projects`, `write:projects`, `read:samples`, `write:samples`,
+  `read:experiments`, `write:experiments`, `read:iterations`, `write:iterations`,
+  `read:risks`, `write:risks`, `read:artifacts`, `write:artifacts`, `read:pages`,
+  `write:pages`, `read:meetings`, `write:meetings`, `read:calendar`,
+  `write:calendar`, `read:ai`, `write:ai`, `read:inbox`, `read:audit`,
+  `admin:org`. The helper `platform.RequireScope(p, scope)` is called immediately
+  after `platform.PrincipalFrom` in every authenticated huma handler. Enforcement
+  rule: a token whose scope list is **non-empty** is fully restricted to those
+  scopes; a token with an **empty/nil** scope list is treated as
+  legacy-unrestricted (backward compatibility for tokens minted before scope
+  enforcement). The internal-AI orchestrator token is minted with exactly the
+  scopes its registered tools require: `read:projects`, `read:samples`,
+  `read:experiments`, `read:pages`, `read:artifacts`, `write:pages`,
+  `write:iterations`, `write:calendar`.
 
 ## Domain modules (Track B)
 

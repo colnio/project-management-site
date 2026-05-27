@@ -13,7 +13,8 @@ so application code is written once and only configuration changes at deploy.
 See [`docs/techSpec.md`](docs/techSpec.md) for the production design,
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for the local build guide,
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the as-built system, and
-[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for usage. Contributor/agent
+[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for usage. The latest review summary
+is in [`docs/securityReview.md`](docs/securityReview.md). Contributor/agent
 conventions live in [`AGENTS.md`](AGENTS.md).
 
 ---
