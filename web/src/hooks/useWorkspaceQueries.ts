@@ -10,7 +10,7 @@ import { api } from '@/api/client';
 
 export interface InboxItem {
   id: string;
-  kind: 'pi_flag' | 'ai_proposal' | 'action_item' | 'comment' | 'system' | 'mention';
+  kind: 'pi_flag' | 'ai_proposal' | 'action_item' | 'comment' | 'system' | 'mention' | 'approval';
   title: string;
   body: string;
   link: string;

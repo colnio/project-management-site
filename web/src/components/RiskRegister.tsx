@@ -31,6 +31,8 @@ import { riskKeys } from '@/hooks/useRiskQueries';
 import { useAuth } from '@/hooks/useAuth';
 import { RiskFormDialog } from '@/components/RiskFormDialog';
 import { useAIPanel } from '@/components/AIPanelProvider';
+import { useProject } from '@/hooks/useQueries';
+import { SendForApprovalDialog } from '@/components/SendForApprovalDialog';
 
 // ─── Likelihood pill ─────────────────────────────────────────────────────────
 
@@ -282,8 +284,14 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
   // Dialog state: null = closed, 'create' = new risk, Risk object = edit mode
   const [dialogState, setDialogState] = useState<null | 'create' | Risk>(null);
 
+  // Send for approval dialog
+  const [approvalOpen, setApprovalOpen] = useState(false);
+
   const { user } = useAuth();
   const isPI = !!user?.is_system_admin;
+
+  // Workspace id needed for stakeholder picker
+  const { data: project } = useProject(projectId);
 
   // AI panel context — degrades gracefully when no provider is present
   const { reviewWithAI } = useAIPanel();
@@ -421,6 +429,14 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
           >
             Review with AI
           </button>
+
+          <button
+            className="top-btn"
+            onClick={() => setApprovalOpen(true)}
+            style={{ fontSize: 12 }}
+          >
+            Send for approval
+          </button>
         </div>
 
         {/* Body */}
@@ -505,6 +521,16 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
           iterationId={iterationId}
           risk={dialogState === 'create' ? undefined : dialogState}
           onClose={() => setDialogState(null)}
+        />
+      )}
+
+      {/* SendForApprovalDialog */}
+      {approvalOpen && project?.workspace_id && (
+        <SendForApprovalDialog
+          projectId={projectId}
+          iterationId={iterationId}
+          workspaceId={project.workspace_id}
+          onClose={() => setApprovalOpen(false)}
         />
       )}
     </>

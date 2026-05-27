@@ -8,6 +8,7 @@ import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState'
 import { useInbox } from '@/hooks/useWorkspaceQueries';
 import { useCurrentWorkspace } from '@/hooks/useQueries';
 import type { InboxItem } from '@/hooks/useWorkspaceQueries';
+import { useDecideApprovalRequest } from '@/hooks/useApprovalQueries';
 
 // ─── Kind config ──────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ const KIND_CONFIG: Record<string, { label: string; color: string; bg: string }> 
   comment: { label: 'Comment', color: '#5a503a', bg: '#f4f0e6' },
   system: { label: 'System', color: 'var(--muted)', bg: 'var(--paper-2)' },
   mention: { label: 'Mention', color: '#5a3e7a', bg: '#eae2ef' },
+  approval: { label: 'Approval', color: '#1a4d8a', bg: '#e2ecf8' },
 };
 
 const ALL_KINDS = Object.keys(KIND_CONFIG);
@@ -52,10 +54,65 @@ function bucketOf(iso: string): 'today' | 'earlier' | 'older' {
   return 'older';
 }
 
+// ─── Approve / Reject buttons (approval kind only) ───────────────────────────
+
+function ApprovalActions({ itemId }: { itemId: string }) {
+  const decide = useDecideApprovalRequest();
+  const [decided, setDecided] = useState<'approved' | 'rejected' | null>(null);
+
+  if (decided) {
+    return (
+      <span
+        style={{
+          fontFamily: 'var(--mono)',
+          fontSize: 11,
+          color: decided === 'approved' ? 'var(--good)' : 'var(--bad)',
+          flexShrink: 0,
+        }}
+      >
+        {decided === 'approved' ? 'Approved' : 'Rejected'}
+      </span>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+      <button
+        className="top-btn"
+        style={{ fontSize: 11, color: 'var(--good)', padding: '2px 10px' }}
+        disabled={decide.isPending}
+        onClick={() => {
+          decide.mutate(
+            { requestId: itemId, approve: true },
+            { onSuccess: () => setDecided('approved') },
+          );
+        }}
+      >
+        Approve
+      </button>
+      <button
+        className="top-btn"
+        style={{ fontSize: 11, color: 'var(--bad)', padding: '2px 10px' }}
+        disabled={decide.isPending}
+        onClick={() => {
+          decide.mutate(
+            { requestId: itemId, approve: false },
+            { onSuccess: () => setDecided('rejected') },
+          );
+        }}
+      >
+        Reject
+      </button>
+    </div>
+  );
+}
+
 // ─── Item row ──────────────────────────────────────────────────────────────────
 
 function InboxRow({ item }: { item: InboxItem }) {
   const cfg = kindConfig(item.kind);
+  const isApproval = item.kind === 'approval';
+
   const inner = (
     <div
       style={{
@@ -64,7 +121,7 @@ function InboxRow({ item }: { item: InboxItem }) {
         gap: 12,
         padding: '11px 4px',
         borderBottom: '1px solid var(--line)',
-        cursor: item.link ? 'default' : undefined,
+        cursor: item.link && !isApproval ? 'default' : undefined,
       }}
     >
       <span
@@ -95,13 +152,17 @@ function InboxRow({ item }: { item: InboxItem }) {
           </div>
         )}
       </div>
-      <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', whiteSpace: 'nowrap', flexShrink: 0, marginTop: 3 }}>
-        {relativeTime(item.created_at)}
-      </span>
+      {isApproval ? (
+        <ApprovalActions itemId={item.id} />
+      ) : (
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', whiteSpace: 'nowrap', flexShrink: 0, marginTop: 3 }}>
+          {relativeTime(item.created_at)}
+        </span>
+      )}
     </div>
   );
 
-  if (item.link) {
+  if (item.link && !isApproval) {
     return <a href={item.link}>{inner}</a>;
   }
   return inner;
