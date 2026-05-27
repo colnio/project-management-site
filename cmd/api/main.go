@@ -26,9 +26,11 @@ import (
 	"github.com/colnio/project-management-site/internal/config"
 	"github.com/colnio/project-management-site/internal/db"
 	"github.com/colnio/project-management-site/internal/experiment"
+	"github.com/colnio/project-management-site/internal/inbox"
 	"github.com/colnio/project-management-site/internal/iteration"
 	"github.com/colnio/project-management-site/internal/jobs"
 	labmcp "github.com/colnio/project-management-site/internal/mcp"
+	"github.com/colnio/project-management-site/internal/meeting"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/page"
 	"github.com/colnio/project-management-site/internal/platform"
@@ -135,6 +137,8 @@ func run() error {
 
 	riskSvc := risk.NewService(pool, projectSvc, auditRec, logger)
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
+	meetingSvc := meeting.NewService(pool, orgSvc, projectSvc, auditRec, logger)
+	inboxSvc := inbox.NewService(pool, orgSvc, logger)
 
 	// AI module (G1/G2/G5): load provider, build client (nil if unavailable).
 	aiProvider, aiProvErr := ai.LoadProvider()
@@ -169,6 +173,8 @@ func run() error {
 	artifact.Register(srv.API, artifactSvc)
 	calendar.Register(srv.API, calendarSvc)
 	risk.Register(srv.API, riskSvc)
+	meeting.Register(srv.API, meetingSvc)
+	inbox.Register(srv.API, inboxSvc)
 	ai.Register(srv.API, aiSvc)
 	ai.RegisterWorkflows(srv.API, aiSvc, workflows)
 	// SSE streaming chat — chi route (not huma) because it's Server-Sent Events.

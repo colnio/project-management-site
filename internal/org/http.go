@@ -176,7 +176,7 @@ type listMembersInput struct {
 }
 
 type listMembersOutput struct {
-	Body []Membership
+	Body []MemberView
 }
 
 func (s *Service) handleListMembers(ctx context.Context, in *listMembersInput) (*listMembersOutput, error) {
@@ -198,12 +198,12 @@ func (s *Service) handleListMembers(ctx context.Context, in *listMembersInput) (
 		return nil, platform.Forbidden("not a member of this workspace")
 	}
 
-	members, err := s.ListMembers(ctx, wsID)
+	members, err := s.ListMembersEnriched(ctx, wsID)
 	if err != nil {
 		return nil, err
 	}
 	if members == nil {
-		members = []Membership{}
+		members = []MemberView{}
 	}
 	return &listMembersOutput{Body: members}, nil
 }

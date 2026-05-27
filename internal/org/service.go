@@ -296,6 +296,52 @@ func (s *Service) ListMembers(ctx context.Context, workspaceID uuid.UUID) ([]Mem
 	return result, rows.Err()
 }
 
+// MemberView is an enriched membership that includes user profile fields.
+type MemberView struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Role        string    `json:"role"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name"`
+	UserCreatedAt time.Time `json:"user_created_at"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// ListMembersEnriched returns workspace memberships joined with user profile
+// data (email, display_name). It uses users.display_name directly; that column
+// exists in the users table as confirmed by auth/user.go.
+func (s *Service) ListMembersEnriched(ctx context.Context, workspaceID uuid.UUID) ([]MemberView, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT m.id, m.workspace_id, m.user_id, m.role,
+		        u.email, u.display_name, u.created_at AS user_created_at,
+		        m.created_at
+		 FROM workspace_memberships m
+		 JOIN users u ON u.id = m.user_id
+		 WHERE m.workspace_id = $1
+		 ORDER BY m.created_at`,
+		workspaceID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("org: list members enriched: %w", err)
+	}
+	defer rows.Close()
+
+	var result []MemberView
+	for rows.Next() {
+		var mv MemberView
+		if err := rows.Scan(
+			&mv.ID, &mv.WorkspaceID, &mv.UserID, &mv.Role,
+			&mv.Email, &mv.DisplayName, &mv.UserCreatedAt,
+			&mv.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("org: scan member view: %w", err)
+		}
+		result = append(result, mv)
+	}
+	return result, rows.Err()
+}
+
 // ─── Project collaborator Go API ─────────────────────────────────────────────
 
 // AddCollaborator upserts a project collaborator entry.
