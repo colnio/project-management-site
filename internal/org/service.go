@@ -394,6 +394,48 @@ func (s *Service) ListCollaborators(ctx context.Context, projectID uuid.UUID) ([
 	return result, rows.Err()
 }
 
+// CollaboratorView is a collaborator joined with user profile data.
+type CollaboratorView struct {
+	ID          uuid.UUID `json:"id"`
+	ProjectID   uuid.UUID `json:"project_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Role        string    `json:"role"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// ListCollaboratorsEnriched returns project collaborators joined with user
+// profile data (email, display_name), mirroring ListMembersEnriched.
+func (s *Service) ListCollaboratorsEnriched(ctx context.Context, projectID uuid.UUID) ([]CollaboratorView, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT c.id, c.project_id, c.user_id, c.role,
+		        u.email, u.display_name, c.created_at
+		 FROM project_collaborations c
+		 JOIN users u ON u.id = c.user_id
+		 WHERE c.project_id = $1
+		 ORDER BY c.created_at`,
+		projectID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("org: list collaborators enriched: %w", err)
+	}
+	defer rows.Close()
+
+	var result []CollaboratorView
+	for rows.Next() {
+		var cv CollaboratorView
+		if err := rows.Scan(
+			&cv.ID, &cv.ProjectID, &cv.UserID, &cv.Role,
+			&cv.Email, &cv.DisplayName, &cv.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("org: scan collaborator view: %w", err)
+		}
+		result = append(result, cv)
+	}
+	return result, rows.Err()
+}
+
 // CollaboratorRole returns the role and a found boolean for a specific collaborator.
 func (s *Service) CollaboratorRole(ctx context.Context, projectID, userID uuid.UUID) (Role, bool, error) {
 	var roleStr string

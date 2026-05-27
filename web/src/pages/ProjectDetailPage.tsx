@@ -17,6 +17,7 @@ import {
   useWorkspaceMembers,
 } from '@/hooks/useQueries';
 import { NewIterationWizard } from '@/components/wizards/NewIterationWizard';
+import { ShareDialog } from '@/components/ShareDialog';
 import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import { PagesPanel } from '@/components/PagesPanel';
 import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
@@ -93,6 +94,7 @@ interface ProjectHeaderProps {
 function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
   const { data: project } = useProject(projectId);
   const { data: members = [] } = useWorkspaceMembers(project?.workspace_id);
+  const [shareOpen, setShareOpen] = useState(false);
 
   if (!project) return null;
 
@@ -105,6 +107,7 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
   const visLabel = project.visibility === 'private' ? 'Private' : 'Workspace';
 
   return (
+    <>
     <div className="proj-head-rich">
       <div className="proj-head-row1">
         {/* Emblem */}
@@ -162,7 +165,7 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
           <button
             className="top-btn"
             title="Share"
-            onClick={() => console.log('Share')}
+            onClick={() => setShareOpen(true)}
           >
             Share
           </button>
@@ -196,6 +199,10 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
         </div>
       </div>
     </div>
+    {shareOpen && (
+      <ShareDialog projectId={projectId} onClose={() => setShareOpen(false)} />
+    )}
+    </>
   );
 }
 

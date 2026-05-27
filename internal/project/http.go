@@ -287,7 +287,7 @@ type listCollaboratorsInput struct {
 }
 
 type listCollaboratorsOutput struct {
-	Body []org.Collaborator
+	Body []org.CollaboratorView
 }
 
 func (s *Service) handleListCollaborators(ctx context.Context, in *listCollaboratorsInput) (*listCollaboratorsOutput, error) {
@@ -308,12 +308,12 @@ func (s *Service) handleListCollaborators(ctx context.Context, in *listCollabora
 		return nil, err
 	}
 
-	collabs, err := s.org.ListCollaborators(ctx, projectID)
+	collabs, err := s.org.ListCollaboratorsEnriched(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
 	if collabs == nil {
-		collabs = []org.Collaborator{}
+		collabs = []org.CollaboratorView{}
 	}
 	return &listCollaboratorsOutput{Body: collabs}, nil
 }

@@ -26,6 +26,7 @@ export const keys = {
   workspaceMembers: (id: string) => ['workspaces', id, 'members'] as const,
   projects: (workspaceId: string) => ['workspaces', workspaceId, 'projects'] as const,
   project: (id: string) => ['projects', id] as const,
+  projectCollaborators: (id: string) => ['projects', id, 'collaborators'] as const,
   projectSamples: (id: string) => ['projects', id, 'samples'] as const,
   projectExperiments: (id: string) => ['projects', id, 'experiments'] as const,
   projectIterations: (id: string) => ['projects', id, 'iterations'] as const,
@@ -96,6 +97,78 @@ export function useCreateProject(workspaceId: string) {
       api.post<Project>(`/v1/workspaces/${workspaceId}/projects`, body),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: keys.projects(workspaceId) }),
+  });
+}
+
+// ─── Project mutations ────────────────────────────────────────────────────────
+
+export function useUpdateProject(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name?: string; description?: string; visibility?: 'workspace' | 'private' }) =>
+      api.patch<Project>(`/v1/projects/${projectId}`, body),
+    onSuccess: (updated) => {
+      void qc.invalidateQueries({ queryKey: keys.project(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.projects(updated.workspace_id) });
+    },
+  });
+}
+
+export function useArchiveProject(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<Project>(`/v1/projects/${projectId}/archive`, {}),
+    onSuccess: (updated) => {
+      void qc.invalidateQueries({ queryKey: keys.project(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.projects(updated.workspace_id) });
+    },
+  });
+}
+
+// ─── Collaborator types ───────────────────────────────────────────────────────
+
+export interface Collaborator {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: 'owner' | 'editor' | 'viewer';
+  email: string;
+  display_name: string;
+  created_at: string;
+}
+
+// ─── Project collaborator hooks ───────────────────────────────────────────────
+
+export function useProjectCollaborators(projectId: string | undefined) {
+  return useQuery({
+    queryKey: projectId ? keys.projectCollaborators(projectId) : ['projects', 'none', 'collaborators'],
+    queryFn: () =>
+      api.get<Collaborator[] | null>(`/v1/projects/${projectId}/collaborators`).then(r => r ?? []),
+    enabled: !!projectId,
+  });
+}
+
+export function useAddCollaborator(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { email: string; role: 'owner' | 'editor' | 'viewer' }) =>
+      api.post<{ ok: boolean }>(`/v1/projects/${projectId}/collaborators`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projectCollaborators(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.project(projectId) });
+    },
+  });
+}
+
+export function useRemoveCollaborator(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      api.delete<{ ok: boolean }>(`/v1/projects/${projectId}/collaborators/${userId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projectCollaborators(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.project(projectId) });
+    },
   });
 }
 
