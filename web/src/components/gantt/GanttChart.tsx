@@ -22,7 +22,7 @@ import {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function MonthGrid({ range }: { range: DateRange }) {
+function MonthGrid({ range, showTodayLabel = false }: { range: DateRange; showTodayLabel?: boolean }) {
   const headers = monthHeaders(range);
   const todayLeft = todayPosition(range);
   const showToday = todayLeft >= 0 && todayLeft <= 100;
@@ -59,6 +59,30 @@ function MonthGrid({ range }: { range: DateRange }) {
             zIndex: 2,
           }}
         />
+      )}
+      {/* Today label (only shown in header row) */}
+      {showToday && showTodayLabel && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${todayLeft}%`,
+            top: 2,
+            transform: 'translateX(-50%)',
+            fontFamily: 'var(--mono)',
+            fontSize: 8,
+            color: 'var(--ember)',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            pointerEvents: 'none',
+            zIndex: 11,
+            whiteSpace: 'nowrap',
+            background: 'var(--paper)',
+            padding: '0 3px',
+            borderRadius: 2,
+          }}
+        >
+          TODAY
+        </div>
       )}
     </div>
   );
@@ -570,8 +594,57 @@ export function GanttChart({
         >
           {showGroups ? 'Project / Iteration' : 'Iteration'}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
           <MonthHeaderRow range={range} />
+          {/* Today marker in header track */}
+          {(() => {
+            const tl = todayPosition(range);
+            if (tl < 0 || tl > 100) return null;
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${tl}%`,
+                  top: 0,
+                  bottom: 0,
+                  width: 1.5,
+                  background: 'var(--ember)',
+                  opacity: 0.8,
+                  pointerEvents: 'none',
+                  zIndex: 11,
+                }}
+              />
+            );
+          })()}
+          {/* TODAY label pinned above header */}
+          {(() => {
+            const tl = todayPosition(range);
+            if (tl < 0 || tl > 100) return null;
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${tl}%`,
+                  top: 2,
+                  transform: 'translateX(-50%)',
+                  fontFamily: 'var(--mono)',
+                  fontSize: 7.5,
+                  color: 'var(--ember)',
+                  letterSpacing: '0.07em',
+                  textTransform: 'uppercase',
+                  pointerEvents: 'none',
+                  zIndex: 12,
+                  whiteSpace: 'nowrap',
+                  background: 'var(--paper)',
+                  padding: '0 3px',
+                  borderRadius: 2,
+                  fontWeight: 700,
+                }}
+              >
+                TODAY
+              </div>
+            );
+          })()}
         </div>
       </div>
 

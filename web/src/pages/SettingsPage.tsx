@@ -11,14 +11,12 @@ import {
   useTokens,
   useCreateToken,
   useRevokeToken,
-  useCalSubscription,
-  useRotateCalSubscription,
-  usePatchCalSubscription,
 } from '@/hooks/useArtifactQueries';
 import type { PATInfo, CreateTokenOutput } from '@/hooks/useArtifactQueries';
 import { useWorkspaces } from '@/hooks/useQueries';
 import { useAuth } from '@/hooks/useAuth';
 import { WorkspaceAutonomySection } from '@/components/AutonomyConfig';
+import { CalendarSubscriptionPanel } from '@/components/CalendarSubscriptionPanel';
 
 // ─── Known scopes ─────────────────────────────────────────────────────────────
 
@@ -323,98 +321,10 @@ function ApiTokensSection() {
   );
 }
 
-// ─── Calendar subscription section ───────────────────────────────────────────
+// ─── Calendar subscription section (delegates to shared component) ────────────
 
 function CalendarSection() {
-  const { data: sub, isLoading, isError } = useCalSubscription();
-  const rotate = useRotateCalSubscription();
-  const patchSub = usePatchCalSubscription();
-  const [rotateConfirm, setRotateConfirm] = useState(false);
-
-  if (isLoading) return <LoadingState message="Loading calendar…" />;
-  if (isError) return <ErrorState message="Failed to load calendar subscription." />;
-  if (!sub) return <EmptyState message="No subscription found." />;
-
-  const icsAbsUrl = `http://localhost:8080${sub.ics_url}`;
-
-  const handleRotate = async () => {
-    await rotate.mutateAsync();
-    setRotateConfirm(false);
-  };
-
-  return (
-    <>
-      {/* ICS URL */}
-      <div style={{ marginBottom: 24 }}>
-        <FieldLabel>Calendar URL (.ics)</FieldLabel>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--paper-2)', border: '1px solid var(--line-2)', borderRadius: 6, padding: '8px 12px' }}>
-          <code style={{ fontFamily: 'var(--mono)', fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink)' }}>
-            {icsAbsUrl}
-          </code>
-          <CopyButton value={icsAbsUrl} label="Copy URL" />
-        </div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', marginTop: 6 }}>
-          Paste this URL into your calendar app (Google Calendar, Apple Calendar, Outlook…)
-        </div>
-      </div>
-
-      {/* Scope toggle */}
-      <div style={{ marginBottom: 24 }}>
-        <FieldLabel>Scope</FieldLabel>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {['all', 'selected'].map(scope => (
-            <button
-              key={scope}
-              className={`status-opt${sub.scope === scope ? ' sel' : ''}`}
-              onClick={() => void patchSub.mutate({ scope })}
-              disabled={patchSub.isPending}
-            >
-              {scope === 'all' ? 'All visible projects' : 'Selected projects'}
-            </button>
-          ))}
-        </div>
-        {patchSub.isPending && (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', marginTop: 6, display: 'block' }}>
-            Saving…
-          </span>
-        )}
-      </div>
-
-      {/* Rotate */}
-      <div>
-        <FieldLabel>Rotate URL</FieldLabel>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {rotateConfirm ? (
-            <>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--warn)' }}>
-                This will invalidate your current calendar URL.
-              </span>
-              <button
-                className="top-btn primary"
-                style={{ background: 'var(--warn)', color: '#fff', fontSize: 12 }}
-                onClick={() => void handleRotate()}
-                disabled={rotate.isPending}
-              >
-                {rotate.isPending ? 'Rotating…' : 'Yes, rotate'}
-              </button>
-              <button className="top-btn" style={{ fontSize: 12 }} onClick={() => setRotateConfirm(false)}>
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="top-btn" style={{ fontSize: 12 }} onClick={() => setRotateConfirm(true)}>
-                Rotate URL
-              </button>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>
-                Invalidates the current .ics URL
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-    </>
-  );
+  return <CalendarSubscriptionPanel />;
 }
 
 // ─── Profile section ─────────────────────────────────────────────────────────

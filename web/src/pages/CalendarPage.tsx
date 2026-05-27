@@ -21,6 +21,7 @@ import type { DateClickArg } from '@fullcalendar/interaction';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState } from '@/components/LoadingState';
 import { GanttChart, type GanttProjectGroup } from '@/components/gantt/GanttChart';
+import { CalendarSubscriptionPanel } from '@/components/CalendarSubscriptionPanel';
 import {
   useAllProjectsEvents,
   useProjectEvents,
@@ -635,6 +636,62 @@ function TimelineView({ groups, range, onEventClick, onRangeChange }: TimelineVi
   );
 }
 
+// ─── Calendar Subscription collapsible panel ─────────────────────────────────
+
+function CollapsibleSubscription() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--line)',
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginTop: 24,
+      }}
+    >
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          width: '100%',
+          padding: '10px 16px',
+          background: open ? 'var(--paper-2)' : 'var(--surface)',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'var(--mono)',
+          fontSize: 10.5,
+          color: 'var(--muted-2)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          textAlign: 'left',
+          borderBottom: open ? '1px solid var(--line)' : 'none',
+        }}
+      >
+        <span style={{ flex: 1 }}>Subscribe to calendar (.ics)</span>
+        <span
+          style={{
+            fontSize: 14,
+            color: 'var(--muted)',
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.2s',
+            display: 'inline-block',
+          }}
+        >
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div style={{ padding: '18px 20px', background: 'var(--surface)' }}>
+          <CalendarSubscriptionPanel />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── CalendarPage ─────────────────────────────────────────────────────────────
 
 type ViewMode = 'calendar' | 'timeline';
@@ -916,6 +973,9 @@ export function CalendarPage() {
             onRangeChange={(start, end) => setTimelineRange({ start, end })}
           />
         )}
+
+        {/* .ics subscription — collapsible secondary panel */}
+        <CollapsibleSubscription />
       </div>
     </AppShell>
   );

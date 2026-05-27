@@ -4,7 +4,7 @@ import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import { StatusPill } from '@/components/StatusPill';
 import { ArtifactUpload } from '@/components/ArtifactUpload';
-import { ArtifactThumbnail, ArtifactDetailModal } from '@/components/ArtifactViewer';
+import { ArtifactDetailModal } from '@/components/ArtifactViewer';
 import { Avatar } from '@/components/Avatar';
 import {
   useProject,
@@ -906,47 +906,299 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Type-specific color tokens for artifact placeholders
+const ARTIFACT_TYPE_COLOR: Record<string, string> = {
+  pdf: '#c0392b',
+  ipynb: '#e67e22',
+  image: '#2980b9',
+  other: '#7f8c8d',
+};
+
+// SVG placeholder glyphs for each artifact type
+function ArtifactPlaceholder({ type }: { type: string }) {
+  const color = ARTIFACT_TYPE_COLOR[type] ?? ARTIFACT_TYPE_COLOR['other'];
+
+  if (type === 'pdf') {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: `${color}11`,
+        }}
+      >
+        <svg width="44" height="54" viewBox="0 0 44 54" fill="none" aria-hidden>
+          <rect x="1.5" y="1.5" width="33" height="43" rx="3" stroke={color} strokeWidth="1.5" opacity="0.5" />
+          <path d="M26 1.5v11h11" stroke={color} strokeWidth="1.5" strokeLinejoin="round" opacity="0.5" />
+          <rect x="8" y="24" width="20" height="2" rx="1" fill={color} opacity="0.3" />
+          <rect x="8" y="29" width="16" height="2" rx="1" fill={color} opacity="0.3" />
+          <rect x="8" y="34" width="18" height="2" rx="1" fill={color} opacity="0.3" />
+          <text x="22" y="20" textAnchor="middle" fontFamily="var(--mono)" fontSize="9" fill={color} fontWeight="700" opacity="0.7">PDF</text>
+        </svg>
+      </div>
+    );
+  }
+
+  if (type === 'ipynb') {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          justifyContent: 'center',
+          background: `${color}0d`,
+          padding: '8px 10px',
+          gap: 4,
+        }}
+      >
+        {/* Traffic lights */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+          {['#e74c3c', '#f39c12', '#2ecc71'].map((c, i) => (
+            <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: c, opacity: 0.5 }} />
+          ))}
+        </div>
+        {/* Faux cell rows */}
+        {[1, 2, 3].map(i => (
+          <div
+            key={i}
+            style={{
+              height: 9,
+              borderRadius: 2,
+              background: i === 2 ? `${color}22` : `${color}18`,
+              borderLeft: `2px solid ${color}`,
+              opacity: 0.8 - i * 0.12,
+            }}
+          />
+        ))}
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color, opacity: 0.5, textAlign: 'center', marginTop: 4, letterSpacing: '0.04em' }}>
+          NOTEBOOK
+        </div>
+      </div>
+    );
+  }
+
+  if (type === 'image') {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: `${color}0d`,
+        }}
+      >
+        <svg width="46" height="40" viewBox="0 0 46 40" fill="none" aria-hidden>
+          <rect x="1.5" y="1.5" width="43" height="37" rx="4" stroke={color} strokeWidth="1.5" opacity="0.4" />
+          <circle cx="14" cy="13" r="5" fill={color} opacity="0.25" />
+          <path d="M1.5 27 L12 17 L20 25 L30 14 L44.5 27" stroke={color} strokeWidth="1.5" strokeLinejoin="round" opacity="0.4" />
+        </svg>
+      </div>
+    );
+  }
+
+  // other / fallback
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: `${color}0d`,
+      }}
+    >
+      <svg width="36" height="46" viewBox="0 0 36 46" fill="none" aria-hidden>
+        <rect x="1.5" y="1.5" width="33" height="43" rx="3" stroke={color} strokeWidth="1.5" opacity="0.4" />
+        <path d="M22 1.5v11h12" stroke={color} strokeWidth="1.5" strokeLinejoin="round" opacity="0.4" />
+        <rect x="8" y="22" width="20" height="2" rx="1" fill={color} opacity="0.25" />
+        <rect x="8" y="28" width="14" height="2" rx="1" fill={color} opacity="0.25" />
+      </svg>
+    </div>
+  );
+}
+
+// Processing shimmer overlay
+function ProcessingOverlay({ status }: { status: string }) {
+  const isPending = status === 'pending' || status === 'processing';
+  if (!isPending) return null;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'rgba(var(--paper-rgb, 250,249,246), 0.55)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 6,
+        backdropFilter: 'blur(1px)',
+      }}
+    >
+      <span
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: '50%',
+          border: '2px solid var(--line)',
+          borderTopColor: 'var(--ember)',
+          animation: 'spin 0.8s linear infinite',
+          display: 'inline-block',
+        }}
+      />
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 8.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {status}
+      </span>
+    </div>
+  );
+}
+
 function ArtifactCard({ artifact: a, onOpen }: { artifact: Artifact; onOpen: () => void }) {
   const deleteArtifact = useDeleteArtifact(a.project_id);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const typeColor = ARTIFACT_TYPE_COLOR[a.type] ?? ARTIFACT_TYPE_COLOR['other'];
+  const hasThumbnail = !!a.thumbnail_url;
+  const isPending = a.processing_status === 'pending' || a.processing_status === 'processing';
+
   return (
-    <div className="arti" style={{ cursor: 'pointer' }}>
-      <div className="ahead" onClick={onOpen}>
-        <ArtifactThumbnail artifact={a} />
-        <span className="tt">{(a.content_type?.split('/')[1] ?? a.type ?? 'file').toUpperCase()}</span>
-        {a.processing_status !== 'done' && (
-          <span style={{ position: 'absolute', top: 6, right: 8, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--warn)', background: 'var(--surface)', padding: '1px 4px', borderRadius: 3, border: '1px solid var(--line)', textTransform: 'uppercase', zIndex: 2 }}>
-            {a.processing_status}
-          </span>
+    <div
+      style={{
+        border: '1px solid var(--line)',
+        borderRadius: 8,
+        overflow: 'hidden',
+        background: 'var(--surface)',
+        display: 'flex',
+        flexDirection: 'column',
+        cursor: 'pointer',
+        transition: 'box-shadow 0.15s',
+      }}
+      onClick={onOpen}
+      title={a.filename}
+    >
+      {/* Thumbnail / Placeholder */}
+      <div
+        style={{
+          position: 'relative',
+          aspectRatio: '4/3',
+          background: 'var(--paper-2)',
+          overflow: 'hidden',
+        }}
+      >
+        {hasThumbnail ? (
+          <img
+            src={a.thumbnail_url!}
+            alt={a.filename}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : (
+          <ArtifactPlaceholder type={a.type} />
         )}
+
+        {/* Processing shimmer */}
+        {isPending && <ProcessingOverlay status={a.processing_status} />}
+
+        {/* Type chip */}
+        <span
+          style={{
+            position: 'absolute',
+            bottom: 6,
+            left: 8,
+            fontFamily: 'var(--mono)',
+            fontSize: 8.5,
+            color: '#fff',
+            background: typeColor,
+            padding: '1px 5px',
+            borderRadius: 3,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            opacity: 0.92,
+          }}
+        >
+          {a.type}
+        </span>
       </div>
-      <div className="ameta">
-        <div className="aname" onClick={onOpen}>{a.filename}</div>
-        <div className="asub">
-          {a.content_type ?? 'unknown'}
-          {a.size_bytes != null && ` · ${formatBytes(a.size_bytes)}`}
+
+      {/* Meta */}
+      <div
+        style={{ padding: '9px 11px', flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div
+          style={{
+            fontWeight: 500,
+            fontSize: 12.5,
+            color: 'var(--ink)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            cursor: 'pointer',
+          }}
+          onClick={onOpen}
+          title={a.filename}
+        >
+          {a.filename}
         </div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--muted-2)', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {a.size_bytes != null && <span>{formatBytes(a.size_bytes)}</span>}
+          {a.processing_status !== 'done' && (
+            <span
+              style={{
+                fontFamily: 'var(--mono)',
+                fontSize: 9,
+                color: a.processing_status === 'failed' ? 'var(--bad)' : 'var(--warn)',
+                background: a.processing_status === 'failed' ? 'var(--pill-blocked-bg)' : 'var(--paper-2)',
+                padding: '0 4px',
+                borderRadius: 3,
+                border: '1px solid var(--line)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {a.processing_status}
+            </span>
+          )}
+        </div>
+        {/* Delete affordance */}
         <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
           {confirmDelete ? (
             <>
               <button
                 className="top-btn"
-                style={{ fontSize: 11, color: 'var(--bad)', padding: '2px 6px' }}
-                onClick={() => void deleteArtifact.mutate(a.id)}
+                style={{ fontSize: 10.5, color: 'var(--bad)', padding: '2px 6px' }}
+                onClick={e => { e.stopPropagation(); void deleteArtifact.mutate(a.id); }}
                 disabled={deleteArtifact.isPending}
               >
                 {deleteArtifact.isPending ? 'Deleting…' : 'Yes, delete'}
               </button>
-              <button className="top-btn" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => setConfirmDelete(false)}>Cancel</button>
+              <button
+                className="top-btn"
+                style={{ fontSize: 10.5, padding: '2px 6px' }}
+                onClick={e => { e.stopPropagation(); setConfirmDelete(false); }}
+              >
+                Cancel
+              </button>
             </>
           ) : (
             <button
               className="icon-btn"
               style={{ fontSize: 10, color: 'var(--muted-2)', padding: '2px 4px' }}
-              onClick={() => setConfirmDelete(true)}
+              onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
               title="Delete artifact"
-            >✕</button>
+            >
+              ✕
+            </button>
           )}
         </div>
       </div>
@@ -958,9 +1210,13 @@ function ArtifactsTab({ projectId }: { projectId: string }) {
   const { data: artifacts = [], isLoading, isError } = useProjectArtifacts(projectId);
   const [selected, setSelected] = useState<Artifact | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [filterType, setFilterType] = useState<string>('');
 
   if (isLoading) return <LoadingState message="Loading artifacts…" />;
   if (isError) return <ErrorState message="Failed to load artifacts." />;
+
+  const types = Array.from(new Set(artifacts.map((a: Artifact) => a.type)));
+  const filtered = filterType ? artifacts.filter((a: Artifact) => a.type === filterType) : artifacts;
 
   return (
     <div className="page-wrap wide">
@@ -987,11 +1243,59 @@ function ArtifactsTab({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {/* Type filter — only show when there are multiple types */}
+      {types.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+          <button
+            onClick={() => setFilterType('')}
+            className={`status-opt${filterType === '' ? ' sel' : ''}`}
+            style={{ fontSize: 12 }}
+          >
+            All
+          </button>
+          {types.map(t => (
+            <button
+              key={t}
+              onClick={() => setFilterType(filterType === t ? '' : t)}
+              className={`status-opt${filterType === t ? ' sel' : ''}`}
+            >
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 12,
+                }}
+              >
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 2,
+                    background: ARTIFACT_TYPE_COLOR[t] ?? ARTIFACT_TYPE_COLOR['other'],
+                    display: 'inline-block',
+                  }}
+                />
+                {t}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {artifacts.length === 0 ? (
         <EmptyState message="No artifacts yet. Upload one above." />
+      ) : filtered.length === 0 ? (
+        <EmptyState message={`No ${filterType} artifacts.`} />
       ) : (
-        <div className="arti-grid">
-          {artifacts.map(a => (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: 14,
+          }}
+        >
+          {filtered.map((a: Artifact) => (
             <ArtifactCard key={a.id} artifact={a} onOpen={() => setSelected(a)} />
           ))}
         </div>
