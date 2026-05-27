@@ -27,9 +27,9 @@ dev: up ## up + migrate + api + web together
 	@echo "services up; starting api + web"
 	@$(MAKE) -j2 api web
 
-test: ## go test ./... + vitest
-	go test ./...
-	@cd web && pnpm test --run 2>/dev/null || true
+test: ## go test ./... -p 1 + vitest (fails loudly on either)
+	go test ./... -p 1
+	cd web && pnpm test --run
 
 openapi: ## regenerate web/src/api types from /openapi.json
 	cd web && pnpm openapi
