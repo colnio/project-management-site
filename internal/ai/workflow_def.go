@@ -28,12 +28,16 @@ type Workflow struct {
 	OutputSchema map[string]string `json:"outputSchema"`
 }
 
-// WorkflowSummary is a lightweight version returned by the list endpoint.
+// WorkflowSummary is the version returned by the list endpoint. It includes
+// the step definitions and output schema so the Templates UI can render the
+// step accordion (with prompt text) and the output schema as JSON.
 type WorkflowSummary struct {
-	Key         string `json:"key"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Scope       string `json:"scope"`
+	Key          string            `json:"key"`
+	Title        string            `json:"title"`
+	Description  string            `json:"description"`
+	Scope        string            `json:"scope"`
+	Steps        []WorkflowStep    `json:"steps"`
+	OutputSchema map[string]string `json:"outputSchema"`
 }
 
 // LoadWorkflows parses all *.json files in the embedded workflows/ directory

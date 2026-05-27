@@ -61,11 +61,22 @@ export interface AutonomyConfig {
   allowed_tools: string[];
 }
 
+export interface AIWorkflowStep {
+  id: string;
+  type: string;
+  sources?: string[];
+  prompt?: string;
+  expects?: Record<string, string>;
+  output_format?: string;
+}
+
 export interface AIWorkflow {
   key: string;
   title: string;
   description: string;
-  scope: 'project' | 'sample' | 'experiment';
+  scope: string;
+  steps?: AIWorkflowStep[];
+  outputSchema?: Record<string, string>;
 }
 
 export interface AIRun {

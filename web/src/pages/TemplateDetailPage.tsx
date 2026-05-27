@@ -1,7 +1,7 @@
 /**
  * TemplateDetailPage — /templates/$workflowKey
- * Workflow definition page. Shows header, scope, description.
- * Full step/prompt definitions not exposed by API — deviation noted.
+ * Workflow definition page: header, scope, description, step accordion
+ * (with prompt text) and the output schema as JSON.
  */
 import { useParams } from '@tanstack/react-router';
 import { AppShell } from '@/components/AppShell';
@@ -103,14 +103,61 @@ function WorkflowDetail({ wf }: { wf: AIWorkflow }) {
           <FieldRow label="Description">
             <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>{wf.description}</p>
           </FieldRow>
-          <FieldRow label="Steps">
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted-2)', fontStyle: 'italic' }}>
-              Step definitions are not exposed by the current API. Run history is not yet available.
-              {/* Deviation: GET /v1/ai/workflows lacks steps/prompt details */}
-            </div>
-          </FieldRow>
         </div>
       </div>
+
+      {/* Steps accordion */}
+      {wf.steps && wf.steps.length > 0 && (
+        <div style={{ border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden', marginBottom: 24 }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', background: 'var(--paper-2)' }}>
+            <div style={{ fontFamily: 'var(--sans)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-2)' }}>
+              Steps ({wf.steps.length})
+            </div>
+          </div>
+          <div style={{ background: 'var(--surface)' }}>
+            {wf.steps.map((step, i) => (
+              <details key={step.id} open={i === 0} style={{ borderBottom: '1px solid var(--line)' }}>
+                <summary style={{ cursor: 'default', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, listStyle: 'none' }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>{String(i + 1).padStart(2, '0')}</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--ink)' }}>{step.id}</span>
+                  <span className="pill" style={{ fontFamily: 'var(--mono)', fontSize: 10, marginLeft: 'auto' }}>{step.type}</span>
+                </summary>
+                <div style={{ padding: '0 16px 14px 42px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {step.sources && step.sources.length > 0 && (
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--muted)' }}>
+                      sources: {step.sources.join(', ')}
+                    </div>
+                  )}
+                  {step.prompt && (
+                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--mono)', fontSize: 12, lineHeight: 1.55, color: 'var(--ink-2)', background: 'var(--paper-2)', border: '1px solid var(--line)', borderRadius: 6, padding: '10px 12px' }}>
+                      {step.prompt}
+                    </pre>
+                  )}
+                  {step.expects && Object.keys(step.expects).length > 0 && (
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--muted)' }}>
+                      expects: {Object.entries(step.expects).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                    </div>
+                  )}
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Output schema */}
+      {wf.outputSchema && Object.keys(wf.outputSchema).length > 0 && (
+        <div style={{ border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden', marginBottom: 24 }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', background: 'var(--paper-2)' }}>
+            <div style={{ fontFamily: 'var(--sans)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-2)' }}>
+              Output schema
+            </div>
+          </div>
+          <pre style={{ margin: 0, padding: '14px 16px', background: 'var(--surface)', fontFamily: 'var(--mono)', fontSize: 12, lineHeight: 1.6, color: 'var(--code-fg)', overflow: 'auto' }}>
+            {JSON.stringify(wf.outputSchema, null, 2)}
+          </pre>
+        </div>
+      )}
 
       {/* How to use callout */}
       <div className="editorial-callout">

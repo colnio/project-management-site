@@ -27,10 +27,12 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 		var items []WorkflowSummary
 		for _, wf := range workflows {
 			items = append(items, WorkflowSummary{
-				Key:         wf.Key,
-				Title:       wf.Title,
-				Description: wf.Description,
-				Scope:       wf.Scope,
+				Key:          wf.Key,
+				Title:        wf.Title,
+				Description:  wf.Description,
+				Scope:        wf.Scope,
+				Steps:        wf.Steps,
+				OutputSchema: wf.OutputSchema,
 			})
 		}
 		return &workflowListOutput{Body: struct {
