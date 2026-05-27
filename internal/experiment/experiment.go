@@ -34,6 +34,8 @@ type Experiment struct {
 	PerformedBy   *uuid.UUID      `json:"performed_by,omitempty"`
 	PerformedAt   *time.Time      `json:"performed_at,omitempty"`
 	Status        string          `json:"status"`
+	Seq           int             `json:"seq"`
+	Code          string          `json:"code"`
 	CreatedBy     uuid.UUID       `json:"created_by"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
@@ -75,13 +77,15 @@ func (s *Service) GetExperiment(ctx context.Context, id uuid.UUID) (*Experiment,
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, project_id, iteration_id, method, parameters, result_summary,
 		        notes_page_id, performed_by, performed_at, status,
+		        COALESCE(seq, 0), COALESCE(code, ''),
 		        created_by, created_at, updated_at
 		 FROM experiments WHERE id = $1`,
 		id,
 	).Scan(
 		&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &e.Parameters,
 		&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
-		&e.Status, &e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
+		&e.Status, &e.Seq, &e.Code,
+		&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, platform.NotFound("experiment.not_found", "experiment not found")
@@ -118,17 +122,22 @@ func (s *Service) CreateExperiment(
 	err := s.pool.QueryRow(ctx,
 		`INSERT INTO experiments
 		   (project_id, iteration_id, method, parameters, result_summary,
-		    status, performed_at, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		    status, performed_at, created_by,
+		    seq, code)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+		         COALESCE((SELECT MAX(seq) FROM experiments WHERE project_id = $1), 0) + 1,
+		         'EX-' || (COALESCE((SELECT MAX(seq) FROM experiments WHERE project_id = $1), 0) + 1))
 		 RETURNING id, project_id, iteration_id, method, parameters, result_summary,
 		           notes_page_id, performed_by, performed_at, status,
+		           COALESCE(seq, 0), COALESCE(code, ''),
 		           created_by, created_at, updated_at`,
 		projectID, iterationID, method, parameters, resultSummary,
 		status, performedAt, creatorID,
 	).Scan(
 		&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &e.Parameters,
 		&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
-		&e.Status, &e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
+		&e.Status, &e.Seq, &e.Code,
+		&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("experiment: create: %w", err)
@@ -154,7 +163,8 @@ func (s *Service) ListExperiments(
 ) ([]*Experiment, error) {
 	query := `SELECT DISTINCT e.id, e.project_id, e.iteration_id, e.method, e.parameters,
 	                 e.result_summary, e.notes_page_id, e.performed_by, e.performed_at,
-	                 e.status, e.created_by, e.created_at, e.updated_at
+	                 e.status, COALESCE(e.seq, 0), COALESCE(e.code, ''),
+	                 e.created_by, e.created_at, e.updated_at
 	          FROM experiments e`
 
 	args := []any{projectID}
@@ -194,7 +204,8 @@ func (s *Service) ListExperiments(
 		if err := rows.Scan(
 			&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &e.Parameters,
 			&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
-			&e.Status, &e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
+			&e.Status, &e.Seq, &e.Code,
+			&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("experiment: scan: %w", err)
 		}
@@ -273,6 +284,7 @@ func (s *Service) UpdateExperiment(
 		`UPDATE experiments SET %s WHERE id = $%d
 		 RETURNING id, project_id, iteration_id, method, parameters, result_summary,
 		           notes_page_id, performed_by, performed_at, status,
+		           COALESCE(seq, 0), COALESCE(code, ''),
 		           created_by, created_at, updated_at`,
 		setSQL, idArg,
 	)
@@ -281,7 +293,8 @@ func (s *Service) UpdateExperiment(
 	err := s.pool.QueryRow(ctx, query, args...).Scan(
 		&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &e.Parameters,
 		&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
-		&e.Status, &e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
+		&e.Status, &e.Seq, &e.Code,
+		&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, platform.NotFound("experiment.not_found", "experiment not found")

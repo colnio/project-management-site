@@ -1190,6 +1190,7 @@ export interface components {
              * @example //schemas/Experiment.json
              */
             readonly $schema?: string;
+            code?: string;
             /** Format: date-time */
             created_at: string;
             created_by: string;
@@ -1203,6 +1204,7 @@ export interface components {
             performed_by?: string;
             project_id: string;
             result_summary: string;
+            seq?: number;
             status: string;
             /** Format: date-time */
             updated_at: string;

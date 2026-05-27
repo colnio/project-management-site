@@ -768,7 +768,7 @@ function ExperimentCard({ experiment: e }: { experiment: Experiment }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="id" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)' }}>
-          {e.id.slice(0, 8)}…
+          {e.code ?? e.id.slice(0, 8)}
         </span>
         <span style={{ marginLeft: 'auto' }}>
           <span className="pill">{e.method}</span>

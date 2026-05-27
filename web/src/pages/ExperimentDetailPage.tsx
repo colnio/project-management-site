@@ -497,7 +497,7 @@ export function ExperimentDetailPage() {
             <h1 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 400, letterSpacing: '-0.01em', margin: '0 0 4px', lineHeight: 1.25 }}>
               {experiment.result_summary || `${experiment.method} experiment`}
             </h1>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)' }}>{experiment.id.slice(0, 8)}…</div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)' }}>{experiment.code ?? experiment.id.slice(0, 8)}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             {dirty && <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--warn)', alignSelf: 'center' }}>unsaved</span>}
@@ -588,7 +588,7 @@ export function ExperimentDetailPage() {
             <div className="section-h"><h2>Meta</h2></div>
             <div style={{ border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
               {[
-                { label: 'ID', value: experiment.id.slice(0, 16) + '…' },
+                { label: 'ID', value: experiment.code ?? (experiment.id.slice(0, 16) + '…') },
                 { label: 'Created', value: new Date(experiment.created_at).toLocaleDateString() },
                 { label: 'Updated', value: new Date(experiment.updated_at).toLocaleDateString() },
                 { label: 'Iteration', value: experiment.iteration_id?.slice(0, 8) ?? '—' },
