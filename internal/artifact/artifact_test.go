@@ -16,9 +16,11 @@ import (
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
 	"github.com/colnio/project-management-site/internal/config"
+	"github.com/colnio/project-management-site/internal/experiment"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
+	"github.com/colnio/project-management-site/internal/sample"
 	"github.com/colnio/project-management-site/internal/testsupport"
 )
 
@@ -105,12 +107,14 @@ func (f *fakeUsers) SetPassword(_ context.Context, _ uuid.UUID, _ string) error 
 // ─── Test environment ─────────────────────────────────────────────────────────
 
 type testEnv struct {
-	pool    *pgxpool.Pool
-	svc     *artifact.Service
-	orgSvc  *org.Service
-	projSvc *project.Service
-	users   *fakeUsers
-	rec     *capturingRecorder
+	pool      *pgxpool.Pool
+	svc       *artifact.Service
+	orgSvc    *org.Service
+	projSvc   *project.Service
+	sampleSvc *sample.Service
+	expSvc    *experiment.Service
+	users     *fakeUsers
+	rec       *capturingRecorder
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -118,6 +122,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	pool := testsupport.NewPool(t)
 	testsupport.Truncate(t, pool,
 		"experiment_artifacts", "sample_artifacts", "artifacts",
+		"experiments", "samples",
 		"projects", "project_collaborations", "admin_overrides",
 		"workspace_memberships", "workspaces", "users",
 	)
@@ -133,20 +138,40 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	orgSvc := org.NewService(pool, cfg, audit.Nop{}, fu, log)
 	projSvc := project.NewService(pool, orgSvc, fu, rec, log)
+	sampleSvc := sample.NewService(pool, projSvc, rec, log)
+	expSvc := experiment.NewService(pool, projSvc, rec, log)
 
-	svc, err := artifact.NewService(pool, projSvc, cfg, rec, log)
+	svc, err := artifact.NewService(pool, projSvc, sampleSvc, expSvc, cfg, rec, log)
 	if err != nil {
 		t.Fatalf("artifact.NewService: %v", err)
 	}
 
 	return &testEnv{
-		pool:    pool,
-		svc:     svc,
-		orgSvc:  orgSvc,
-		projSvc: projSvc,
-		users:   fu,
-		rec:     rec,
+		pool:      pool,
+		svc:       svc,
+		orgSvc:    orgSvc,
+		projSvc:   projSvc,
+		sampleSvc: sampleSvc,
+		expSvc:    expSvc,
+		users:     fu,
+		rec:       rec,
 	}
+}
+
+// seedSample inserts a sample directly into the project (no public create API
+// is exported from the sample package), returning its id.
+func seedSample(t *testing.T, env *testEnv, projectID, createdBy uuid.UUID, identifier string) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	err := env.pool.QueryRow(context.Background(),
+		`INSERT INTO samples (project_id, identifier, name, kind, properties, status, created_by)
+		 VALUES ($1, $2, $3, 'other', '{}', 'active', $4) RETURNING id`,
+		projectID, identifier, identifier, createdBy,
+	).Scan(&id)
+	if err != nil {
+		t.Fatalf("seed sample: %v", err)
+	}
+	return id
 }
 
 func principal(u *auth.User) *platform.Principal {
@@ -185,7 +210,7 @@ func TestNewService_BadCredentials(t *testing.T) {
 	orgSvc := org.NewService(pool, cfg, audit.Nop{}, fu, log)
 	projSvc := project.NewService(pool, orgSvc, fu, audit.Nop{}, log)
 
-	_, err := artifact.NewService(pool, projSvc, &badCfg, audit.Nop{}, log)
+	_, err := artifact.NewService(pool, projSvc, nil, nil, &badCfg, audit.Nop{}, log)
 	if err == nil {
 		t.Fatal("expected error for empty S3 credentials")
 	}
@@ -386,7 +411,7 @@ func TestAttachToSample_RoundTrip(t *testing.T) {
 		t.Fatalf("create artifact: %v", err)
 	}
 
-	sampleID := uuid.New()
+	sampleID := seedSample(t, env, proj.ID, owner.ID, "S-1")
 	sa, err := env.svc.AttachToSample(ctxWithP, sampleID, art.ID, "specimen_image")
 	if err != nil {
 		t.Fatalf("attach to sample: %v", err)
@@ -428,7 +453,11 @@ func TestAttachToExperiment_RoundTrip(t *testing.T) {
 		t.Fatalf("create artifact: %v", err)
 	}
 
-	experimentID := uuid.New()
+	exp, err := env.expSvc.CreateExperiment(ctxWithP, proj.ID, "XRD", nil, "", nil, "planned", nil, owner.ID)
+	if err != nil {
+		t.Fatalf("create experiment: %v", err)
+	}
+	experimentID := exp.ID
 	ea, err := env.svc.AttachToExperiment(ctxWithP, experimentID, art.ID, "raw_data")
 	if err != nil {
 		t.Fatalf("attach to experiment: %v", err)

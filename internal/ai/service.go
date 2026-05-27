@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -251,6 +252,49 @@ func (s *Service) GetUsageSummary(ctx context.Context, p *platform.Principal, wo
 	// Reuse the same lightweight auth as GetWorkspaceAutonomy — no role required
 	// beyond being authenticated (any workspace member can view spend data).
 	return getUsageSummary(ctx, s.pool, workspaceID)
+}
+
+// ─── ListProposedToolCallsByWorkspace ─────────────────────────────────────────
+
+// ProposedToolCallItem is a lightweight view of a proposed AI tool call.
+type ProposedToolCallItem struct {
+	ID        uuid.UUID
+	Tool      string
+	ProjectID uuid.UUID
+	CreatedAt time.Time
+}
+
+// ListProposedToolCallsByWorkspace returns proposed AI tool calls for all projects
+// in the given workspace, ordered by created_at DESC, limited to limit rows.
+func (s *Service) ListProposedToolCallsByWorkspace(ctx context.Context, workspaceID uuid.UUID, limit int) ([]ProposedToolCallItem, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT tc.id, tc.tool, tc.created_at, p.id AS project_id
+		 FROM ai_tool_calls tc
+		 JOIN ai_conversations c ON c.id = tc.conversation_id
+		 JOIN projects p ON p.id = c.project_id
+		 WHERE p.workspace_id = $1
+		   AND tc.status = 'proposed'
+		 ORDER BY tc.created_at DESC
+		 LIMIT $2`,
+		workspaceID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ai: list proposed tool calls by workspace: %w", err)
+	}
+	defer rows.Close()
+
+	var items []ProposedToolCallItem
+	for rows.Next() {
+		var item ProposedToolCallItem
+		if err := rows.Scan(&item.ID, &item.Tool, &item.CreatedAt, &item.ProjectID); err != nil {
+			return nil, fmt.Errorf("ai: scan proposed tool call: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ai: proposed tool calls rows: %w", err)
+	}
+	return items, nil
 }
 
 // SetProjectAutonomy upserts the autonomy config for a project.

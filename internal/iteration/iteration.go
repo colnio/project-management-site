@@ -311,6 +311,22 @@ func (s *Service) UnlinkSample(ctx context.Context, iterationID, sampleID uuid.U
 	return nil
 }
 
+// GetProjectIDForIteration returns the project_id for the given iteration.
+// Returns platform.NotFound if the iteration does not exist.
+func (s *Service) GetProjectIDForIteration(ctx context.Context, iterationID uuid.UUID) (uuid.UUID, error) {
+	var projectID uuid.UUID
+	err := s.pool.QueryRow(ctx,
+		`SELECT project_id FROM iterations WHERE id = $1`, iterationID,
+	).Scan(&projectID)
+	if err == pgx.ErrNoRows {
+		return uuid.Nil, platform.NotFound("iteration.not_found", "iteration not found")
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("iteration: get project id: %w", err)
+	}
+	return projectID, nil
+}
+
 // ListSamples returns all samples linked to an iteration.
 func (s *Service) ListSamples(ctx context.Context, iterationID uuid.UUID) ([]*IterationSample, error) {
 	rows, err := s.pool.Query(ctx,

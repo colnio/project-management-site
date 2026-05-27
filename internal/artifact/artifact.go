@@ -21,9 +21,11 @@ import (
 
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/config"
+	"github.com/colnio/project-management-site/internal/experiment"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
+	"github.com/colnio/project-management-site/internal/sample"
 )
 
 // Artifact is the domain struct for a stored file. ProcessingStatus is managed
@@ -67,14 +69,16 @@ type ExperimentArtifact struct {
 
 // Service is the artifact module's domain service.
 type Service struct {
-	pool     *pgxpool.Pool
-	projects *project.Service
-	cfg      *config.Config
-	rec      audit.Recorder
-	presign  *s3.PresignClient
-	bucket   string
-	log      *slog.Logger
-	enqueuer Enqueuer // optional; nil means skip enqueueing (keeps old tests green)
+	pool        *pgxpool.Pool
+	projects    *project.Service
+	samples     *sample.Service
+	experiments *experiment.Service
+	cfg         *config.Config
+	rec         audit.Recorder
+	presign     *s3.PresignClient
+	bucket      string
+	log         *slog.Logger
+	enqueuer    Enqueuer // optional; nil means skip enqueueing (keeps old tests green)
 }
 
 // SetEnqueuer wires a background-job enqueuer into the service after construction.
@@ -89,6 +93,8 @@ func (s *Service) SetEnqueuer(e Enqueuer) { s.enqueuer = e }
 func NewService(
 	pool *pgxpool.Pool,
 	projects *project.Service,
+	samples *sample.Service,
+	experiments *experiment.Service,
 	cfg *config.Config,
 	rec audit.Recorder,
 	log *slog.Logger,
@@ -116,13 +122,15 @@ func NewService(
 	presign := s3.NewPresignClient(s3Client)
 
 	return &Service{
-		pool:     pool,
-		projects: projects,
-		cfg:      cfg,
-		rec:      rec,
-		presign:  presign,
-		bucket:   cfg.BucketOriginals,
-		log:      log,
+		pool:        pool,
+		projects:    projects,
+		samples:     samples,
+		experiments: experiments,
+		cfg:         cfg,
+		rec:         rec,
+		presign:     presign,
+		bucket:      cfg.BucketOriginals,
+		log:         log,
 	}, nil
 }
 
@@ -315,6 +323,15 @@ func (s *Service) AttachToSample(ctx context.Context, sampleID, artifactID uuid.
 		return nil, err
 	}
 
+	// Verify the sample belongs to the same project as the artifact.
+	sm, err := s.samples.GetSample(ctx, sampleID)
+	if err != nil {
+		return nil, err
+	}
+	if sm.ProjectID != art.ProjectID {
+		return nil, platform.BadRequest("artifact.project_mismatch", "sample does not belong to artifact's project")
+	}
+
 	var rolePtr *string
 	if role != "" {
 		r := role
@@ -397,6 +414,15 @@ func (s *Service) AttachToExperiment(ctx context.Context, experimentID, artifact
 
 	if _, _, err := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleEditor); err != nil {
 		return nil, err
+	}
+
+	// Verify the experiment belongs to the same project as the artifact.
+	exp, err := s.experiments.GetExperiment(ctx, experimentID)
+	if err != nil {
+		return nil, err
+	}
+	if exp.ProjectID != art.ProjectID {
+		return nil, platform.BadRequest("artifact.project_mismatch", "experiment does not belong to artifact's project")
 	}
 
 	var rolePtr *string

@@ -386,7 +386,7 @@ func buildTestEnvWithPool(t *testing.T, pool *pgxpool.Pool) *testEnv {
 	orgSvc := org.NewService(pool, cfg, audit.Nop{}, fu, log)
 	projSvc := project.NewService(pool, orgSvc, fu, rec, log)
 
-	svc, err := artifact.NewService(pool, projSvc, cfg, rec, log)
+	svc, err := artifact.NewService(pool, projSvc, nil, nil, cfg, rec, log)
 	if err != nil {
 		t.Fatalf("artifact.NewService: %v", err)
 	}

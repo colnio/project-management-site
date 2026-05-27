@@ -98,7 +98,7 @@ func run() error {
 	sampleSvc := sample.NewService(pool, projectSvc, auditRec, logger)
 	experimentSvc := experiment.NewService(pool, projectSvc, auditRec, logger)
 	pageSvc := page.NewService(pool, projectSvc, auditRec, logger)
-	artifactSvc, err := artifact.NewService(pool, projectSvc, cfg, auditRec, logger)
+	artifactSvc, err := artifact.NewService(pool, projectSvc, sampleSvc, experimentSvc, cfg, auditRec, logger)
 	if err != nil {
 		return err
 	}
@@ -135,10 +135,9 @@ func run() error {
 	// Wire the River-backed enqueuer into the artifact service.
 	artifactSvc.SetEnqueuer(artifact.NewRiverEnqueuer(riverClient))
 
-	riskSvc := risk.NewService(pool, projectSvc, auditRec, logger)
+	riskSvc := risk.NewService(pool, projectSvc, iterationSvc, auditRec, logger)
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
 	meetingSvc := meeting.NewService(pool, orgSvc, projectSvc, auditRec, logger)
-	inboxSvc := inbox.NewService(pool, orgSvc, logger)
 
 	// AI module (G1/G2/G5): load provider, build client (nil if unavailable).
 	aiProvider, aiProvErr := ai.LoadProvider()
@@ -154,6 +153,7 @@ func run() error {
 	}
 	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, projectSvc, auditRec, logger)
 	aiSvc.SetRiskService(riskSvc)
+	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projectSvc, logger)
 
 	// Load workflow definitions from the embedded workflows/ directory.
 	workflows, wfErr := ai.LoadWorkflows()

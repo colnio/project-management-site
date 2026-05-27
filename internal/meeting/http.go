@@ -108,6 +108,14 @@ func (s *Service) handleCreateMeeting(ctx context.Context, in *createMeetingInpu
 			return nil, platform.BadRequest("meeting.invalid_project_id", "invalid project ID")
 		}
 		projectID = &pid
+		// Verify the project belongs to this workspace.
+		proj, err := s.projects.GetProject(ctx, pid)
+		if err != nil {
+			return nil, err
+		}
+		if proj.WorkspaceID != wsID {
+			return nil, platform.BadRequest("meeting.project_mismatch", "project does not belong to this workspace")
+		}
 	}
 
 	var chair *uuid.UUID

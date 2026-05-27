@@ -266,6 +266,33 @@ func (s *Service) UpdateProject(
 	return &proj, nil
 }
 
+// ListIDsForWorkspace returns the UUIDs of non-archived projects in the workspace.
+func (s *Service) ListIDsForWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id FROM projects
+		 WHERE workspace_id = $1
+		   AND archived_at IS NULL`,
+		workspaceID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("project: list ids for workspace: %w", err)
+	}
+	defer rows.Close()
+
+	var result []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("project: scan project id: %w", err)
+		}
+		result = append(result, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("project: rows error (ids): %w", err)
+	}
+	return result, nil
+}
+
 // ArchiveProject sets archived_at to now().
 func (s *Service) ArchiveProject(ctx context.Context, id uuid.UUID, actorID uuid.UUID) (*Project, error) {
 	var proj Project

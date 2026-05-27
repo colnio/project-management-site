@@ -114,6 +114,14 @@ func (s *Service) handleCreateRisk(ctx context.Context, in *createRiskInput) (*c
 			return nil, platform.BadRequest("risk.invalid_iteration_id", "invalid iteration ID")
 		}
 		iterationID = &parsed
+		// Verify the iteration belongs to the same project.
+		iterProjID, err := s.iterations.GetProjectIDForIteration(ctx, parsed)
+		if err != nil {
+			return nil, err
+		}
+		if iterProjID != projectID {
+			return nil, platform.BadRequest("risk.iteration_mismatch", "iteration does not belong to this project")
+		}
 	}
 
 	likelihood := in.Body.Likelihood
@@ -194,13 +202,10 @@ func (s *Service) handleListByIteration(ctx context.Context, in *listRisksByIter
 		return nil, platform.BadRequest("iteration.invalid_id", "invalid iteration ID")
 	}
 
-	// Resolve the iteration's project_id for authorization.
-	var projectID uuid.UUID
-	err = s.pool.QueryRow(ctx,
-		`SELECT project_id FROM iterations WHERE id = $1`, iterationID,
-	).Scan(&projectID)
+	// Resolve the iteration's project_id for authorization via the iteration service.
+	projectID, err := s.iterations.GetProjectIDForIteration(ctx, iterationID)
 	if err != nil {
-		return nil, platform.NotFound("iteration.not_found", "iteration not found")
+		return nil, err
 	}
 
 	if _, _, err := s.projects.Authorize(ctx, p, projectID, org.RoleViewer); err != nil {

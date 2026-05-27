@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/colnio/project-management-site/internal/audit"
+	"github.com/colnio/project-management-site/internal/iteration"
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
 )
@@ -53,24 +54,27 @@ type Risk struct {
 
 // Service is the risk module's domain service.
 type Service struct {
-	pool     *pgxpool.Pool
-	projects *project.Service
-	rec      audit.Recorder
-	log      *slog.Logger
+	pool       *pgxpool.Pool
+	projects   *project.Service
+	iterations *iteration.Service
+	rec        audit.Recorder
+	log        *slog.Logger
 }
 
 // NewService constructs a Service.
 func NewService(
 	pool *pgxpool.Pool,
 	projects *project.Service,
+	iterations *iteration.Service,
 	rec audit.Recorder,
 	log *slog.Logger,
 ) *Service {
 	return &Service{
-		pool:     pool,
-		projects: projects,
-		rec:      rec,
-		log:      log,
+		pool:       pool,
+		projects:   projects,
+		iterations: iterations,
+		rec:        rec,
+		log:        log,
 	}
 }
 
@@ -260,6 +264,28 @@ func (s *Service) setPIReview(ctx context.Context, id uuid.UUID, flagged bool) (
 		id, flagged,
 	)
 	return scanRisk(row)
+}
+
+// ─── ListFlaggedForPIReviewByWorkspace ────────────────────────────────────────
+
+// ListFlaggedForPIReviewByWorkspace returns risks with flagged_for_pi_review=true
+// across all projects in the workspace, ordered created_at DESC, limited to limit rows.
+func (s *Service) ListFlaggedForPIReviewByWorkspace(ctx context.Context, workspaceID uuid.UUID, limit int) ([]*Risk, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+riskCols+`
+		 FROM risks r
+		 JOIN projects p ON p.id = r.project_id
+		 WHERE p.workspace_id = $1
+		   AND r.flagged_for_pi_review = true
+		 ORDER BY r.created_at DESC
+		 LIMIT $2`,
+		workspaceID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("risk: list flagged for pi review by workspace: %w", err)
+	}
+	defer rows.Close()
+	return collectRisks(rows)
 }
 
 // ─── UpsertFromWorkflow ──────────────────────────────────────────────────────
