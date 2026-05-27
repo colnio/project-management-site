@@ -83,7 +83,7 @@ export function PageEditorPage() {
   );
 
   return (
-    <AppShell topBarCrumbs={crumbs} topBarActions={topBarActions}>
+    <AppShell topBarCrumbs={crumbs} topBarActions={topBarActions} activeProjectId={pageData?.project_id}>
       {/* History panel (controlled at page level so it can overlay the AppShell) */}
       {showHistory && pageData && (
         <HistoryPanel

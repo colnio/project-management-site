@@ -81,6 +81,8 @@ function ToolCallCard({ tc, convId, onApprove, onReject }: ToolCallCardProps) {
   const approve = useApproveToolCall(convId);
   const reject = useRejectToolCall(convId);
   const proposed = isProposedToolCall(tc);
+  // Collapsed by default to keep the conversation readable; click to expand.
+  const [expanded, setExpanded] = useState(false);
 
   const handleApprove = async () => { await approve.mutateAsync(tc.id); onApprove?.(); };
   const handleReject = async () => { await reject.mutateAsync(tc.id); onReject?.(); };
@@ -92,11 +94,15 @@ function ToolCallCard({ tc, convId, onApprove, onReject }: ToolCallCardProps) {
       border: `1px solid ${proposed ? 'var(--ember-soft)' : 'var(--line)'}`,
       borderRadius: 6, fontSize: 11.5, fontFamily: 'var(--mono)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexWrap: 'wrap' }}>
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexWrap: 'wrap', cursor: 'pointer' }}
+      >
+        <span style={{ color: 'var(--muted-2)', fontSize: 10 }}>{expanded ? '▾' : '▸'}</span>
         <span style={{ color: 'var(--ember)', fontWeight: 600 }}>{tc.name}</span>
-        <span style={{ color: 'var(--muted)' }}>{formatToolArgs(tc.arguments)}</span>
+        {expanded && <span style={{ color: 'var(--muted)' }}>{formatToolArgs(tc.arguments)}</span>}
       </div>
-      {tc.result != null && (
+      {expanded && tc.result != null && (
         <div style={{ color: 'var(--muted)', marginTop: 3 }}>→ {formatToolResult(tc.result)}</div>
       )}
       {proposed && (
