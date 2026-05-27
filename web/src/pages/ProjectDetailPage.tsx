@@ -12,11 +12,11 @@ import {
   useProjectExperiments,
   useProjectIterations,
   useProjectArtifacts,
-  useCreateIteration,
   useCreateSample,
   useCreateExperiment,
   useWorkspaceMembers,
 } from '@/hooks/useQueries';
+import { NewIterationWizard } from '@/components/wizards/NewIterationWizard';
 import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import { PagesPanel } from '@/components/PagesPanel';
 import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
@@ -833,58 +833,6 @@ function ExperimentsTab({ projectId }: { projectId: string }) {
   );
 }
 
-// ─── Create Iteration Dialog ──────────────────────────────────────────────────
-
-function CreateIterationDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [status, setStatus] = useState('planned');
-  const createIter = useCreateIteration(projectId);
-
-  const handleCreate = async () => {
-    if (!title.trim()) return;
-    await createIter.mutateAsync({ title: title.trim(), description, status });
-    onClose();
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-head">
-          <span className="modal-title">New Iteration</span>
-          <button className="icon-btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Title</div>
-            <input className="field-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Formation cycle batch" autoFocus />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Description</div>
-            <textarea className="field-textarea" value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What does this iteration cover?" />
-          </div>
-          <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Initial status</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {['planned', 'active', 'done', 'blocked'].map(s => (
-                <button key={s} onClick={() => setStatus(s)} className={`status-opt${status === s ? ' sel' : ''}`}>
-                  <StatusPill status={s} />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="modal-foot">
-          <button className="top-btn" onClick={onClose}>Cancel</button>
-          <button className="top-btn primary" onClick={handleCreate} disabled={!title.trim() || createIter.isPending}>
-            {createIter.isPending ? 'Creating…' : 'Create iteration'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Iterations Tab ──────────────────────────────────────────────────────────
 
 function IterationRow({ iteration: it }: { iteration: Iteration }) {
@@ -919,7 +867,7 @@ function IterationRow({ iteration: it }: { iteration: Iteration }) {
 
 function IterationsTab({ projectId }: { projectId: string }) {
   const { data: iterations = [], isLoading, isError } = useProjectIterations(projectId);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   if (isLoading) return <LoadingState message="Loading iterations…" />;
   if (isError) return <ErrorState message="Failed to load iterations." />;
@@ -928,12 +876,17 @@ function IterationsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="page-wrap">
-      {createOpen && <CreateIterationDialog projectId={projectId} onClose={() => setCreateOpen(false)} />}
+      {wizardOpen && (
+        <NewIterationWizard
+          projectId={projectId}
+          onClose={() => setWizardOpen(false)}
+        />
+      )}
       <div className="section-h" style={{ marginBottom: 4 }}>
         <h2>Iterations</h2>
         <span className="meta">{iterations.length} total</span>
         <div className="right">
-          <button className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New iteration</button>
+          <button className="top-btn primary" onClick={() => setWizardOpen(true)}>+ New iteration</button>
         </div>
       </div>
       {sorted.length === 0 ? <EmptyState message="No iterations yet." /> : (

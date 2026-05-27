@@ -175,6 +175,31 @@ func (s *Service) UpdateIteration(
 	position *int,
 	actorID uuid.UUID,
 ) (*Iteration, error) {
+	// Gate: block transition to "active" when a HIGH-likelihood risk is open and
+	// flagged for PI review.
+	if status != nil && *status == "active" {
+		var blocked bool
+		err := s.pool.QueryRow(ctx,
+			`SELECT EXISTS(
+				SELECT 1 FROM risks
+				WHERE iteration_id = $1
+				  AND likelihood = 'high'
+				  AND flagged_for_pi_review = true
+				  AND status = 'open'
+			)`,
+			id,
+		).Scan(&blocked)
+		if err != nil {
+			return nil, fmt.Errorf("iteration: risk gate check: %w", err)
+		}
+		if blocked {
+			return nil, platform.Conflict(
+				"iteration.blocked_by_risk",
+				"cannot activate: a HIGH-likelihood risk is flagged for PI review and unresolved",
+			)
+		}
+	}
+
 	var it Iteration
 	err := s.pool.QueryRow(ctx,
 		`UPDATE iterations

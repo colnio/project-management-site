@@ -6,8 +6,8 @@ import {
   useWorkspaces,
   useProjects,
   useCreateWorkspace,
-  useCreateProject,
 } from '@/hooks/useQueries';
+import { NewProjectWizard } from '@/components/wizards/NewProjectWizard';
 import type { Workspace } from '@/api/types';
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
@@ -47,83 +47,6 @@ function NewWorkspaceDialog({ onClose }: DialogProps) {
             disabled={!name.trim()}
           >
             Create workspace
-          </SubmitButton>
-        </DialogFooter>
-      </Dialog>
-    </Backdrop>
-  );
-}
-
-interface NewProjectDialogProps extends DialogProps {
-  workspaceId: string;
-}
-
-function NewProjectDialog({ workspaceId, onClose }: NewProjectDialogProps) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [visibility, setVisibility] = useState('workspace');
-  const mutation = useCreateProject(workspaceId);
-  const navigate = useNavigate();
-
-  const handleSubmit = async () => {
-    if (!name.trim()) return;
-    const project = await mutation.mutateAsync({
-      name: name.trim(),
-      description: description.trim() || undefined,
-      visibility,
-    });
-    onClose();
-    await navigate({ to: '/projects/$projectId', params: { projectId: project.id } });
-  };
-
-  return (
-    <Backdrop onClose={onClose}>
-      <Dialog title="New Project">
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <FieldLabel>Project name</FieldLabel>
-          <TextInput
-            value={name}
-            onChange={setName}
-            placeholder="e.g. NMC 4.30V cycling"
-            autoFocus
-          />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <FieldLabel>Description (optional)</FieldLabel>
-          <TextInput
-            value={description}
-            onChange={setDescription}
-            placeholder="Brief description of project goals"
-          />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <FieldLabel>Visibility</FieldLabel>
-          <select
-            value={visibility}
-            onChange={e => setVisibility(e.target.value)}
-            style={{
-              border: '1px solid var(--line-2)',
-              borderRadius: 6,
-              padding: '8px 10px',
-              font: '13px/1.5 var(--sans)',
-              color: 'var(--ink)',
-              background: 'var(--paper)',
-              outline: 'none',
-            }}
-          >
-            <option value="workspace">Workspace (all members)</option>
-            <option value="private">Private (collaborators only)</option>
-          </select>
-        </label>
-        {mutation.error && <FormError message={String(mutation.error)} />}
-        <DialogFooter>
-          <CancelButton onClick={onClose} />
-          <SubmitButton
-            onClick={() => void handleSubmit()}
-            loading={mutation.isPending}
-            disabled={!name.trim()}
-          >
-            Create project
           </SubmitButton>
         </DialogFooter>
       </Dialog>
@@ -284,7 +207,7 @@ function WorkspaceSection({
       )}
 
       {showNewProject && (
-        <NewProjectDialog
+        <NewProjectWizard
           workspaceId={workspace.id}
           onClose={() => setShowNewProject(false)}
         />
