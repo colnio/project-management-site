@@ -30,6 +30,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { riskKeys } from '@/hooks/useRiskQueries';
 import { useAuth } from '@/hooks/useAuth';
 import { RiskFormDialog } from '@/components/RiskFormDialog';
+import { useAIPanel } from '@/components/AIPanelProvider';
 
 // ─── Likelihood pill ─────────────────────────────────────────────────────────
 
@@ -284,6 +285,17 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
   const { user } = useAuth();
   const isPI = !!user?.is_system_admin;
 
+  // AI panel context — degrades gracefully when no provider is present
+  const { reviewWithAI } = useAIPanel();
+
+  const handleReviewWithAI = () => {
+    const scope = iterationId ? 'iteration' : 'project';
+    reviewWithAI(
+      'risk_assesment_skill',
+      `Begin a structured risk assessment for this ${scope}. Start with Phase 1 (Context Mapping).`,
+    );
+  };
+
   const projectResult = useProjectRisks(iterationId ? undefined : projectId);
   const iterationResult = useIterationRisks(iterationId);
 
@@ -400,6 +412,14 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
             style={{ fontSize: 12 }}
           >
             {runWorkflow.isPending ? 'Running…' : 'Run risk assessment'}
+          </button>
+
+          <button
+            className="top-btn"
+            onClick={handleReviewWithAI}
+            style={{ fontSize: 12 }}
+          >
+            Review with AI
           </button>
         </div>
 

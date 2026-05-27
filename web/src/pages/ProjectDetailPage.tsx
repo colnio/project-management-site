@@ -24,6 +24,7 @@ import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import { PagesPanel } from '@/components/PagesPanel';
 import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
 import { AIChatPanel } from '@/components/AIChatPanel';
+import { AIPanelProvider, useAIPanel } from '@/components/AIPanelProvider';
 import { WorkflowRunner } from '@/components/WorkflowRunner';
 import { ProjectAutonomySection } from '@/components/AutonomyConfig';
 import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
@@ -1160,7 +1161,7 @@ interface ProjectDetailSearch {
 
 const TAB_IDS = new Set<Tab>(TABS.map(t => t.id));
 
-export function ProjectDetailPage() {
+function ProjectDetailPageInner() {
   const { projectId } = useParams({ strict: false }) as { projectId: string };
   const search = useSearch({ strict: false }) as ProjectDetailSearch;
   const router = useRouter();
@@ -1169,7 +1170,7 @@ export function ProjectDetailPage() {
   const { data: experiments = [] } = useProjectExperiments(projectId);
   const { data: iterations = [] } = useProjectIterations(projectId);
   const { data: artifacts = [] } = useProjectArtifacts(projectId);
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const { open: aiPanelOpen, seed: aiSeed, toggle: toggleAI, close: closeAI } = useAIPanel();
 
   // URL search param is the single source of truth for the active tab.
   // Unknown values (e.g. a hand-typed ?tab=settings) fall back to overview
@@ -1199,7 +1200,7 @@ export function ProjectDetailPage() {
     <button
       className="top-btn primary"
       style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
-      onClick={() => setAiPanelOpen(o => !o)}
+      onClick={toggleAI}
     >
       <span
         style={{
@@ -1234,7 +1235,7 @@ export function ProjectDetailPage() {
             counts={counts}
           />
           <div className="content" style={{ padding: 0 }}>
-            {currentTab === 'overview' && <OverviewTab projectId={projectId} onToggleAI={() => setAiPanelOpen(o => !o)} />}
+            {currentTab === 'overview' && <OverviewTab projectId={projectId} onToggleAI={toggleAI} />}
             {currentTab === 'samples' && <SamplesTab projectId={projectId} />}
             {currentTab === 'experiments' && <ExperimentsTab projectId={projectId} />}
             {currentTab === 'iterations' && <IterationsTab projectId={projectId} />}
@@ -1319,9 +1320,18 @@ export function ProjectDetailPage() {
         <AIChatPanel
           projectId={projectId}
           workspaceId={project?.workspace_id}
-          onClose={() => setAiPanelOpen(false)}
+          onClose={closeAI}
+          seed={aiSeed}
         />
       )}
     </AppShell>
+  );
+}
+
+export function ProjectDetailPage() {
+  return (
+    <AIPanelProvider>
+      <ProjectDetailPageInner />
+    </AIPanelProvider>
   );
 }

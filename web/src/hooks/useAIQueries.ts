@@ -128,11 +128,21 @@ export function useConversations(projectId: string | undefined) {
   });
 }
 
+export interface CreateConversationInput {
+  title: string;
+  skill?: string;
+}
+
 export function useCreateConversation(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (title: string) =>
-      api.post<AIConversation>(`/v1/projects/${projectId}/ai/conversations`, { title }),
+    mutationFn: (input: string | CreateConversationInput) => {
+      const title = typeof input === 'string' ? input : input.title;
+      const skill = typeof input === 'string' ? undefined : input.skill;
+      const body: Record<string, string> = { title };
+      if (skill) body.skill = skill;
+      return api.post<AIConversation>(`/v1/projects/${projectId}/ai/conversations`, body);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: aiKeys.conversations(projectId) }),
   });
 }

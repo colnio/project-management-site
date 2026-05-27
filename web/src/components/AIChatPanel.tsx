@@ -300,13 +300,19 @@ function StatusStrip({ projectId, workspaceId }: StatusStripProps) {
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
+export interface AIChatPanelSeed {
+  skill?: string;
+  message?: string;
+}
+
 interface AIChatPanelProps {
   projectId: string;
   onClose: () => void;
   workspaceId?: string;
+  seed?: AIChatPanelSeed;
 }
 
-export function AIChatPanel({ projectId, onClose, workspaceId }: AIChatPanelProps) {
+export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPanelProps) {
   const qc = useQueryClient();
   const { data: conversations = [], isLoading: convLoading } = useConversations(projectId);
   const createConv = useCreateConversation(projectId);
@@ -322,6 +328,10 @@ export function AIChatPanel({ projectId, onClose, workspaceId }: AIChatPanelProp
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Guard: auto-send the seed message exactly once after the seeded conversation
+  // is selected. A ref prevents re-firing on re-renders.
+  const didSeedSend = useRef(false);
 
   // Set/clear --ai-w on <html> so the main content area shifts.
   useEffect(() => {
@@ -341,16 +351,45 @@ export function AIChatPanel({ projectId, onClose, workspaceId }: AIChatPanelProp
     if (convLoading || didAutoCreate.current) return;
     if (conversations.length === 0 && !createConv.isPending) {
       didAutoCreate.current = true;
-      createConv.mutate('General', {
-        onSuccess: conv => setSelectedConvId(conv.id),
-        onError: () => { didAutoCreate.current = false; },
-      });
+      if (seed?.skill) {
+        // Seeded flow: create a "Risk Assessment" conversation with the skill.
+        createConv.mutate(
+          { title: 'Risk Assessment', skill: seed.skill },
+          {
+            onSuccess: conv => setSelectedConvId(conv.id),
+            onError: () => { didAutoCreate.current = false; },
+          },
+        );
+      } else {
+        // Normal flow: create a generic "General" conversation.
+        createConv.mutate('General', {
+          onSuccess: conv => setSelectedConvId(conv.id),
+          onError: () => { didAutoCreate.current = false; },
+        });
+      }
     }
-  }, [conversations, convLoading, createConv]);
+  }, [conversations, convLoading, createConv, seed]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streaming]);
+
+  // Auto-send the seed kickoff message exactly once after the seeded conversation
+  // is selected and the message list has loaded empty (freshly created conv).
+  // didSeedSend guards against re-firing on re-renders.
+  useEffect(() => {
+    if (!seed?.message) return;
+    if (!selectedConvId) return;
+    if (sending) return;
+    if (didSeedSend.current) return;
+    if (msgsLoading) return;
+    if (messages.length > 0) return; // conv already has messages — don't re-seed
+
+    didSeedSend.current = true;
+    void handleSend(seed.message);
+    // handleSend is stable via useCallback; seed/selectedConvId/sending are captured above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed, selectedConvId, sending, msgsLoading, messages.length]);
 
   const handleNewConversation = async () => {
     const title = `Chat ${new Date().toLocaleDateString()}`;
@@ -358,11 +397,11 @@ export function AIChatPanel({ projectId, onClose, workspaceId }: AIChatPanelProp
     setSelectedConvId(conv.id);
   };
 
-  const handleSend = useCallback(async () => {
-    const content = draft.trim();
+  const handleSend = useCallback(async (overrideContent?: string) => {
+    const content = (overrideContent ?? draft).trim();
     if (!content || !selectedConvId || sending) return;
 
-    setDraft('');
+    if (!overrideContent) setDraft('');
     setSendError(null);
     setSending(true);
 
