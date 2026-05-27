@@ -28,6 +28,7 @@ import {
   useAddSampleRelation,
   useProjectSamples,
   useProjectArtifacts,
+  useProjectExperiments,
 } from '@/hooks/useQueries';
 import {
   useSampleArtifacts,
@@ -35,6 +36,7 @@ import {
   useArtifact,
 } from '@/hooks/useArtifactQueries';
 import { ArtifactThumbnail, ArtifactDetailModal } from '@/components/ArtifactViewer';
+import { ArtEmbed } from '@/components/embeds/ArtEmbeds';
 import type { Sample, Artifact } from '@/api/types';
 import type { LineageGraph } from '@/hooks/useQueries';
 
@@ -475,6 +477,124 @@ function LineageFlow({ sampleId }: LineageFlowProps) {
   );
 }
 
+// ─── Identifier strip (read view) ────────────────────────────────────────────
+
+function IdentifierStrip({ sample }: { sample: Sample }) {
+  const created = new Date(sample.created_at).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+  });
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        flexWrap: 'wrap',
+        padding: '8px 12px',
+        background: 'var(--paper-2)',
+        border: '1px solid var(--line)',
+        borderRadius: 6,
+        marginBottom: 16,
+      }}
+    >
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--ember)', letterSpacing: '-0.01em' }}>
+        {sample.identifier}
+      </span>
+      <span style={{ color: 'var(--line-2)' }}>·</span>
+      <KindPill kind={sample.kind} />
+      <StatusPill status={sample.status} />
+      <span style={{ color: 'var(--line-2)' }}>·</span>
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>
+        {created}
+      </span>
+    </div>
+  );
+}
+
+// ─── Artifact embeds (read view) ─────────────────────────────────────────────
+
+function SampleArtifactEmbeds({ sampleId }: { sampleId: string }) {
+  const { data: attached = [], isLoading } = useSampleArtifacts(sampleId);
+
+  if (isLoading || attached.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div className="section-h" style={{ marginTop: 0, marginBottom: 12 }}>
+        <h2>Artifact Embeds</h2>
+        <span className="meta">{attached.length}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+        {attached.map(sa => (
+          <SampleArtifactEmbed key={sa.artifact_id} artifactId={sa.artifact_id} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SampleArtifactEmbed({ artifactId }: { artifactId: string }) {
+  const { data: artifact } = useArtifact(artifactId);
+  if (!artifact) return null;
+  return <ArtEmbed artifact={artifact} />;
+}
+
+// ─── Linked experiments (read view) ──────────────────────────────────────────
+
+function LinkedExperimentsSection({ projectId }: { projectId: string }) {
+  const { data: experiments = [] } = useProjectExperiments(projectId);
+
+  // Filter experiments that have this sample in their sample list is not
+  // directly available without per-experiment queries. We do a best-effort:
+  // show experiments in the same project with the sample's project_id as a hint.
+  // The experiment detail page links samples explicitly; here we show the project's
+  // full experiment list as "experiments in this project" so the user can navigate.
+  if (experiments.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div className="section-h" style={{ marginTop: 0, marginBottom: 12 }}>
+        <h2>Experiments in Project</h2>
+        <span className="meta">{experiments.length}</span>
+      </div>
+      <div
+        style={{
+          border: '1px solid var(--line)',
+          borderRadius: 8,
+          overflow: 'hidden',
+        }}
+      >
+        {experiments.slice(0, 8).map((exp, i, arr) => (
+          <div
+            key={exp.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '9px 14px',
+              borderBottom: i < arr.length - 1 ? '1px solid var(--line)' : undefined,
+            }}
+          >
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)', flexShrink: 0 }}>
+              {(exp.code as string | undefined) ?? exp.id.slice(0, 6)}
+            </span>
+            <span className="pill" style={{ flexShrink: 0 }}>{exp.method as string}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {(exp.result_summary as string | undefined) ?? '—'}
+            </span>
+            <StatusPill status={exp.status as string} />
+          </div>
+        ))}
+        {experiments.length > 8 && (
+          <div style={{ padding: '8px 14px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>
+            +{experiments.length - 8} more experiments
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Sample edit inline panel ─────────────────────────────────────────────────
 
 const KIND_OPTIONS = ['precursor', 'electrode', 'cell', 'module', 'derivative', 'other'] as const;
@@ -571,6 +691,7 @@ export function SampleDetailPage() {
   const updateSample = useUpdateSample(sampleId, sample?.project_id ?? '');
   const filterRef = useRef('');
   const { data: projectSamples = [] } = useProjectSamples(sample?.project_id);
+  const [editOpen, setEditOpen] = useState(false);
 
   // We only use projectSamples for the count badge; silence unused warning
   void projectSamples;
@@ -588,55 +709,76 @@ export function SampleDetailPage() {
     <AppShell activeProjectId={sample.project_id} topBarCrumbs={crumbs}>
       <div className="page-wrap wide" style={{ paddingTop: 28 }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid var(--line)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid var(--line)' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <KindPill kind={sample.kind} />
-              <StatusPill status={sample.status} />
-            </div>
-            <h1 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 400, letterSpacing: '-0.01em', margin: '0 0 4px', lineHeight: 1.25 }}>
+            <h1 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 400, letterSpacing: '-0.01em', margin: '0 0 8px', lineHeight: 1.25 }}>
               {sample.name || sample.identifier}
             </h1>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--ember)' }}>{sample.identifier}</div>
+            {/* Identifier strip */}
+            <IdentifierStrip sample={sample} />
+            {/* Description */}
+            {sample.description && (
+              <p style={{ margin: '0 0 0', fontSize: 14.5, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 640 }}>
+                {sample.description}
+              </p>
+            )}
+          </div>
+          <div style={{ flexShrink: 0 }}>
+            <button
+              className="top-btn primary"
+              onClick={() => setEditOpen(o => !o)}
+            >
+              {editOpen ? 'Close Editor' : 'Edit'}
+            </button>
           </div>
         </div>
 
-        {/* Two-column layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginBottom: 48 }}>
-          {/* Left: edit panel */}
-          <div>
-            <div className="section-h" style={{ marginBottom: 16, marginTop: 0 }}>
-              <h2>Details</h2>
-            </div>
-            <EditPanel
-              sample={sample}
-              onSave={data => updateSample.mutateAsync(data)}
-              saving={updateSample.isPending}
-            />
-          </div>
+        {/* Artifact embeds (rich read view) */}
+        <SampleArtifactEmbeds sampleId={sampleId} />
 
-          {/* Right: meta */}
-          <div>
-            <div className="section-h" style={{ marginTop: 0, marginBottom: 16 }}>
-              <h2>Info</h2>
-            </div>
-            <div style={{ border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
-              {[
-                { label: 'ID', value: sample.id },
-                { label: 'Project', value: sample.project_id },
-                { label: 'Created', value: new Date(sample.created_at).toLocaleString() },
-                { label: 'Updated', value: new Date(sample.updated_at).toLocaleString() },
-              ].map(r => (
-                <div key={r.label} style={{ display: 'flex', padding: '10px 14px', borderBottom: '1px solid var(--line)', gap: 16 }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)', width: 80, flexShrink: 0 }}>{r.label}</span>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</span>
+        {/* Linked experiments */}
+        <LinkedExperimentsSection projectId={sample.project_id} />
+
+        {/* Edit panel (toggled) */}
+        {editOpen && (
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40 }}>
+              {/* Left: edit form */}
+              <div>
+                <div className="section-h" style={{ marginBottom: 16, marginTop: 0 }}>
+                  <h2>Details</h2>
                 </div>
-              ))}
+                <EditPanel
+                  sample={sample}
+                  onSave={data => updateSample.mutateAsync(data)}
+                  saving={updateSample.isPending}
+                />
+              </div>
+
+              {/* Right: meta */}
+              <div>
+                <div className="section-h" style={{ marginTop: 0, marginBottom: 16 }}>
+                  <h2>Info</h2>
+                </div>
+                <div style={{ border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
+                  {[
+                    { label: 'ID', value: sample.id },
+                    { label: 'Project', value: sample.project_id },
+                    { label: 'Created', value: new Date(sample.created_at).toLocaleString() },
+                    { label: 'Updated', value: new Date(sample.updated_at).toLocaleString() },
+                  ].map(r => (
+                    <div key={r.label} style={{ display: 'flex', padding: '10px 14px', borderBottom: '1px solid var(--line)', gap: 16 }}>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)', width: 80, flexShrink: 0 }}>{r.label}</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Artifacts */}
+        {/* Artifacts attach/manage section */}
         <SampleArtifactsSection sampleId={sampleId} projectId={sample.project_id} />
 
         {/* Lineage Graph */}

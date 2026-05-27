@@ -23,6 +23,7 @@ import {
   useArtifact,
 } from '@/hooks/useArtifactQueries';
 import { ArtifactDetailModal } from '@/components/ArtifactViewer';
+import { ArtImage, ArtPDF, ArtNotebook, ArtEmbed } from '@/components/embeds/ArtEmbeds';
 import type { Sample, Artifact } from '@/api/types';
 import type { ExperimentSample } from '@/hooks/useQueries';
 
@@ -132,6 +133,54 @@ function ExpAttachedArtifactRow({ artifactId, role, onOpen }: { artifactId: stri
       <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>{artifact.processing_status}</span>
     </div>
   );
+}
+
+// ─── Method-specific artifact embed view ──────────────────────────────────────
+
+/** Pick the right embed component for a given artifact + experiment method. */
+function MethodArtifactEmbed({ artifact, method }: { artifact: Artifact; method: string }) {
+  if (method === 'SEM') {
+    // SEM → ArtImage with scale-bar styling (pull from artifact metadata if present)
+    return <ArtImage artifact={artifact} />;
+  }
+  if (method === 'EIS') {
+    // EIS → PDF for reports, Notebook for analysis, generic otherwise
+    if (artifact.type === 'pdf') return <ArtPDF artifact={artifact} />;
+    if (artifact.type === 'ipynb') return <ArtNotebook artifact={artifact} />;
+    return <ArtEmbed artifact={artifact} />;
+  }
+  if (method === 'cycling') {
+    // Cycling → image primary (voltage/capacity curves), notebook for analysis
+    if (artifact.type === 'image') return <ArtImage artifact={artifact} />;
+    if (artifact.type === 'ipynb') return <ArtNotebook artifact={artifact} />;
+    return <ArtEmbed artifact={artifact} />;
+  }
+  // Fallback for XRD, synthesis, weighing, drying, custom
+  return <ArtEmbed artifact={artifact} />;
+}
+
+function ExperimentArtifactEmbeds({ experimentId, method }: { experimentId: string; method: string }) {
+  const { data: attached = [], isLoading } = useExperimentArtifacts(experimentId);
+  if (isLoading || attached.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div className="section-h" style={{ marginTop: 0, marginBottom: 12 }}>
+        <h2>Artifact Embeds</h2>
+        <span className="meta">{attached.length} · {method}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+        {attached.map(ea => (
+          <ExperimentArtifactEmbedItem key={ea.artifact_id} artifactId={ea.artifact_id} method={method} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ExperimentArtifactEmbedItem({ artifactId, method }: { artifactId: string; method: string }) {
+  const { data: artifact } = useArtifact(artifactId);
+  if (!artifact) return null;
+  return <MethodArtifactEmbed artifact={artifact} method={method} />;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -488,16 +537,38 @@ export function ExperimentDetailPage() {
 
       <div className="page-wrap wide" style={{ paddingTop: 28 }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid var(--line)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid var(--line)' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            {/* Code (EX-N) — shown prominently */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 8,
+                padding: '3px 10px 3px 4px',
+                background: 'var(--paper-2)',
+                border: '1px solid var(--line)',
+                borderRadius: 6,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--ember)',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                {experiment.code ?? experiment.id.slice(0, 8)}
+              </span>
               <span className="pill">{experiment.method}</span>
               <StatusPill status={currentStatus} />
             </div>
             <h1 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 400, letterSpacing: '-0.01em', margin: '0 0 4px', lineHeight: 1.25 }}>
               {experiment.result_summary || `${experiment.method} experiment`}
             </h1>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)' }}>{experiment.code ?? experiment.id.slice(0, 8)}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             {dirty && <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--warn)', alignSelf: 'center' }}>unsaved</span>}
@@ -506,6 +577,9 @@ export function ExperimentDetailPage() {
             </button>
           </div>
         </div>
+
+        {/* Method-specific artifact embeds */}
+        <ExperimentArtifactEmbeds experimentId={experimentId} method={experiment.method as string} />
 
         {/* Main content */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 40 }}>

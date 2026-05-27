@@ -16,7 +16,9 @@ import {
   useLinkIterationSample,
   useUnlinkIterationSample,
   useProjectSamples,
+  useProjectArtifacts,
 } from '@/hooks/useQueries';
+import { ArtEmbed } from '@/components/embeds/ArtEmbeds';
 import type { Sample } from '@/api/types';
 import type { IterationSample } from '@/hooks/useQueries';
 import { RiskRegister } from '@/components/RiskRegister';
@@ -213,6 +215,53 @@ function LinkedSampleRow({ item, iterationId }: { item: IterationSample; iterati
   );
 }
 
+// ─── Iteration artifact embeds (light-touch) ──────────────────────────────────
+
+/**
+ * There is no iteration-specific artifact API endpoint.
+ * We use project-level artifacts as a best-effort display, degrading
+ * gracefully when none are available.
+ */
+function IterationArtifactsSection({ projectId }: { projectId: string }) {
+  const { data: artifacts = [], isLoading } = useProjectArtifacts(projectId);
+  if (isLoading || artifacts.length === 0) return null;
+
+  // Show at most 4 artifacts as a preview
+  const preview = artifacts.slice(0, 4);
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div className="section-h" style={{ marginBottom: 12 }}>
+        <h2>Project Artifacts</h2>
+        <span className="meta">{artifacts.length}</span>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+          gap: 14,
+        }}
+      >
+        {preview.map(artifact => (
+          <ArtEmbed key={artifact.id} artifact={artifact} />
+        ))}
+      </div>
+      {artifacts.length > 4 && (
+        <div
+          style={{
+            marginTop: 8,
+            fontFamily: 'var(--mono)',
+            fontSize: 11,
+            color: 'var(--muted-2)',
+          }}
+        >
+          +{artifacts.length - 4} more in project
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function IterationDetailPage() {
@@ -305,6 +354,9 @@ export function IterationDetailPage() {
 
         {/* Risk Register */}
         <RiskRegister projectId={iteration.project_id} iterationId={iterationId} />
+
+        {/* Artifact embeds (project-level, graceful degradation) */}
+        <IterationArtifactsSection projectId={iteration.project_id} />
 
         {/* Linked Samples */}
         <div className="section-h">
