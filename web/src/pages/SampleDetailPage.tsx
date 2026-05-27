@@ -289,6 +289,7 @@ export function SampleDetailPage() {
           parentType="sample"
           parentId={sampleId}
           projectId={sample.project_id}
+          slot="description"
         />
       </div>
     </AppShell>

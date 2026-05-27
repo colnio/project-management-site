@@ -199,6 +199,7 @@ type createPageInput struct {
 	Body struct {
 		ParentType string          `json:"parent_type" required:"true" enum:"project,iteration,sample,experiment"`
 		ParentID   string          `json:"parent_id" required:"true"`
+		Slot       string          `json:"slot,omitempty"`
 		Blocks     json.RawMessage `json:"blocks" required:"true"`
 	}
 }
@@ -243,7 +244,7 @@ func (s *Service) handleCreatePage(ctx context.Context, in *createPageInput) (*c
 		return nil, platform.BadRequest("page.invalid_blocks", "blocks must be a JSON array")
 	}
 
-	pg, _, blocks, err := s.createPage(ctx, projectID, in.Body.ParentType, parentID, in.Body.Blocks, p.UserID)
+	pg, _, blocks, err := s.createPage(ctx, projectID, in.Body.ParentType, parentID, in.Body.Slot, in.Body.Blocks, p.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -268,6 +269,7 @@ type getPageOutput struct {
 		ProjectID         uuid.UUID       `json:"project_id"`
 		ParentType        string          `json:"parent_type"`
 		ParentID          uuid.UUID       `json:"parent_id"`
+		Slot              string          `json:"slot"`
 		Blocks            json.RawMessage `json:"blocks"`
 		MarkdownExport    string          `json:"markdown_export"`
 		CurrentRevisionID *uuid.UUID      `json:"current_revision_id,omitempty"`
@@ -298,6 +300,7 @@ func (s *Service) handleGetPage(ctx context.Context, in *getPageInput) (*getPage
 	out.Body.ProjectID = pg.ProjectID
 	out.Body.ParentType = pg.ParentType
 	out.Body.ParentID = pg.ParentID
+	out.Body.Slot = pg.Slot
 	out.Body.CurrentRevisionID = pg.CurrentRevisionID
 
 	if pg.CurrentRevisionID != nil {

@@ -34,8 +34,10 @@ export function PagesPanel({ projectId, parentType, parentId }: PagesPanelProps)
   // useProjectPages fetches GET /v1/projects/{id}/pages which returns all pages
   // for the project. We filter client-side by parentType + parentId.
   const { data: allPages = [], isLoading, isError } = useProjectPages(projectId);
+  // Exclude slot pages (description/notes) — those are managed by EntityPageEditor
+  // and should not appear in the general Notes / Pages list.
   const pages = allPages.filter(
-    p => p.parent_type === parentType && p.parent_id === parentId
+    p => p.parent_type === parentType && p.parent_id === parentId && !p.slot
   );
 
   const createPage = useCreatePage();

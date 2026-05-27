@@ -24,6 +24,7 @@ type PresenceEntry struct {
 }
 
 // ExportCreatePage calls the internal createPage method directly.
+// slot may be empty string for a legacy/unslotted page.
 func ExportCreatePage(
 	s *Service,
 	ctx context.Context,
@@ -33,7 +34,7 @@ func ExportCreatePage(
 	blocks json.RawMessage,
 	authorID uuid.UUID,
 ) (*Page, *Revision, json.RawMessage, error) {
-	return s.createPage(ctx, projectID, parentType, parentID, blocks, authorID)
+	return s.createPage(ctx, projectID, parentType, parentID, "", blocks, authorID)
 }
 
 // ExportUpdatePage performs the If-Match check and calls updatePage.

@@ -5,14 +5,13 @@
  *   parentType  — 'project' | 'iteration' | 'sample' | 'experiment'
  *   parentId    — the entity's own ID
  *   projectId   — the project that owns the entity (used to create + list pages)
+ *   slot        — 'description' | 'notes' — which slot this editor manages
  *
  * Behavior
- *   1. Queries useProjectPages(projectId) for a page matching parentType + parentId.
- *   2. If none found, creates one via useCreatePage seeded with default blocks:
- *        heading(1) "Overview"
- *        entityDashboard block (entityType=parentType, entityId=parentId)
- *        heading(2) "Notes"
- *        paragraph (empty)
+ *   1. Queries useProjectPages(projectId) for a page matching parentType +
+ *      parentId + slot.
+ *   2. If none found, creates one via useCreatePage seeded with a single empty
+ *      paragraph.
  *   3. Renders PageEditorCore for the resolved pageId with an inline toolbar.
  */
 
@@ -27,33 +26,13 @@ export interface EntityPageEditorProps {
   parentType: EntityParentType;
   parentId: string;
   projectId: string;
+  slot: 'description' | 'notes';
 }
 
-// ─── Default seed blocks for a fresh entity page ──────────────────────────────
+// ─── Default seed blocks for a fresh entity slot page ─────────────────────────
 
-function makeSeedBlocks(parentType: EntityParentType, parentId: string): unknown[] {
+function makeSeedBlocks(): unknown[] {
   return [
-    {
-      type: 'heading',
-      props: { level: 1, textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
-      content: [{ type: 'text', text: 'Overview', styles: {} }],
-      children: [],
-    },
-    {
-      type: 'entityDashboard',
-      props: {
-        entityType: parentType,
-        entityId: parentId,
-      },
-      content: undefined,
-      children: [],
-    },
-    {
-      type: 'heading',
-      props: { level: 2, textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
-      content: [{ type: 'text', text: 'Notes', styles: {} }],
-      children: [],
-    },
     {
       type: 'paragraph',
       props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
@@ -65,7 +44,7 @@ function makeSeedBlocks(parentType: EntityParentType, parentId: string): unknown
 
 // ─── EntityPageEditor ─────────────────────────────────────────────────────────
 
-export function EntityPageEditor({ parentType, parentId, projectId }: EntityPageEditorProps) {
+export function EntityPageEditor({ parentType, parentId, projectId, slot }: EntityPageEditorProps) {
   const { data: pages = [], isLoading: pagesLoading } = useProjectPages(projectId);
   const createPage = useCreatePage();
 
@@ -73,14 +52,14 @@ export function EntityPageEditor({ parentType, parentId, projectId }: EntityPage
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(false);
 
-  // Only attempt resolution/creation once.
+  // Only attempt resolution/creation once per slot.
   const resolvedRef = useRef(false);
 
   useEffect(() => {
     if (pagesLoading || resolvedRef.current) return;
 
     const match = pages.find(
-      p => p.parent_type === parentType && p.parent_id === parentId
+      p => p.parent_type === parentType && p.parent_id === parentId && p.slot === slot
     );
 
     if (match) {
@@ -89,7 +68,7 @@ export function EntityPageEditor({ parentType, parentId, projectId }: EntityPage
       return;
     }
 
-    // No existing page — create one with default blocks.
+    // No existing page for this slot — create one with a minimal seed.
     resolvedRef.current = true;
     setCreating(true);
 
@@ -97,7 +76,8 @@ export function EntityPageEditor({ parentType, parentId, projectId }: EntityPage
       projectId,
       parentType,
       parentId,
-      blocks: makeSeedBlocks(parentType, parentId),
+      slot,
+      blocks: makeSeedBlocks(),
     })
       .then(result => {
         setResolvedPageId(result.page.id);

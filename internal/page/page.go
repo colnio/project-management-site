@@ -35,6 +35,7 @@ type Page struct {
 	ProjectID         uuid.UUID  `json:"project_id"`
 	ParentType        string     `json:"parent_type"`
 	ParentID          uuid.UUID  `json:"parent_id"`
+	Slot              string     `json:"slot"`
 	CurrentRevisionID *uuid.UUID `json:"current_revision_id,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
@@ -85,12 +86,12 @@ func NewService(
 func (s *Service) GetPage(ctx context.Context, id uuid.UUID) (*Page, error) {
 	var pg Page
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, project_id, parent_type, parent_id,
+		`SELECT id, project_id, parent_type, parent_id, slot,
 		        current_revision_id, created_at, updated_at
 		 FROM pages WHERE id = $1`,
 		id,
 	).Scan(
-		&pg.ID, &pg.ProjectID, &pg.ParentType, &pg.ParentID,
+		&pg.ID, &pg.ProjectID, &pg.ParentType, &pg.ParentID, &pg.Slot,
 		&pg.CurrentRevisionID, &pg.CreatedAt, &pg.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -305,6 +306,7 @@ func (s *Service) createPage(
 	projectID uuid.UUID,
 	parentType string,
 	parentID uuid.UUID,
+	slot string,
 	blocks json.RawMessage,
 	authorID uuid.UUID,
 ) (*Page, *Revision, json.RawMessage, error) {
@@ -327,13 +329,13 @@ func (s *Service) createPage(
 	// Insert page (current_revision_id NULL initially to avoid circular FK).
 	var pg Page
 	err = tx.QueryRow(ctx,
-		`INSERT INTO pages (project_id, parent_type, parent_id)
-		 VALUES ($1, $2, $3)
-		 RETURNING id, project_id, parent_type, parent_id,
+		`INSERT INTO pages (project_id, parent_type, parent_id, slot)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, project_id, parent_type, parent_id, slot,
 		           current_revision_id, created_at, updated_at`,
-		projectID, parentType, parentID,
+		projectID, parentType, parentID, slot,
 	).Scan(
-		&pg.ID, &pg.ProjectID, &pg.ParentType, &pg.ParentID,
+		&pg.ID, &pg.ProjectID, &pg.ParentType, &pg.ParentID, &pg.Slot,
 		&pg.CurrentRevisionID, &pg.CreatedAt, &pg.UpdatedAt,
 	)
 	if err != nil {
@@ -567,6 +569,7 @@ type PageListItem struct {
 	ProjectID         uuid.UUID  `json:"project_id"`
 	ParentType        string     `json:"parent_type"`
 	ParentID          uuid.UUID  `json:"parent_id"`
+	Slot              string     `json:"slot"`
 	CurrentRevisionID *uuid.UUID `json:"current_revision_id,omitempty"`
 	Title             string     `json:"title"`
 	UpdatedAt         time.Time  `json:"updated_at"`
@@ -616,7 +619,7 @@ func (s *Service) listPagesByProject(
 		where += fmt.Sprintf(` AND p.parent_id = $%d`, len(args))
 	}
 
-	q := `SELECT p.id, p.project_id, p.parent_type, p.parent_id,
+	q := `SELECT p.id, p.project_id, p.parent_type, p.parent_id, p.slot,
 	             p.current_revision_id, p.updated_at,
 	             COALESCE(r.markdown_export, '')
 	      FROM pages p
@@ -635,7 +638,7 @@ func (s *Service) listPagesByProject(
 		var item PageListItem
 		var md string
 		if err := rows.Scan(
-			&item.ID, &item.ProjectID, &item.ParentType, &item.ParentID,
+			&item.ID, &item.ProjectID, &item.ParentType, &item.ParentID, &item.Slot,
 			&item.CurrentRevisionID, &item.UpdatedAt, &md,
 		); err != nil {
 			return nil, fmt.Errorf("page: list pages scan: %w", err)

@@ -72,6 +72,7 @@ export function ExperimentDetailPage() {
           parentType="experiment"
           parentId={experimentId}
           projectId={experiment.project_id}
+          slot="description"
         />
       </div>
     </AppShell>

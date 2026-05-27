@@ -96,7 +96,7 @@ async function putPage(
 
 async function postPage(
   projectId: string,
-  body: { parent_type: string; parent_id: string; blocks: unknown }
+  body: { parent_type: string; parent_id: string; slot: string; blocks: unknown }
 ): Promise<CreatePageResponse> {
   const resp = await fetch(`/v1/projects/${projectId}/pages`, {
     method: 'POST',
@@ -127,6 +127,7 @@ export interface PageListItem {
   id: string;
   parent_type: string;
   parent_id: string;
+  slot: string;
   title: string;
   updated_at: string;
   current_revision_id?: string;
@@ -202,11 +203,13 @@ export function useCreatePage() {
       projectId: string;
       parentType: string;
       parentId: string;
+      slot?: string;
       blocks?: unknown;
     }) =>
       postPage(args.projectId, {
         parent_type: args.parentType,
         parent_id: args.parentId,
+        slot: args.slot ?? '',
         blocks: args.blocks ?? [],
       }),
     onSuccess: (_data, vars) => {

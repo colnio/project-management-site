@@ -24,6 +24,7 @@ import { AIChatPanel } from '@/components/AIChatPanel';
 import { WorkflowRunner } from '@/components/WorkflowRunner';
 import { ProjectAutonomySection } from '@/components/AutonomyConfig';
 import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
+import { ProjectDashboard } from '@/components/dashboards/ProjectDashboard';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 
 type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
@@ -198,6 +199,27 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
   );
 }
 
+// ─── Section Label ────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontFamily: 'var(--mono)',
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: '0.07em',
+        textTransform: 'uppercase',
+        color: 'var(--muted-2)',
+        marginTop: 28,
+        marginBottom: 10,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
 interface OverviewTabProps {
@@ -215,11 +237,26 @@ function OverviewTab({ projectId, onToggleAI }: OverviewTabProps) {
       {/* Rich header */}
       <ProjectHeader projectId={projectId} onToggleAI={onToggleAI} />
 
-      {/* Entity page editor (contains entityDashboard block + notes) */}
+      {/* Section 1: Description editor */}
+      <SectionLabel>Description</SectionLabel>
       <EntityPageEditor
         parentType="project"
         parentId={projectId}
         projectId={projectId}
+        slot="description"
+      />
+
+      {/* Section 2: Dashboard (imperative) */}
+      <SectionLabel>Dashboard</SectionLabel>
+      <ProjectDashboard projectId={projectId} />
+
+      {/* Section 3: Notes editor */}
+      <SectionLabel>Notes</SectionLabel>
+      <EntityPageEditor
+        parentType="project"
+        parentId={projectId}
+        projectId={projectId}
+        slot="notes"
       />
     </div>
   );

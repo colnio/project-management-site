@@ -16,6 +16,8 @@ import {
   useUpdateIteration,
 } from '@/hooks/useQueries';
 import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
+import { IterationDashboard } from '@/components/dashboards/IterationDashboard';
+import { IterationStatusControls } from '@/components/dashboards/IterationStatusControls';
 
 // ─── Local field editor ───────────────────────────────────────────────────────
 
@@ -111,6 +113,27 @@ function EditDialog({ iterationId, projectId, initial, onClose }: EditDialogProp
   );
 }
 
+// ─── Section Label ────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontFamily: 'var(--mono)',
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: '0.07em',
+        textTransform: 'uppercase',
+        color: 'var(--muted-2)',
+        marginTop: 28,
+        marginBottom: 10,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function IterationDetailPage() {
@@ -173,11 +196,31 @@ export function IterationDetailPage() {
           </div>
         </div>
 
-        {/* Entity page editor (contains entityDashboard block with meta/risks/samples + notes) */}
+        {/* Section 1: Description editor */}
+        <SectionLabel>Description</SectionLabel>
         <EntityPageEditor
           parentType="iteration"
           parentId={iterationId}
           projectId={iteration.project_id}
+          slot="description"
+        />
+
+        {/* Section 2: Dashboard (imperative) */}
+        <SectionLabel>Dashboard</SectionLabel>
+        <IterationStatusControls
+          iterationId={iterationId}
+          projectId={iteration.project_id}
+          status={iteration.status}
+        />
+        <IterationDashboard iterationId={iterationId} />
+
+        {/* Section 3: Notes editor */}
+        <SectionLabel>Notes</SectionLabel>
+        <EntityPageEditor
+          parentType="iteration"
+          parentId={iterationId}
+          projectId={iteration.project_id}
+          slot="notes"
         />
       </div>
     </AppShell>
