@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/smtp"
 	"strings"
 	"sync"
 	"time"
@@ -503,63 +502,22 @@ func (s *Service) handlePIFlag(ctx context.Context, output map[string]any, works
 		ResourceID:   runID.String(),
 	})
 
-	// Send email to workspace owners — best effort.
-	go func() {
-		owners, err := s.listWorkspaceOwnerEmails(context.Background(), workspaceID)
+	if s.piNotify != nil {
+		proj, err := s.projects.GetProject(ctx, projectID)
 		if err != nil {
-			s.log.Warn("ai: workflow: list workspace owners failed", "err", err)
+			s.log.Warn("ai: workflow: load project for pi flag email", "err", err)
 			return
 		}
-		for _, email := range owners {
-			if err := s.sendPIFlagEmail(email, runID, projectID); err != nil {
-				s.log.Warn("ai: workflow: send PI flag email failed", "to", email, "err", err)
+		idem := fmt.Sprintf("pi_flag_workflow:%s", runID)
+		actionPath := "/projects/" + projectID.String()
+		go func() {
+			if err := s.piNotify.EnqueuePIFlagForWorkspaceOwners(
+				context.Background(), proj.WorkspaceID, proj.Name, actionPath, "", idem,
+			); err != nil {
+				s.log.Warn("ai: workflow: enqueue PI flag emails failed", "err", err)
 			}
-		}
-	}()
-}
-
-func (s *Service) listWorkspaceOwnerEmails(ctx context.Context, workspaceID uuid.UUID) ([]string, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT u.email FROM users u
-		 JOIN workspace_memberships m ON m.user_id = u.id
-		 WHERE m.workspace_id = $1 AND m.role = 'owner'`,
-		workspaceID,
-	)
-	if err != nil {
-		return nil, err
+		}()
 	}
-	defer rows.Close()
-	var emails []string
-	for rows.Next() {
-		var email string
-		if err := rows.Scan(&email); err != nil {
-			continue
-		}
-		emails = append(emails, email)
-	}
-	return emails, rows.Err()
-}
-
-func (s *Service) sendPIFlagEmail(to string, runID, projectID uuid.UUID) error {
-	addr := fmt.Sprintf("%s:%s", s.cfg.SMTPHost, s.cfg.SMTPPort)
-	from := s.cfg.SMTPFrom
-	subject := "AI Risk Assessment Flagged for PI Review"
-	body := fmt.Sprintf(
-		"A risk assessment workflow has been flagged for PI review.\n\n"+
-			"Run ID:     %s\n"+
-			"Project ID: %s\n\n"+
-			"Please review the assessment result page and take appropriate action.\n",
-		runID, projectID,
-	)
-	msg := []byte(
-		"From: " + from + "\r\n" +
-			"To: " + to + "\r\n" +
-			"Subject: " + subject + "\r\n" +
-			"Content-Type: text/plain; charset=utf-8\r\n" +
-			"\r\n" +
-			body,
-	)
-	return smtp.SendMail(addr, nil, from, []string{to}, msg)
 }
 
 func (s *Service) markRunFailed(ctx context.Context, runID uuid.UUID, stepResults, errMsg string) error {

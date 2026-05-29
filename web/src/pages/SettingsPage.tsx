@@ -4,7 +4,7 @@
  * - API Tokens: list PATs, create (with one-time secret reveal + copy), revoke
  * - Calendar subscription: show .ics URL, rotate, scope toggle
  */
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import {
@@ -20,6 +20,10 @@ import type { User } from '@/api/types';
 import { WorkspaceAutonomySection } from '@/components/AutonomyConfig';
 import { CalendarSubscriptionPanel } from '@/components/CalendarSubscriptionPanel';
 import { AppearanceSection } from '@/components/AppearanceSection';
+import {
+  useNotificationPreferences,
+  useUpdateNotificationPreferences,
+} from '@/hooks/useNotificationPrefs';
 
 const TITLE_OPTIONS = [
   { value: '', label: 'Select role…' },
@@ -483,57 +487,47 @@ function ProfileSection() {
 
 // ─── Notifications section ────────────────────────────────────────────────────
 
-const NOTIFICATION_KEYS = [
-  { key: 'notif_pi_flag', label: 'PI review flags', description: 'Notify when a risk is flagged for PI review' },
-  { key: 'notif_ai_proposal', label: 'AI proposals', description: 'Notify when an AI action awaits approval' },
-  { key: 'notif_mentions', label: 'Mentions', description: 'Notify when you are mentioned' },
-  { key: 'notif_meetings', label: 'Meeting reminders', description: 'Notify before scheduled meetings' },
-] as const;
-
-type NotifKey = typeof NOTIFICATION_KEYS[number]['key'];
-
 function NotificationsSection() {
-  const [prefs, setPrefs] = useState<Record<NotifKey, boolean>>(() => {
-    try {
-      const stored = localStorage.getItem('notif_prefs');
-      if (stored) return JSON.parse(stored) as Record<NotifKey, boolean>;
-    } catch {}
-    return { notif_pi_flag: true, notif_ai_proposal: true, notif_mentions: true, notif_meetings: true };
-  });
+  const { data: prefs, isLoading, isError } = useNotificationPreferences();
+  const update = useUpdateNotificationPreferences();
 
-  useEffect(() => {
-    localStorage.setItem('notif_prefs', JSON.stringify(prefs));
-  }, [prefs]);
+  if (isLoading) return <LoadingState message="Loading notification preferences…" />;
+  if (isError || !prefs) return <ErrorState message="Failed to load notification preferences." />;
 
-  const toggle = (key: NotifKey) => {
-    setPrefs(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggle = (category: string, enabled: boolean, mandatory: boolean) => {
+    if (mandatory) return;
+    update.mutate({ [category]: !enabled });
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', marginBottom: 4 }}>
-        Preferences stored locally in your browser.
+        Email notifications are stored on the server. Account and security messages cannot be turned off.
       </div>
-      {NOTIFICATION_KEYS.map(({ key, label, description }) => (
-        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      {prefs.map(({ category, label, description, enabled, mandatory }) => (
+        <div key={category} style={{ display: 'flex', alignItems: 'center', gap: 14, opacity: mandatory ? 0.75 : 1 }}>
           <button
-            onClick={() => toggle(key)}
+            type="button"
+            disabled={mandatory || update.isPending}
+            onClick={() => toggle(category, enabled, mandatory)}
+            aria-pressed={enabled}
             style={{
               width: 36,
               height: 20,
               borderRadius: 10,
-              background: prefs[key] ? 'var(--ember)' : 'var(--line-2)',
+              background: enabled ? 'var(--ember)' : 'var(--line-2)',
               position: 'relative',
               flexShrink: 0,
               transition: 'background 0.2s ease',
               border: 0,
+              cursor: mandatory ? 'not-allowed' : 'pointer',
             }}
           >
             <span
               style={{
                 position: 'absolute',
                 top: 2,
-                left: prefs[key] ? 18 : 2,
+                left: enabled ? 18 : 2,
                 width: 16,
                 height: 16,
                 borderRadius: '50%',
@@ -543,7 +537,14 @@ function NotificationsSection() {
             />
           </button>
           <div>
-            <div style={{ fontSize: 13.5, fontWeight: 500 }}>{label}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 500 }}>
+              {label}
+              {mandatory && (
+                <span style={{ marginLeft: 8, fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--muted-2)' }}>
+                  Required
+                </span>
+              )}
+            </div>
             <div style={{ fontSize: 11.5, color: 'var(--muted)', fontFamily: 'var(--mono)', marginTop: 1 }}>{description}</div>
           </div>
         </div>

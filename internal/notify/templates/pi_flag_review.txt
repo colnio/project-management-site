@@ -1,0 +1,11 @@
+Risk flagged for PI review — {{.ProjectName}}
+---
+A risk item has been flagged for PI review.
+
+Project: {{.ProjectName}}
+{{if .RiskTitle}}Risk: {{.RiskTitle}}
+{{end}}
+Open the project:
+{{.ActionURL}}
+
+Manage notification preferences: {{.PrefsURL}}

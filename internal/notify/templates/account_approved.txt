@@ -1,0 +1,5 @@
+Your account has been approved
+---
+Your registration has been approved. You can now sign in and use the lab project management site.
+
+Sign in: {{.ActionURL}}

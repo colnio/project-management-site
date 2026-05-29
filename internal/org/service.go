@@ -80,13 +80,19 @@ type Invite struct {
 
 // ─── Service ─────────────────────────────────────────────────────────────────
 
+// InviteNotifier sends workspace invite emails (notify.Service).
+type InviteNotifier interface {
+	EnqueueWorkspaceInvite(ctx context.Context, inviteID uuid.UUID, toEmail, inviteLink string) error
+}
+
 // Service is the org module's domain service.
 type Service struct {
-	pool  *pgxpool.Pool
-	cfg   *config.Config
-	rec   audit.Recorder
-	users Users
-	log   *slog.Logger
+	pool   *pgxpool.Pool
+	cfg    *config.Config
+	rec    audit.Recorder
+	users  Users
+	log    *slog.Logger
+	notify InviteNotifier
 }
 
 // NewService constructs a Service.
@@ -98,6 +104,11 @@ func NewService(pool *pgxpool.Pool, cfg *config.Config, rec audit.Recorder, user
 		users: users,
 		log:   log,
 	}
+}
+
+// SetInviteNotifier wires the notify module for invite emails.
+func (s *Service) SetInviteNotifier(n InviteNotifier) {
+	s.notify = n
 }
 
 // ─── Workspace CRUD ──────────────────────────────────────────────────────────
@@ -475,10 +486,11 @@ func (s *Service) CreateInvite(ctx context.Context, workspaceID uuid.UUID, email
 		return nil, "", fmt.Errorf("org: create invite: %w", err)
 	}
 
-	// Send email — best effort.
 	link := fmt.Sprintf("%s/invite/accept?token=%s", s.cfg.WebOrigin, rawToken)
-	if sendErr := s.sendInviteEmail(email, link); sendErr != nil {
-		s.log.Warn("org: failed to send invite email", "error", sendErr, "invite_id", inv.ID)
+	if s.notify != nil {
+		if sendErr := s.notify.EnqueueWorkspaceInvite(ctx, inv.ID, email, link); sendErr != nil {
+			s.log.Warn("org: failed to enqueue invite email", "error", sendErr, "invite_id", inv.ID)
+		}
 	}
 
 	_ = s.rec.Record(ctx, audit.Entry{

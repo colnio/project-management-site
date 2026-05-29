@@ -1,0 +1,16 @@
+Approval request pending: {{.ProjectName}}
+---
+A new approval request requires your decision.
+
+Project: {{.ProjectName}}
+
+Description:
+{{.Description}}
+
+AI Review:
+{{.AIReviewSnippet}}
+
+Review and decide here:
+{{.ActionURL}}
+
+Manage notification preferences: {{.PrefsURL}}

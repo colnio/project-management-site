@@ -35,7 +35,9 @@ const (
 	ScopeReadAI  = "read:ai"
 	ScopeWriteAI = "write:ai"
 
-	ScopeReadInbox = "read:inbox"
+	ScopeReadInbox  = "read:inbox"
+	ScopeReadNotify = "read:notify"
+	ScopeWriteNotify = "write:notify"
 	ScopeReadAudit = "read:audit"
 
 	ScopeReadApprovals  = "read:approvals"

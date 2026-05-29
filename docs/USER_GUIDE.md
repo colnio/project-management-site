@@ -19,7 +19,13 @@ is **pending** — it cannot log in until an **admin or PI approves** it (Admin 
 Users). On first successful login the user must complete a short **profile**
 (first/last name, title, bio) before reaching the app; it stays editable in
 Settings. Accounts can also be **suspended** by an admin/PI. (Invite emails land in
-**Mailpit** at <http://localhost:8025> locally.)
+**Mailpit** at <http://localhost:8025> locally.) When an admin approves your account,
+you receive an **approval email** (same Mailpit inbox in dev).
+
+**Email notifications** — **Settings → Notifications** controls optional categories
+(PI flags, AI proposals, mentions, meetings, daily digest). Account, security, and
+admin announcements cannot be disabled. **Admins/PIs** can send a lab-wide or
+workspace-wide broadcast from **Admin → Email Broadcast**.
 
 **Global roles:** `member` (default), `pi`, and `admin`. **Admins and PIs** (the
 "privileged" tier) approve/suspend/reject users, change global roles, manage

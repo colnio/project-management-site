@@ -1,0 +1,5 @@
+Your account has been suspended
+---
+Your account on the lab project management site has been suspended.
+
+If you believe this is an error, contact your lab administrator.

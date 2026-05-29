@@ -1,0 +1,10 @@
+You have been invited to a workspace
+---
+You have been invited to join a workspace on the lab project management site.
+
+Accept your invitation here:
+{{.InviteLink}}
+
+This link expires in 7 days.
+
+Manage notification preferences: {{.PrefsURL}}

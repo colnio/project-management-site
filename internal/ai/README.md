@@ -158,7 +158,7 @@ A run is flagged for PI review if **either**:
 
 When flagged:
 1. An `ai.workflow_pi_flag` audit entry is recorded.
-2. An email is sent via SMTP (cfg.SMTPHost:cfg.SMTPPort, from cfg.SMTPFrom) to all `owner`-role members of the workspace. Email failures are logged and do **not** fail the run.
+2. `notify` enqueues `pi_flag_review` emails to all workspace `owner`-role members. Failures are logged and do **not** fail the run.
 
 ### Result-page rendering
 

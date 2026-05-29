@@ -2,6 +2,7 @@ package risk
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -274,6 +275,8 @@ func (s *Service) handlePatchRisk(ctx context.Context, in *patchRiskInput) (*pat
 		return nil, err
 	}
 
+	wasFlagged := r.FlaggedForPIReview
+
 	updated, err := s.patchRisk(ctx, riskID,
 		in.Body.Title, in.Body.Likelihood,
 		in.Body.ImpactHeadline, in.Body.ImpactDescription,
@@ -291,6 +294,21 @@ func (s *Service) handlePatchRisk(ctx context.Context, in *patchRiskInput) (*pat
 		ResourceType: "risk",
 		ResourceID:   updated.ID.String(),
 	})
+
+	if s.notify != nil && in.Body.FlaggedForPIReview != nil && *in.Body.FlaggedForPIReview && !wasFlagged {
+		proj, perr := s.projects.GetProject(ctx, updated.ProjectID)
+		if perr != nil {
+			s.log.Warn("risk: load project for pi flag email", "err", perr)
+		} else {
+			idem := fmt.Sprintf("pi_flag_risk:%s", updated.ID)
+			actionPath := fmt.Sprintf("/projects/%s", updated.ProjectID)
+			if err := s.notify.EnqueuePIFlagForWorkspaceOwners(
+				ctx, proj.WorkspaceID, proj.Name, actionPath, updated.Title, idem,
+			); err != nil {
+				s.log.Warn("risk: enqueue pi flag email failed", "err", err)
+			}
+		}
+	}
 
 	return &patchRiskOutput{Body: updated}, nil
 }

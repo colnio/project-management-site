@@ -1,0 +1,9 @@
+Your daily lab digest
+---
+Here is your inbox summary for {{.Date}}.
+
+{{.Body}}
+
+Open the app: {{.ActionURL}}
+
+Turn off daily digests: {{.UnsubscribeURL}}

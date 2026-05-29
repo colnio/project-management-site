@@ -57,3 +57,25 @@ export function useDeleteAdminUser() {
     onSuccess: () => qc.invalidateQueries({ queryKey: adminKeys.users }),
   });
 }
+
+// ─── Email broadcast ───────────────────────────────────────────────────────────
+
+export interface CreateBroadcastPayload {
+  subject: string;
+  body: string;
+  audience: 'all' | 'workspace' | 'users';
+  workspace_id?: string;
+  user_ids?: string[];
+}
+
+export interface CreateBroadcastResult {
+  id: string;
+  recipients_queued: number;
+}
+
+export function useCreateBroadcast() {
+  return useMutation({
+    mutationFn: (body: CreateBroadcastPayload) =>
+      api.post<CreateBroadcastResult>('/v1/admin/broadcasts', body),
+  });
+}

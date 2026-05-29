@@ -28,9 +28,15 @@ type Config struct {
 	S3PublicURLBase   string // base URL the browser uses to reach object storage
 
 	// Email (Mailpit locally, SES in prod) — standard SMTP.
-	SMTPHost string
-	SMTPPort string
-	SMTPFrom string
+	SMTPHost     string
+	SMTPPort     string
+	SMTPFrom     string
+	SMTPUser     string
+	SMTPPassword string
+
+	// Daily digest schedule (local wall-clock hour in LabTimezone).
+	DigestHour    int
+	LabTimezone   string
 
 	// Auth signing + cookies.
 	JWTSigningKey  string
@@ -72,6 +78,10 @@ func Load() (*Config, error) {
 		SMTPHost:        getenv("SMTP_HOST", "localhost"),
 		SMTPPort:        getenv("SMTP_PORT", "1025"),
 		SMTPFrom:        getenv("SMTP_FROM", "no-reply@graphene-lab.org"),
+		SMTPUser:        getenv("SMTP_USER", ""),
+		SMTPPassword:    getenv("SMTP_PASSWORD", ""),
+		DigestHour:      getint("DIGEST_HOUR", 7),
+		LabTimezone:     getenv("LAB_TIMEZONE", "Asia/Singapore"),
 		JWTSigningKey:   getenv("JWT_SIGNING_KEY", "dev-insecure-jwt-key-change-me"),
 		InviteSignKey:   getenv("INVITE_SIGN_KEY", "dev-insecure-invite-key-change-me"),
 		AccessTokenTTL:  getdur("ACCESS_TOKEN_TTL", 15*time.Minute),
@@ -104,6 +114,16 @@ func getbool(key string, def bool) bool {
 		b, err := strconv.ParseBool(v)
 		if err == nil {
 			return b
+		}
+	}
+	return def
+}
+
+func getint(key string, def int) int {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err == nil {
+			return n
 		}
 	}
 	return def

@@ -53,6 +53,7 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 | G6, G7, G8 | AI chat UI (streaming), workflow runner UI, autonomy config UI | ✅ done |
 | H1 | **Risk Register**: first-class `risk` module (likelihood/impact/mitigation/Plan B, PI-review flag, per-project seq); AI workflows upsert AI-sourced risks; register UI on Overview + iterations | ✅ done |
 | H2 | **Workspace surfaces**: `meeting` + `inbox` modules; Inbox, People directory, Meetings (list+detail), Workspace Admin, Templates (workflow library + definition pages) | ✅ done |
+| H2b | **Email notifications** (`notify`): River-backed outbox, server-side prefs, transactional pings (invite/approval/PI flag/account), daily digest, admin broadcast | ✅ done |
 | H3 | **UX layer**: docked Cursor-style AI panel (citations + spend-cap meter), Tweaks panel (3 Overview layouts, dark mode, density, accent), rich entity pages with `ArtImage/ArtPDF/ArtNotebook` embeds + `@`-mention reference blocks, human-readable `EX-N` experiment codes, new-project/new-iteration wizards with a HIGH-risk activation gate | ✅ done |
 
 > **Page editor (BlockNote):** the rich editor mounts and is fully editable. The

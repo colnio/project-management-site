@@ -40,3 +40,6 @@ go.work.sum
 # Built Go binaries (from `go build ./cmd/...` without -o)
 /api
 /seed
+
+# Local dev runtime (scripts/dev-local.sh)
+.dev/

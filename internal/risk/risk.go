@@ -52,6 +52,11 @@ type Risk struct {
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
+// PIFlagNotifier notifies workspace owners when a risk is flagged for PI review.
+type PIFlagNotifier interface {
+	EnqueuePIFlagForWorkspaceOwners(ctx context.Context, workspaceID uuid.UUID, projectName, actionPath, riskTitle, idempotencyPrefix string) error
+}
+
 // Service is the risk module's domain service.
 type Service struct {
 	pool       *pgxpool.Pool
@@ -59,6 +64,7 @@ type Service struct {
 	iterations *iteration.Service
 	rec        audit.Recorder
 	log        *slog.Logger
+	notify     PIFlagNotifier
 }
 
 // NewService constructs a Service.
@@ -76,6 +82,11 @@ func NewService(
 		rec:        rec,
 		log:        log,
 	}
+}
+
+// SetPIFlagNotifier wires the notify module for manual PI flag emails.
+func (s *Service) SetPIFlagNotifier(n PIFlagNotifier) {
+	s.notify = n
 }
 
 // ─── Scan helper ─────────────────────────────────────────────────────────────

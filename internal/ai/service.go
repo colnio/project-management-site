@@ -28,9 +28,20 @@ type Service struct {
 	orgSvc   *org.Service
 	projects *project.Service
 	risks    *risk.Service // optional; nil if risk module not wired yet
+	piNotify PIFlagNotifier
 	rec      audit.Recorder
 	log      *slog.Logger
 	restBase string // http://127.0.0.1:{port}
+}
+
+// PIFlagNotifier sends PI review flag emails.
+type PIFlagNotifier interface {
+	EnqueuePIFlagForWorkspaceOwners(ctx context.Context, workspaceID uuid.UUID, projectName, actionPath, riskTitle, idempotencyPrefix string) error
+}
+
+// SetPIFlagNotifier wires the notify module for workflow PI-flag emails.
+func (s *Service) SetPIFlagNotifier(n PIFlagNotifier) {
+	s.piNotify = n
 }
 
 // SetRiskService wires the risk service into the AI service so that completed

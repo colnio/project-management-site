@@ -13,8 +13,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/smtp"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -62,6 +60,11 @@ type PendingItem struct {
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
+// ApprovalNotifier sends approval-request emails.
+type ApprovalNotifier interface {
+	EnqueueApprovalPending(ctx context.Context, requestID, projectID, recipientUserID uuid.UUID, toEmail, projectName, description, aiReview string) error
+}
+
 // Service is the approval module's domain service.
 type Service struct {
 	pool     *pgxpool.Pool
@@ -70,6 +73,7 @@ type Service struct {
 	rec      audit.Recorder
 	cfg      *config.Config
 	log      *slog.Logger
+	notify   ApprovalNotifier
 }
 
 // NewService constructs a Service.
@@ -89,6 +93,11 @@ func NewService(
 		cfg:      cfg,
 		log:      log,
 	}
+}
+
+// SetApprovalNotifier wires the notify module for approval emails.
+func (s *Service) SetApprovalNotifier(n ApprovalNotifier) {
+	s.notify = n
 }
 
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
@@ -214,11 +223,12 @@ func (s *Service) Create(
 		ResourceID:   ar.ID.String(),
 	})
 
-	// Best-effort emails — a failure must not fail the request.
-	for _, r := range ar.Recipients {
-		if err := s.sendApprovalEmail(r.Email, proj.Name, description, aiReview, ar.ID); err != nil {
-			s.log.Warn("approval: send notification email failed",
-				"to", r.Email, "request_id", ar.ID, "err", err)
+	if s.notify != nil {
+		for _, r := range ar.Recipients {
+			if err := s.notify.EnqueueApprovalPending(ctx, ar.ID, proj.ID, r.UserID, r.Email, proj.Name, description, aiReview); err != nil {
+				s.log.Warn("approval: enqueue notification email failed",
+					"to", r.Email, "request_id", ar.ID, "err", err)
+			}
 		}
 	}
 
@@ -355,38 +365,4 @@ func (s *Service) ListPendingByWorkspace(ctx context.Context, workspaceID uuid.U
 		return nil, fmt.Errorf("approval: pending rows: %w", err)
 	}
 	return result, nil
-}
-
-// ─── Email ────────────────────────────────────────────────────────────────────
-
-// sendApprovalEmail sends a plain-text notification to a recipient.
-// Mirrors org.sendInviteEmail: unauthenticated SMTP, best-effort.
-func (s *Service) sendApprovalEmail(to, projectName, description, aiReview string, requestID uuid.UUID) error {
-	addr := fmt.Sprintf("%s:%s", s.cfg.SMTPHost, s.cfg.SMTPPort)
-	from := s.cfg.SMTPFrom
-
-	// Trim ai_review to a brief snippet.
-	snippet := aiReview
-	if len(snippet) > 200 {
-		snippet = snippet[:200] + "..."
-	}
-	snippet = strings.TrimSpace(snippet)
-
-	link := "/projects/" + requestID.String()
-
-	msg := []byte(
-		"From: " + from + "\r\n" +
-			"To: " + to + "\r\n" +
-			"Subject: Approval Request Pending: " + projectName + "\r\n" +
-			"Content-Type: text/plain; charset=utf-8\r\n" +
-			"\r\n" +
-			"A new approval request requires your decision.\r\n\r\n" +
-			"Project: " + projectName + "\r\n" +
-			"Description:\r\n" + description + "\r\n\r\n" +
-			"AI Review:\r\n" + snippet + "\r\n\r\n" +
-			"Review and decide here:\r\n" +
-			link + "\r\n",
-	)
-
-	return smtp.SendMail(addr, nil, from, []string{to}, msg)
 }

@@ -127,7 +127,7 @@ All endpoints require authentication via `platform.PrincipalFrom(ctx)` unless no
 ### Invite flow
 
 1. Owner/admin POSTs to `/v1/workspaces/{id}/invites` with `{email, role}`.
-2. A 7-day invite is created; `sha256(raw_token)` stored; raw token emailed to the address via plain SMTP (no auth — Mailpit locally). If SMTP fails, a warning is logged but the 201 is still returned.
+2. A 7-day invite is created; `sha256(raw_token)` stored; `notify` enqueues a `workspace_invite` email (Mailpit locally). If enqueue fails, a warning is logged but the 201 is still returned.
 3. Recipient POSTs to `/v1/invites/accept` with `{token, password, display_name}`.
    - If user exists → membership added.
    - If user absent → `CreateUser` + `SetPassword`, then membership added.

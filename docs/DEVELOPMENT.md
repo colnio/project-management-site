@@ -27,10 +27,12 @@ cp .env.example .env                   # then fill in any blanks
 
 # every session
 ollama serve                           # native, NOT in docker (GPU/Metal speed)
+./scripts/dev-local.sh                 # compose + seed (if needed) + API + web in background
+# — or step by step —
 make up                                # postgres, minio, mailpit, mock-oidc, nbconvert, searxng
-make migrate                           # goose up
 make seed                              # demo workspace/projects/samples
-make dev                               # Go API on :8080 + Vite SPA on :5173
+make api                               # Go API on :8080 (migrations run on boot)
+make web                               # Vite SPA on :5173
 ```
 
 Then open <http://localhost:5173>. Mailpit UI is at <http://localhost:8025>, MinIO console at
@@ -47,7 +49,7 @@ write "dev-only" code paths for these — we point the same client at a local se
 |---|---|---|---|
 | Database | Postgres 16 (EC2) | `postgres:16` (Compose) | Same SQL, same major version |
 | Object storage | Amazon S3 | **MinIO** (Compose) | AWS SDK + `S3_ENDPOINT` override, path-style; presigned URLs work unchanged |
-| Email | Amazon SES | **Mailpit** (Compose) | Standard SMTP; view mail at :8025 |
+| Email | Amazon SES | **Mailpit** (Compose) | `internal/notify` + River `send_email` worker; view mail at :8025. Optional `SMTP_USER`/`SMTP_PASSWORD` for SES. Daily digest: `DIGEST_HOUR` (default 7) in `LAB_TIMEZONE` (default `Asia/Singapore`). |
 | Human SSO | Microsoft Entra OIDC | **mock-oauth2-server** (Compose) | Real OAuth2/PKCE; only `issuer`/`client_id`/`secret` env differ |
 | External users | Local password (Argon2id) | same | Offline; no change between dev/prod |
 | Agent auth (PAT) | Argon2id-hashed tokens | same | No external dependency |

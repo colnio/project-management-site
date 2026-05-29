@@ -33,6 +33,7 @@ import (
 	"github.com/colnio/project-management-site/internal/jobs"
 	labmcp "github.com/colnio/project-management-site/internal/mcp"
 	"github.com/colnio/project-management-site/internal/meeting"
+	"github.com/colnio/project-management-site/internal/notify"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/page"
 	"github.com/colnio/project-management-site/internal/platform"
@@ -121,10 +122,21 @@ func run() error {
 		PublicURLBase:  cfg.S3PublicURLBase,
 	})
 
+	notifySvc := notify.NewService(pool, cfg, auditRec, logger)
+	notify.RegisterWorkers(riverWorkers, notify.WorkerDeps{Pool: pool, Svc: notifySvc})
+
 	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Workers: riverWorkers,
 		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 5}},
 		Logger:  logger,
+		PeriodicJobs: func() []*river.PeriodicJob {
+			loc, locErr := time.LoadLocation(cfg.LabTimezone)
+			if locErr != nil {
+				loc = time.UTC
+				logger.Warn("notify: invalid LAB_TIMEZONE, using UTC", "tz", cfg.LabTimezone, "err", locErr)
+			}
+			return []*river.PeriodicJob{notify.NewDailyDigestPeriodicJob(cfg.DigestHour, loc)}
+		}(),
 	})
 	if err != nil {
 		return fmt.Errorf("build River client: %w", err)
@@ -137,10 +149,14 @@ func run() error {
 	// Wire the River-backed enqueuer into the artifact service.
 	artifactSvc.SetEnqueuer(artifact.NewRiverEnqueuer(riverClient))
 
+	notifySvc.SetEnqueuer(notify.NewRiverEnqueuer(riverClient))
+
 	riskSvc := risk.NewService(pool, projectSvc, iterationSvc, auditRec, logger)
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
 	meetingSvc := meeting.NewService(pool, orgSvc, projectSvc, auditRec, logger)
 	approvalSvc := approval.NewService(pool, projectSvc, orgSvc, auditRec, cfg, logger)
+	orgSvc.SetInviteNotifier(notifySvc)
+	approvalSvc.SetApprovalNotifier(notifySvc)
 
 	// AI module (G1/G2/G5): load provider, build client (nil if unavailable).
 	aiProvider, aiProvErr := ai.LoadProvider()
@@ -157,6 +173,10 @@ func run() error {
 	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, orgSvc, projectSvc, auditRec, logger)
 	aiSvc.SetRiskService(riskSvc)
 	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projectSvc, approvalSvc, logger)
+	notifySvc.SetInbox(inboxSvc)
+	notifySvc.SetAuth(authSvc)
+	aiSvc.SetPIFlagNotifier(notifySvc)
+	riskSvc.SetPIFlagNotifier(notifySvc)
 
 	// Load workflow definitions from the embedded workflows/ directory.
 	workflows, wfErr := ai.LoadWorkflows()
@@ -166,6 +186,7 @@ func run() error {
 	logger.Info("ai: workflows loaded", "count", len(workflows))
 
 	adminSvc := admin.NewService(authSvc, auditRec)
+	adminSvc.SetAccountNotifier(notifySvc)
 	auth.Register(srv.API, authSvc)
 	admin.Register(srv.API, adminSvc)
 	audit.Register(srv.API, audit.NewService(auditRec))
@@ -181,6 +202,8 @@ func run() error {
 	meeting.Register(srv.API, meetingSvc)
 	approval.Register(srv.API, approvalSvc)
 	inbox.Register(srv.API, inboxSvc)
+	notify.Register(srv.API, notifySvc)
+	notify.RegisterPublic(srv.Router, notifySvc)
 	ai.Register(srv.API, aiSvc)
 	ai.RegisterWorkflows(srv.API, aiSvc, workflows)
 	// SSE streaming chat — chi route (not huma) because it's Server-Sent Events.

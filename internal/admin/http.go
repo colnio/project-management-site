@@ -15,15 +15,27 @@ import (
 	"github.com/colnio/project-management-site/internal/platform"
 )
 
+// AccountNotifier sends account status emails.
+type AccountNotifier interface {
+	EnqueueAccountApproved(ctx context.Context, userID uuid.UUID, toEmail string) error
+	EnqueueAccountSuspended(ctx context.Context, userID uuid.UUID, toEmail string) error
+}
+
 // Service is the admin module's domain service.
 type Service struct {
-	auth *auth.Service
-	rec  audit.Recorder
+	auth   *auth.Service
+	rec    audit.Recorder
+	notify AccountNotifier
 }
 
 // NewService constructs an admin Service.
 func NewService(authSvc *auth.Service, rec audit.Recorder) *Service {
 	return &Service{auth: authSvc, rec: rec}
+}
+
+// SetAccountNotifier wires the notify module for account emails.
+func (s *Service) SetAccountNotifier(n AccountNotifier) {
+	s.notify = n
 }
 
 // Register wires admin HTTP endpoints onto the huma API.
@@ -157,8 +169,25 @@ func (s *Service) handleUpdateUser(ctx context.Context, in *updateUserInput) (*u
 		if !validStatuses[*in.Body.Status] {
 			return nil, platform.BadRequest("admin.invalid_status", "status must be one of: pending, approved, suspended")
 		}
+		prev, err := s.auth.GetUserByID(ctx, in.ID)
+		if err != nil {
+			return nil, err
+		}
 		if err := s.auth.SetUserStatus(ctx, in.ID, *in.Body.Status); err != nil {
 			return nil, err
+		}
+		if s.notify != nil && prev.Status != *in.Body.Status {
+			switch *in.Body.Status {
+			case "approved":
+				if err := s.notify.EnqueueAccountApproved(ctx, in.ID, prev.Email); err != nil {
+					// logged by caller pattern — admin has no log; use silent best-effort
+					_ = err
+				}
+			case "suspended":
+				if err := s.notify.EnqueueAccountSuspended(ctx, in.ID, prev.Email); err != nil {
+					_ = err
+				}
+			}
 		}
 		_ = s.rec.Record(ctx, audit.Entry{
 			Actor:        p.UserID,
