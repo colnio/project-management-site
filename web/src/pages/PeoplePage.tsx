@@ -5,8 +5,7 @@
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import { Avatar } from '@/components/Avatar';
-import { useWorkspaceMembers } from '@/hooks/useQueries';
-import { useCurrentWorkspace } from '@/hooks/useQueries';
+import { useWorkspaceMembers, useCurrentWorkspace } from '@/hooks/useQueries';
 import type { MemberView } from '@/hooks/useWorkspaceQueries';
 
 // ─── Role order ───────────────────────────────────────────────────────────────
@@ -99,8 +98,7 @@ function RoleGroup({ role, members }: { role: string; members: MemberView[] }) {
 export function PeoplePage() {
   const { workspaceId } = useCurrentWorkspace();
   // useWorkspaceMembers returns Membership[] from schema; we cast defensively
-  const { data: rawMembers = [], isLoading, isError } = useWorkspaceMembers(workspaceId);
-  const members = rawMembers as unknown as MemberView[];
+  const { data: members = [], isLoading, isError } = useWorkspaceMembers(workspaceId);
 
   const crumbs = [{ label: 'People' }];
 

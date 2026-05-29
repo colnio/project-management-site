@@ -33,6 +33,7 @@ import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
 import { ProjectDashboard } from '@/components/dashboards/ProjectDashboard';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 import { experimentDisplayTags } from '@/api/types';
+import { memberLabel } from '@/lib/userDisplay';
 
 type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
 
@@ -144,7 +145,7 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
 
   const leads = members.filter(m => m.role === 'owner' || m.role === 'admin');
   const leadNames = leads.length > 0
-    ? leads.map(m => m.user_id.slice(0, 8)).join(', ')
+    ? leads.map(m => memberLabel(m)).join(', ')
     : null;
 
   const visIcon = project.visibility === 'private' ? '🔒' : '🌐';
@@ -182,7 +183,7 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
           {members.length > 0 && (
             <div className="avatar-stack" style={{ marginRight: 6 }}>
               {members.slice(0, 4).map(m => (
-                <Avatar key={m.id} name={m.user_id.slice(0, 8)} size={26} ring />
+                <Avatar key={m.id} name={memberLabel(m)} size={26} ring />
               ))}
               {members.length > 4 && (
                 <div

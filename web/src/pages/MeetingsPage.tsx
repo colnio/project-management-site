@@ -8,7 +8,9 @@ import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import { useMeetings, useCreateMeeting } from '@/hooks/useWorkspaceQueries';
 import { useCurrentWorkspace } from '@/hooks/useQueries';
+import { useUserDirectory } from '@/hooks/useUserDirectory';
 import type { Meeting } from '@/hooks/useWorkspaceQueries';
+import { resolveUserLabel, type UserDirectory } from '@/lib/userDisplay';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -45,7 +47,7 @@ function safeLen(v: unknown): number {
 
 // ─── Meeting row ──────────────────────────────────────────────────────────────
 
-function MeetingRow({ meeting }: { meeting: Meeting }) {
+function MeetingRow({ meeting, directory }: { meeting: Meeting; directory: UserDirectory }) {
   return (
     <Link
       to="/meetings/$meetingId"
@@ -75,7 +77,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
             <span style={kindStyle(meeting.kind)}>{meeting.kind}</span>
             {meeting.chair && (
               <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>
-                {meeting.chair.slice(0, 8)}…
+                Chair: {resolveUserLabel(directory, meeting.chair)}
               </span>
             )}
           </div>
@@ -190,6 +192,7 @@ function NewMeetingModal({ workspaceId, onClose }: NewMeetingModalProps) {
 
 export function MeetingsPage() {
   const { workspaceId } = useCurrentWorkspace();
+  const { directory } = useUserDirectory(workspaceId);
   const { data: meetings = [], isLoading, isError } = useMeetings(workspaceId);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -232,7 +235,7 @@ export function MeetingsPage() {
                   <h2>Upcoming</h2>
                   <span className="meta">{upcoming.length}</span>
                 </div>
-                {upcoming.map(m => <MeetingRow key={m.id} meeting={m} />)}
+                {upcoming.map(m => <MeetingRow key={m.id} meeting={m} directory={directory} />)}
               </div>
             )}
             {past.length > 0 && (
@@ -241,7 +244,7 @@ export function MeetingsPage() {
                   <h2>Past</h2>
                   <span className="meta">{past.length}</span>
                 </div>
-                {past.map(m => <MeetingRow key={m.id} meeting={m} />)}
+                {past.map(m => <MeetingRow key={m.id} meeting={m} directory={directory} />)}
               </div>
             )}
           </>

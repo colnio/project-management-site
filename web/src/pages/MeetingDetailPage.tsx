@@ -8,7 +8,9 @@ import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState } from '@/components/LoadingState';
 import { useMeeting, useUpdateMeeting } from '@/hooks/useWorkspaceQueries';
 import { useCurrentWorkspace } from '@/hooks/useQueries';
+import { useUserDirectory } from '@/hooks/useUserDirectory';
 import type { ActionItem } from '@/hooks/useWorkspaceQueries';
+import { resolveUserLabel } from '@/lib/userDisplay';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -137,6 +139,7 @@ function EditableText({ value, onSave, isPending }: EditableProps) {
 export function MeetingDetailPage() {
   const { meetingId } = useParams({ from: '/auth/meetings/$meetingId' });
   const { workspaceId } = useCurrentWorkspace();
+  const { directory } = useUserDirectory(workspaceId);
   const { data: meeting, isLoading, isError } = useMeeting(meetingId);
   const update = useUpdateMeeting(meetingId, workspaceId ?? '');
 
@@ -238,7 +241,7 @@ export function MeetingDetailPage() {
                     </div>
                     {ai.owner && (
                       <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', marginTop: 2 }}>
-                        Owner: {ai.owner}
+                        Owner: {resolveUserLabel(directory, ai.owner)}
                       </div>
                     )}
                   </div>

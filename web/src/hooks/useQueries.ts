@@ -10,6 +10,7 @@ import type {
   Artifact,
 } from '@/api/types';
 import type { components } from '@/api/schema.d.ts';
+import type { MemberView } from '@/hooks/useWorkspaceQueries';
 
 // ─── Extra types (not in re-exports yet) ─────────────────────────────────────
 
@@ -55,7 +56,7 @@ export function useWorkspaceMembers(workspaceId: string | undefined) {
     queryKey: workspaceId ? keys.workspaceMembers(workspaceId) : ['workspaces', 'none', 'members'],
     queryFn: () =>
       api
-        .get<Membership[] | null>(`/v1/workspaces/${workspaceId}/members`)
+        .get<MemberView[] | null>(`/v1/workspaces/${workspaceId}/members`)
         .then(r => r ?? []),
     enabled: !!workspaceId,
   });

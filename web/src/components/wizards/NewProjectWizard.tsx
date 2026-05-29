@@ -19,6 +19,8 @@ import { useRunWorkflow, useAIRun } from '@/hooks/useAIQueries';
 import { LoadingState } from '@/components/LoadingState';
 import { RiskRegister } from '@/components/RiskRegister';
 import { ApiError } from '@/api/client';
+import { memberLabel } from '@/lib/userDisplay';
+import { Avatar } from '@/components/Avatar';
 
 // ─── Primitives (shared with WorkspacesPage style) ────────────────────────────
 
@@ -426,27 +428,25 @@ function TeamStep({
                 borderRadius: 6,
               }}
             >
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  background: 'var(--ember-tint)',
-                  color: 'var(--ember)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  fontFamily: 'var(--serif)',
-                  flexShrink: 0,
-                }}
-              >
-                {m.user_id[0]?.toUpperCase()}
-              </div>
+              <Avatar name={memberLabel(m)} size={28} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12.5, color: 'var(--ink)', fontWeight: 500 }}>
-                  {m.user_id.slice(0, 16)}
+                  {memberLabel(m)}
                 </div>
+                {m.email && (
+                  <div
+                    style={{
+                      fontFamily: 'var(--mono)',
+                      fontSize: 10,
+                      color: 'var(--muted-2)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {m.email}
+                  </div>
+                )}
                 <div
                   style={{
                     fontFamily: 'var(--mono)',
@@ -454,6 +454,7 @@ function TeamStep({
                     color: 'var(--muted-2)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.06em',
+                    marginTop: 2,
                   }}
                 >
                   {m.role}

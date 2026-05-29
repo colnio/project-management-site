@@ -9,7 +9,6 @@
  */
 import { useState } from 'react';
 import { useWorkspaceMembers, useProjectCollaborators } from '@/hooks/useQueries';
-import type { MemberView } from '@/hooks/useWorkspaceQueries';
 import {
   useGenerateRiskReview,
   useCreateApprovalRequest,
@@ -163,10 +162,7 @@ export function SendForApprovalDialog({
   onClose,
 }: SendForApprovalDialogProps) {
   // ── Stakeholder data ──────────────────────────────────────────────────────
-  // useWorkspaceMembers is typed as Membership[] in schema but the API returns
-  // richer MemberView objects at runtime — cast following the PeoplePage pattern.
-  const { data: rawWsMembers = [] } = useWorkspaceMembers(workspaceId);
-  const wsMembers = rawWsMembers as unknown as MemberView[];
+  const { data: wsMembers = [] } = useWorkspaceMembers(workspaceId);
   const { data: collabs = [] } = useProjectCollaborators(projectId);
 
   // Dedup by user_id: prefer workspace members (richer data); supplement with collabs.

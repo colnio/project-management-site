@@ -2,16 +2,21 @@
  * AdminPage — /admin
  * Sections: Workspace info, AI overview, Members table, User management, Risk workflows, Audit log, Backups.
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import { Avatar } from '@/components/Avatar';
 import { useWorkspaceMembers, useCurrentWorkspace } from '@/hooks/useQueries';
 import { useAIUsage, useWorkflows } from '@/hooks/useAIQueries';
 import { useAuditLog } from '@/hooks/useWorkspaceQueries';
-import type { MemberView } from '@/hooks/useWorkspaceQueries';
 import type { AuditEntry } from '@/hooks/useWorkspaceQueries';
-import { useAdminUsers, useUpdateAdminUser, useDeleteAdminUser } from '@/hooks/useAdminQueries';
+import { formatUserLabel } from '@/lib/userDisplay';
+import {
+  useAdminUsers,
+  useUpdateAdminUser,
+  useDeleteAdminUser,
+  useCreateBroadcast,
+} from '@/hooks/useAdminQueries';
 import type { AdminUserView } from '@/api/types';
 import { useAuth } from '@/hooks/useAuth';
 import { isPrivileged } from '@/api/types';
@@ -110,8 +115,7 @@ function AIOverviewSection({ workspaceId }: { workspaceId: string }) {
 // ─── Members table ────────────────────────────────────────────────────────────
 
 function MembersSection({ workspaceId }: { workspaceId: string }) {
-  const { data: rawMembers = [], isLoading, isError } = useWorkspaceMembers(workspaceId);
-  const members = rawMembers as unknown as MemberView[];
+  const { data: members = [], isLoading, isError } = useWorkspaceMembers(workspaceId);
 
   if (isLoading) return <LoadingState message="Loading members…" />;
   if (isError) return <ErrorState message="Failed to load members." />;
@@ -174,6 +178,15 @@ function WorkflowsSection() {
 
 function AuditSection() {
   const { data: entries = [], isLoading, isError } = useAuditLog();
+  const { data: users = [] } = useAdminUsers();
+
+  const actorLabels = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const u of users) {
+      byId.set(u.id, formatUserLabel({ display_name: u.display_name, email: u.email, user_id: u.id }));
+    }
+    return byId;
+  }, [users]);
 
   if (isLoading) return <LoadingState message="Loading audit log…" />;
   if (isError) return <ErrorState message="Failed to load audit log. (Requires system admin role.)" />;
@@ -191,8 +204,8 @@ function AuditSection() {
         <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 120px', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--line)', alignItems: 'start', fontSize: 12 }}>
           <span style={{ fontWeight: 500 }}>{e.action}</span>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted)' }}>{e.resource_type}</span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {e.actor.slice(0, 8)}…
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.actor}>
+            {actorLabels.get(e.actor) ?? formatUserLabel({ user_id: e.actor })}
           </span>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>
             {new Date(e.created_at).toLocaleString()}
@@ -398,6 +411,93 @@ function UsersSection() {
   );
 }
 
+// ─── Email broadcast ───────────────────────────────────────────────────────────
+
+function BroadcastSection({ workspaceId }: { workspaceId: string | undefined }) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [audience, setAudience] = useState<'all' | 'workspace'>('workspace');
+  const [result, setResult] = useState<string | null>(null);
+  const broadcast = useCreateBroadcast();
+
+  const submit = () => {
+    setResult(null);
+    broadcast.mutate(
+      {
+        subject: subject.trim(),
+        body: body.trim(),
+        audience,
+        workspace_id: audience === 'workspace' ? workspaceId : undefined,
+      },
+      {
+        onSuccess: (res) => {
+          setResult(`Queued email for ${res.recipients_queued} recipient(s).`);
+          setSubject('');
+          setBody('');
+        },
+        onError: () => setResult('Failed to send broadcast.'),
+      },
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 560 }}>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+        Sends a mandatory email to every approved user (or everyone in this workspace). Recipients cannot opt out.
+      </p>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase' }}>Audience</span>
+        <select
+          value={audience}
+          onChange={e => setAudience(e.target.value as 'all' | 'workspace')}
+          style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--paper-2)' }}
+        >
+          <option value="workspace" disabled={!workspaceId}>This workspace</option>
+          <option value="all">All approved users</option>
+        </select>
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase' }}>Subject</span>
+        <input
+          value={subject}
+          onChange={e => setSubject(e.target.value)}
+          style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--paper-2)' }}
+        />
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase' }}>Message</span>
+        <textarea
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          rows={5}
+          style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--paper-2)', resize: 'vertical' }}
+        />
+      </label>
+      <button
+        type="button"
+        disabled={broadcast.isPending || !subject.trim() || !body.trim() || (audience === 'workspace' && !workspaceId)}
+        onClick={submit}
+        style={{
+          alignSelf: 'flex-start',
+          padding: '8px 16px',
+          borderRadius: 6,
+          border: 0,
+          background: 'var(--ember)',
+          color: '#fff',
+          fontWeight: 600,
+          cursor: 'pointer',
+          opacity: broadcast.isPending ? 0.6 : 1,
+        }}
+      >
+        {broadcast.isPending ? 'Sending…' : 'Send broadcast'}
+      </button>
+      {result && (
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>{result}</div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function AdminPage() {
@@ -453,6 +553,10 @@ export function AdminPage() {
 
         <SectionCard title="User Management">
           <UsersSection />
+        </SectionCard>
+
+        <SectionCard title="Email Broadcast">
+          <BroadcastSection workspaceId={workspaceId} />
         </SectionCard>
 
         <SectionCard title="Risk Workflow Library">
