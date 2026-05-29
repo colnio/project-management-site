@@ -11,6 +11,7 @@ import {
   useExperiment,
   useUpdateExperiment,
   useExperimentSamples,
+  useProjectExperimentTags,
 } from '@/hooks/useQueries';
 import {
   useExperimentArtifacts,
@@ -18,6 +19,7 @@ import {
 } from '@/hooks/useArtifactQueries';
 import { ArtImage, ArtPDF, ArtNotebook, ArtEmbed } from '@/components/embeds/ArtEmbeds';
 import type { Artifact } from '@/api/types';
+import { experimentDisplayTags } from '@/api/types';
 import type { ExperimentSample } from '@/hooks/useQueries';
 
 // ─── Method-specific artifact embed ──────────────────────────────────────────
@@ -94,14 +96,14 @@ function ParamsDisplay({ params }: { params: Record<string, unknown> }) {
 
 const STATUSES = ['planned', 'in_progress', 'completed', 'failed'] as const;
 type ExpStatus = typeof STATUSES[number];
-const METHODS = ['cycling', 'synthesis', 'SEM', 'XRD', 'EIS', 'weighing', 'drying', 'custom'] as const;
-
 // ─── ExperimentDashboard ──────────────────────────────────────────────────────
 
 export function ExperimentDashboard({ experimentId }: { experimentId: string }) {
   const { data: experiment, isLoading, isError } = useExperiment(experimentId);
   const { data: linkedSamples = [] } = useExperimentSamples(experimentId);
-  const updateExp = useUpdateExperiment(experimentId, experiment?.project_id ?? '');
+  const projectId = experiment?.project_id ?? '';
+  const { data: tags = [] } = useProjectExperimentTags(projectId || undefined);
+  const updateExp = useUpdateExperiment(experimentId, projectId);
 
   if (isLoading) return <LoadingState message="Loading experiment dashboard…" />;
   if (isError || !experiment) return <ErrorState message="Failed to load experiment." />;
@@ -116,6 +118,15 @@ export function ExperimentDashboard({ experimentId }: { experimentId: string }) 
     void updateExp.mutateAsync({ status: s });
   };
 
+  const assignedTags = experimentDisplayTags(experiment);
+
+  const toggleTag = (label: string) => {
+    const next = assignedTags.includes(label)
+      ? assignedTags.filter(t => t !== label)
+      : [...assignedTags, label];
+    void updateExp.mutateAsync({ tags: next });
+  };
+
   return (
     <div>
       {/* Header */}
@@ -124,7 +135,9 @@ export function ExperimentDashboard({ experimentId }: { experimentId: string }) 
           <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: 'var(--ember)', letterSpacing: '-0.01em' }}>
             {(experiment as unknown as { code?: string }).code ?? experiment.id.slice(0, 8)}
           </span>
-          <span className="pill">{experiment.method}</span>
+          {assignedTags.map(label => (
+            <span key={label} className="pill">{label}</span>
+          ))}
           <StatusPill status={experiment.status} />
         </div>
         {experiment.result_summary && (
@@ -149,13 +162,28 @@ export function ExperimentDashboard({ experimentId }: { experimentId: string }) 
         ))}
       </div>
 
-      {/* Method chips (display only) */}
-      <div className="section-h"><h2>Method</h2></div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        {METHODS.map(m => (
-          <span key={m} className="pill" style={{ opacity: experiment.method === m ? 1 : 0.4 }}>{m}</span>
-        ))}
-      </div>
+      {/* Tag assignment */}
+      <div className="section-h"><h2>Tags</h2></div>
+      {tags.length === 0 ? (
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--muted)' }}>
+          No project tags yet — add tags from the project Experiments tab (Manage tags).
+        </p>
+      ) : (
+        <div className="choice-row" style={{ marginBottom: 20 }}>
+          {tags.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => toggleTag(t.label)}
+              className={`status-opt${assignedTags.includes(t.label) ? ' sel' : ''}`}
+              aria-pressed={assignedTags.includes(t.label)}
+              disabled={updateExp.isPending}
+            >
+              <span className="pill">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Artifact embeds */}
       <ExperimentArtifactEmbeds experimentId={experimentId} method={experiment.method as string} />

@@ -22,6 +22,7 @@ type aiConfFile struct {
 	Active     string          `json:"active"`
 	OpenRouter json.RawMessage `json:"openrouter"`
 	GlowByte   json.RawMessage `json:"glowbyte"`
+	Ollama     json.RawMessage `json:"ollama"`
 }
 
 type providerEntry struct {
@@ -60,6 +61,8 @@ func LoadProvider() (*Provider, error) {
 		raw = conf.OpenRouter
 	case "glowbyte":
 		raw = conf.GlowByte
+	case "ollama":
+		raw = conf.Ollama
 	default:
 		return nil, fmt.Errorf("ai: unknown provider %q in aiconf", conf.Active)
 	}

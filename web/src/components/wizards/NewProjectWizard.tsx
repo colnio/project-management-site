@@ -499,8 +499,8 @@ function FirstIterationStep({
       try {
         await createIter.mutateAsync({
           title: title.trim(),
-          start_at: startAt || undefined,
-          end_at: endAt || undefined,
+          start_at: startAt ? new Date(startAt).toISOString() : undefined,
+          end_at: endAt ? new Date(endAt).toISOString() : undefined,
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to create iteration.');

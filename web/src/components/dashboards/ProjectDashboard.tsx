@@ -17,6 +17,7 @@ import {
   useProjectArtifacts,
 } from '@/hooks/useQueries';
 import type { Sample, Experiment } from '@/api/types';
+import { experimentDisplayTags } from '@/api/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,8 +72,10 @@ function ExperimentCard({ experiment: e }: { experiment: Experiment }) {
         <span className="id" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)' }}>
           {(e as unknown as { code?: string }).code ?? e.id.slice(0, 8)}
         </span>
-        <span style={{ marginLeft: 'auto' }}>
-          <span className="pill">{e.method}</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {experimentDisplayTags(e).map(label => (
+            <span key={label} className="pill">{label}</span>
+          ))}
         </span>
       </div>
       <div className="name">{e.result_summary || e.method}</div>

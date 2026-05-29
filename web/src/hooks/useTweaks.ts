@@ -1,159 +1,161 @@
 /**
- * useTweaks — lightweight localStorage-backed tweaks store.
- *
- * Stable exports: OVERVIEW_LAYOUT_KEY, getOverviewLayout,
- * setOverviewLayout, useOverviewLayout.
- * Phase 3 additions: useTheme, useAccent, useDensity.
+ * React hooks for per-user appearance preferences (see appearancePrefs.ts).
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  type OverviewLayout,
+  type Theme,
+  type Density,
+  type FontFamily,
+  OVERVIEW_LAYOUT_KEY,
+  THEME_KEY,
+  ACCENT_KEY,
+  DENSITY_KEY,
+  FONT_FAMILY_KEY,
+  ACCENT_DEFAULTS,
+  getOverviewLayout,
+  setOverviewLayout,
+  getTheme,
+  applyTheme,
+  getAccent,
+  applyAccent,
+  getDensity,
+  applyDensity,
+  getFontFamily,
+  applyFontFamily,
+  writeAppearancePref,
+  applyAppearanceForUser,
+  initTweaks,
+} from '@/hooks/appearancePrefs';
 
-// ─── Overview Layout ──────────────────────────────────────────────────────────
-
-export type OverviewLayout = 'editorial' | 'dashboard' | 'stream';
-
-export const OVERVIEW_LAYOUT_KEY = 'tweaks.overviewLayout';
-
-export function getOverviewLayout(): OverviewLayout {
-  try {
-    const v = localStorage.getItem(OVERVIEW_LAYOUT_KEY);
-    if (v === 'editorial' || v === 'dashboard' || v === 'stream') return v;
-  } catch {
-    // localStorage unavailable
-  }
-  return 'dashboard';
-}
-
-export function setOverviewLayout(layout: OverviewLayout): void {
-  try {
-    localStorage.setItem(OVERVIEW_LAYOUT_KEY, layout);
-  } catch {
-    // ignore
-  }
-}
+export type { OverviewLayout, Theme, Density, FontFamily };
+export {
+  OVERVIEW_LAYOUT_KEY,
+  THEME_KEY,
+  ACCENT_KEY,
+  DENSITY_KEY,
+  FONT_FAMILY_KEY,
+  ACCENT_DEFAULTS,
+  getOverviewLayout,
+  setOverviewLayout,
+  getTheme,
+  getAccent,
+  getDensity,
+  getFontFamily,
+  applyAppearanceForUser,
+  initTweaks,
+};
 
 export function useOverviewLayout(): [OverviewLayout, (l: OverviewLayout) => void] {
-  const [layout, setLayout] = useState<OverviewLayout>(getOverviewLayout);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [layout, setLayout] = useState<OverviewLayout>(() => getOverviewLayout(userId));
 
-  const update = useCallback((l: OverviewLayout) => {
-    setOverviewLayout(l);
-    setLayout(l);
-  }, []);
+  useEffect(() => {
+    setLayout(getOverviewLayout(userId));
+  }, [userId]);
+
+  const update = useCallback(
+    (l: OverviewLayout) => {
+      setOverviewLayout(l, userId);
+      setLayout(l);
+    },
+    [userId],
+  );
 
   return [layout, update];
 }
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-
-export type Theme = 'light' | 'dark';
-
-export const THEME_KEY = 'tweaks.theme';
-
-export function getTheme(): Theme {
-  try {
-    const v = localStorage.getItem(THEME_KEY);
-    if (v === 'light' || v === 'dark') return v;
-  } catch { /* ignore */ }
-  return 'light';
-}
-
-function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
-}
-
 export function useTheme(): [Theme, (t: Theme) => void] {
-  const [theme, setTheme] = useState<Theme>(getTheme);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [theme, setThemeState] = useState<Theme>(() => getTheme(userId));
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
-
-  const update = useCallback((t: Theme) => {
-    try { localStorage.setItem(THEME_KEY, t); } catch { /* ignore */ }
-    setTheme(t);
+    const t = getTheme(userId);
+    setThemeState(t);
     applyTheme(t);
-  }, []);
+  }, [userId]);
+
+  const update = useCallback(
+    (t: Theme) => {
+      writeAppearancePref(userId, THEME_KEY, t);
+      setThemeState(t);
+      applyTheme(t);
+    },
+    [userId],
+  );
 
   return [theme, update];
 }
 
-// ─── Accent Color ─────────────────────────────────────────────────────────────
-
-export const ACCENT_KEY = 'tweaks.accent';
-export const ACCENT_DEFAULTS = [
-  '#d97757', // ember (default)
-  '#5a7d3a', // green
-  '#5a6a8a', // slate
-  '#7a5a8a', // violet
-  '#b5841b', // amber
-];
-
-export function getAccent(): string {
-  try {
-    const v = localStorage.getItem(ACCENT_KEY);
-    if (v) return v;
-  } catch { /* ignore */ }
-  return ACCENT_DEFAULTS[0];
-}
-
-function applyAccent(color: string) {
-  document.documentElement.style.setProperty('--accent', color);
-}
-
 export function useAccent(): [string, (a: string) => void] {
-  const [accent, setAccent] = useState<string>(getAccent);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [accent, setAccentState] = useState<string>(() => getAccent(userId));
 
   useEffect(() => {
-    applyAccent(accent);
-  }, [accent]);
-
-  const update = useCallback((a: string) => {
-    try { localStorage.setItem(ACCENT_KEY, a); } catch { /* ignore */ }
-    setAccent(a);
+    const a = getAccent(userId);
+    setAccentState(a);
     applyAccent(a);
-  }, []);
+  }, [userId]);
+
+  const update = useCallback(
+    (a: string) => {
+      writeAppearancePref(userId, ACCENT_KEY, a);
+      setAccentState(a);
+      applyAccent(a);
+    },
+    [userId],
+  );
 
   return [accent, update];
 }
 
-// ─── Density ─────────────────────────────────────────────────────────────────
-
-export type Density = 'compact' | 'regular' | 'comfy';
-
-export const DENSITY_KEY = 'tweaks.density';
-
-export function getDensity(): Density {
-  try {
-    const v = localStorage.getItem(DENSITY_KEY);
-    if (v === 'compact' || v === 'regular' || v === 'comfy') return v;
-  } catch { /* ignore */ }
-  return 'regular';
-}
-
-function applyDensity(density: Density) {
-  document.documentElement.dataset.density = density;
-}
-
 export function useDensity(): [Density, (d: Density) => void] {
-  const [density, setDensity] = useState<Density>(getDensity);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [density, setDensityState] = useState<Density>(() => getDensity(userId));
 
   useEffect(() => {
-    applyDensity(density);
-  }, [density]);
-
-  const update = useCallback((d: Density) => {
-    try { localStorage.setItem(DENSITY_KEY, d); } catch { /* ignore */ }
-    setDensity(d);
+    const d = getDensity(userId);
+    setDensityState(d);
     applyDensity(d);
-  }, []);
+  }, [userId]);
+
+  const update = useCallback(
+    (d: Density) => {
+      writeAppearancePref(userId, DENSITY_KEY, d);
+      setDensityState(d);
+      applyDensity(d);
+    },
+    [userId],
+  );
 
   return [density, update];
 }
 
-// ─── Init (call once at app boot) ────────────────────────────────────────────
+export function useFontFamily(): [FontFamily, (f: FontFamily) => void] {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [font, setFontState] = useState<FontFamily>(() => getFontFamily(userId));
 
-export function initTweaks() {
-  applyTheme(getTheme());
-  applyAccent(getAccent());
-  applyDensity(getDensity());
+  useEffect(() => {
+    const f = getFontFamily(userId);
+    setFontState(f);
+    applyFontFamily(f);
+  }, [userId]);
+
+  const update = useCallback(
+    (f: FontFamily) => {
+      writeAppearancePref(userId, FONT_FAMILY_KEY, f);
+      setFontState(f);
+      applyFontFamily(f);
+    },
+    [userId],
+  );
+
+  return [font, update];
 }

@@ -482,3 +482,47 @@ func TestAudit_CreateUpdateArchive(t *testing.T) {
 		t.Error("missing project.archive audit entry")
 	}
 }
+
+func TestExperimentTag_CRUD(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner@example.com", "Owner")
+	ws, _ := env.orgSvc.CreateWorkspace(ctx, "WS", owner.ID)
+	proj, err := env.projSvc.CreateProject(ctx, ws.ID, "TagProj", "", "workspace", owner.ID)
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	tag, err := env.projSvc.CreateExperimentTag(ctx, proj.ID, "EIS", owner.ID)
+	if err != nil {
+		t.Fatalf("create tag: %v", err)
+	}
+	if tag.Label != "EIS" {
+		t.Errorf("label = %q", tag.Label)
+	}
+
+	list, err := env.projSvc.ListExperimentTags(ctx, proj.ID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("want 1 tag, got %d", len(list))
+	}
+
+	updated, err := env.projSvc.UpdateExperimentTag(ctx, proj.ID, tag.ID, "SEM", owner.ID)
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if updated.Label != "SEM" {
+		t.Errorf("updated label = %q", updated.Label)
+	}
+
+	if err := env.projSvc.DeleteExperimentTag(ctx, proj.ID, tag.ID, owner.ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	list, _ = env.projSvc.ListExperimentTags(ctx, proj.ID)
+	if len(list) != 0 {
+		t.Errorf("want 0 tags after delete, got %d", len(list))
+	}
+}

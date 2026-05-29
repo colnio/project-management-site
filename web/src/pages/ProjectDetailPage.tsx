@@ -14,9 +14,11 @@ import {
   useProjectArtifacts,
   useCreateSample,
   useCreateExperiment,
+  useProjectExperimentTags,
   useWorkspaceMembers,
   useArchiveProject,
 } from '@/hooks/useQueries';
+import { ExperimentTagsManager } from '@/components/ExperimentTagsManager';
 import { NewIterationWizard } from '@/components/wizards/NewIterationWizard';
 import { ShareDialog } from '@/components/ShareDialog';
 import { EditProjectDialog } from '@/components/EditProjectDialog';
@@ -30,6 +32,7 @@ import { ProjectAutonomySection } from '@/components/AutonomyConfig';
 import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
 import { ProjectDashboard } from '@/components/dashboards/ProjectDashboard';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
+import { experimentDisplayTags } from '@/api/types';
 
 type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
 
@@ -555,13 +558,22 @@ function SamplesTab({ projectId }: { projectId: string }) {
 // ─── Create Experiment Dialog ─────────────────────────────────────────────────
 
 function CreateExperimentDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const [method, setMethod] = useState('cycling');
+  const { data: tags = [] } = useProjectExperimentTags(projectId);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [status, setStatus] = useState('planned');
   const createExp = useCreateExperiment(projectId);
-  const METHODS = ['cycling', 'synthesis', 'SEM', 'XRD', 'EIS', 'weighing', 'drying', 'custom'];
+
+  const toggleTag = (label: string) => {
+    setSelectedTags(prev =>
+      prev.includes(label) ? prev.filter(t => t !== label) : [...prev, label],
+    );
+  };
 
   const handleCreate = async () => {
-    await createExp.mutateAsync({ method, status });
+    await createExp.mutateAsync({
+      tags: selectedTags,
+      status,
+    });
     onClose();
   };
 
@@ -573,21 +585,35 @@ function CreateExperimentDialog({ projectId, onClose }: { projectId: string; onC
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Method</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {METHODS.map(m => (
-                <button key={m} onClick={() => setMethod(m)} className={`status-opt${method === m ? ' sel' : ''}`}>
-                  <span className="pill">{m}</span>
-                </button>
-              ))}
+          {tags.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Tags (optional)</div>
+              <div className="choice-row">
+                {tags.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => toggleTag(t.label)}
+                    className={`status-opt${selectedTags.includes(t.label) ? ' sel' : ''}`}
+                    aria-pressed={selectedTags.includes(t.label)}
+                  >
+                    <span className="pill">{t.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           <div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Initial status</div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="choice-row">
               {['planned', 'in_progress', 'completed', 'failed'].map(s => (
-                <button key={s} onClick={() => setStatus(s)} className={`status-opt${status === s ? ' sel' : ''}`}>
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className={`status-opt${status === s ? ' sel' : ''}`}
+                  aria-pressed={status === s}
+                >
                   <StatusPill status={s} />
                 </button>
               ))}
@@ -619,8 +645,10 @@ function ExperimentCard({ experiment: e }: { experiment: Experiment }) {
         <span className="id" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)' }}>
           {e.code ?? e.id.slice(0, 8)}
         </span>
-        <span style={{ marginLeft: 'auto' }}>
-          <span className="pill">{e.method}</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {experimentDisplayTags(e).map(label => (
+            <span key={label} className="pill">{label}</span>
+          ))}
         </span>
       </div>
       <div className="name">{e.result_summary || e.method}</div>
@@ -645,34 +673,40 @@ function ExperimentCard({ experiment: e }: { experiment: Experiment }) {
 
 function ExperimentsTab({ projectId }: { projectId: string }) {
   const { data: experiments = [], isLoading, isError } = useProjectExperiments(projectId);
+  const { data: tags = [] } = useProjectExperimentTags(projectId);
   const [createOpen, setCreateOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [filterMethod, setFilterMethod] = useState('');
 
   if (isLoading) return <LoadingState message="Loading experiments…" />;
   if (isError) return <ErrorState message="Failed to load experiments." />;
 
-  const METHODS = ['cycling', 'synthesis', 'SEM', 'XRD', 'EIS', 'weighing', 'drying', 'custom'];
-  const filtered = filterMethod ? experiments.filter((e: Experiment) => e.method === filterMethod) : experiments;
+  const filtered = filterMethod
+    ? experiments.filter((e: Experiment) => experimentDisplayTags(e).includes(filterMethod))
+    : experiments;
 
   return (
     <div className="page-wrap wide">
       {createOpen && <CreateExperimentDialog projectId={projectId} onClose={() => setCreateOpen(false)} />}
+      {tagsOpen && <ExperimentTagsManager projectId={projectId} onClose={() => setTagsOpen(false)} />}
       <div className="section-h" style={{ marginBottom: 14 }}>
         <h2>Experiments</h2>
         <span className="meta">{experiments.length} total</span>
-        <div className="right">
-          <button className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New experiment</button>
+        <div className="right" style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="top-btn" onClick={() => setTagsOpen(true)}>Manage tags</button>
+          <button type="button" className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New experiment</button>
         </div>
       </div>
-      {/* Method filter */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-        <button onClick={() => setFilterMethod('')} className={`status-opt${filterMethod === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
-        {METHODS.map(m => (
-          <button key={m} onClick={() => setFilterMethod(filterMethod === m ? '' : m)} className={`status-opt${filterMethod === m ? ' sel' : ''}`}>
-            <span className="pill">{m}</span>
-          </button>
-        ))}
-      </div>
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
+          <button type="button" onClick={() => setFilterMethod('')} className={`status-opt${filterMethod === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
+          {tags.map(t => (
+            <button key={t.id} type="button" onClick={() => setFilterMethod(filterMethod === t.label ? '' : t.label)} className={`status-opt${filterMethod === t.label ? ' sel' : ''}`}>
+              <span className="pill">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {filtered.length === 0 ? <EmptyState message="No experiments." /> : (
         <div className="records three">
           {filtered.map((e: Experiment) => <ExperimentCard key={e.id} experiment={e} />)}
@@ -1221,7 +1255,6 @@ function ProjectDetailPageInner() {
       activeProjectId={projectId}
       topBarCrumbs={crumbs}
       topBarActions={topBarActions}
-      onJumpTab={(tab) => setTab(tab as Tab)}
     >
       {isLoading ? (
         <LoadingState />

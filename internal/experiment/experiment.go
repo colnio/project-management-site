@@ -28,6 +28,7 @@ type Experiment struct {
 	ProjectID     uuid.UUID       `json:"project_id"`
 	IterationID   *uuid.UUID      `json:"iteration_id,omitempty"`
 	Method        string          `json:"method"`
+	Tags          []string        `json:"tags,omitempty"`
 	Parameters    json.RawMessage `json:"parameters"`
 	ResultSummary string          `json:"result_summary"`
 	NotesPageID   *uuid.UUID      `json:"notes_page_id,omitempty"`
@@ -74,19 +75,10 @@ func NewService(
 // GetExperiment loads an experiment by id. Returns platform.NotFound if absent.
 func (s *Service) GetExperiment(ctx context.Context, id uuid.UUID) (*Experiment, error) {
 	var e Experiment
-	err := s.pool.QueryRow(ctx,
-		`SELECT id, project_id, iteration_id, method, parameters, result_summary,
-		        notes_page_id, performed_by, performed_at, status,
-		        COALESCE(seq, 0), COALESCE(code, ''),
-		        created_by, created_at, updated_at
-		 FROM experiments WHERE id = $1`,
+	err := scanExperiment(s.pool.QueryRow(ctx,
+		`SELECT `+experimentSelectCols+` FROM experiments WHERE id = $1`,
 		id,
-	).Scan(
-		&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &e.Parameters,
-		&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
-		&e.Status, &e.Seq, &e.Code,
-		&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
-	)
+	), &e)
 	if err == pgx.ErrNoRows {
 		return nil, platform.NotFound("experiment.not_found", "experiment not found")
 	}
@@ -101,6 +93,7 @@ func (s *Service) CreateExperiment(
 	ctx context.Context,
 	projectID uuid.UUID,
 	method string,
+	tagLabels []string,
 	parameters json.RawMessage,
 	resultSummary string,
 	iterationID *uuid.UUID,
@@ -108,8 +101,25 @@ func (s *Service) CreateExperiment(
 	performedAt *time.Time,
 	creatorID uuid.UUID,
 ) (*Experiment, error) {
-	if method == "" {
-		method = "custom"
+	tagLabels = normalizeTagLabels(tagLabels)
+	var err error
+	if len(tagLabels) > 0 {
+		tagLabels, err = s.canonicalizeTagLabels(ctx, projectID, tagLabels)
+		if err != nil {
+			return nil, err
+		}
+		method = primaryMethod(tagLabels)
+	} else {
+		if method == "" {
+			method = "custom"
+		}
+		if method != "custom" {
+			tagLabels = []string{method}
+		}
+	}
+	tagsJSON, err := marshalTags(tagLabels)
+	if err != nil {
+		return nil, err
 	}
 	if status == "" {
 		status = "planned"
@@ -119,26 +129,18 @@ func (s *Service) CreateExperiment(
 	}
 
 	var e Experiment
-	err := s.pool.QueryRow(ctx,
+	err = scanExperiment(s.pool.QueryRow(ctx,
 		`INSERT INTO experiments
-		   (project_id, iteration_id, method, parameters, result_summary,
+		   (project_id, iteration_id, method, tags, parameters, result_summary,
 		    status, performed_at, created_by,
 		    seq, code)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
 		         COALESCE((SELECT MAX(seq) FROM experiments WHERE project_id = $1), 0) + 1,
 		         'EX-' || (COALESCE((SELECT MAX(seq) FROM experiments WHERE project_id = $1), 0) + 1))
-		 RETURNING id, project_id, iteration_id, method, parameters, result_summary,
-		           notes_page_id, performed_by, performed_at, status,
-		           COALESCE(seq, 0), COALESCE(code, ''),
-		           created_by, created_at, updated_at`,
-		projectID, iterationID, method, parameters, resultSummary,
+		 RETURNING `+experimentSelectCols,
+		projectID, iterationID, method, tagsJSON, parameters, resultSummary,
 		status, performedAt, creatorID,
-	).Scan(
-		&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &e.Parameters,
-		&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
-		&e.Status, &e.Seq, &e.Code,
-		&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
-	)
+	), &e)
 	if err != nil {
 		return nil, fmt.Errorf("experiment: create: %w", err)
 	}
@@ -161,7 +163,7 @@ func (s *Service) ListExperiments(
 	method string,
 	sampleID *uuid.UUID,
 ) ([]*Experiment, error) {
-	query := `SELECT DISTINCT e.id, e.project_id, e.iteration_id, e.method, e.parameters,
+	query := `SELECT DISTINCT e.id, e.project_id, e.iteration_id, e.method, e.tags, e.parameters,
 	                 e.result_summary, e.notes_page_id, e.performed_by, e.performed_at,
 	                 e.status, COALESCE(e.seq, 0), COALESCE(e.code, ''),
 	                 e.created_by, e.created_at, e.updated_at
@@ -184,7 +186,7 @@ func (s *Service) ListExperiments(
 		argN++
 	}
 	if method != "" {
-		query += fmt.Sprintf(` AND e.method = $%d`, argN)
+		query += fmt.Sprintf(` AND (e.method = $%d OR e.tags @> jsonb_build_array($%d::text))`, argN, argN)
 		args = append(args, method)
 		argN++
 	}
@@ -201,12 +203,7 @@ func (s *Service) ListExperiments(
 	var result []*Experiment
 	for rows.Next() {
 		var e Experiment
-		if err := rows.Scan(
-			&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &e.Parameters,
-			&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
-			&e.Status, &e.Seq, &e.Code,
-			&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
-		); err != nil {
+		if err := scanExperiment(rows, &e); err != nil {
 			return nil, fmt.Errorf("experiment: scan: %w", err)
 		}
 		result = append(result, &e)
@@ -222,6 +219,7 @@ func (s *Service) UpdateExperiment(
 	ctx context.Context,
 	id uuid.UUID,
 	method string,
+	tagLabels *[]string,
 	parameters json.RawMessage,
 	resultSummary *string,
 	iterationID *uuid.UUID,
@@ -230,14 +228,51 @@ func (s *Service) UpdateExperiment(
 	performedAt *time.Time,
 	actorID uuid.UUID,
 ) (*Experiment, error) {
+	existing, err := s.GetExperiment(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
 	// Build update dynamically.
 	setClauses := []string{"updated_at = now()"}
 	args := []any{}
 	argN := 1
 
-	if method != "" {
+	if tagLabels != nil {
+		labels := normalizeTagLabels(*tagLabels)
+		if len(labels) > 0 {
+			labels, err = s.canonicalizeTagLabels(ctx, existing.ProjectID, labels)
+			if err != nil {
+				return nil, err
+			}
+			method = primaryMethod(labels)
+		} else {
+			method = "custom"
+		}
+		tagsJSON, err := marshalTags(labels)
+		if err != nil {
+			return nil, err
+		}
+		setClauses = append(setClauses, fmt.Sprintf("tags = $%d", argN))
+		args = append(args, tagsJSON)
+		argN++
 		setClauses = append(setClauses, fmt.Sprintf("method = $%d", argN))
 		args = append(args, method)
+		argN++
+	} else if method != "" {
+		setClauses = append(setClauses, fmt.Sprintf("method = $%d", argN))
+		args = append(args, method)
+		argN++
+		legacyTags := []string{}
+		if method != "custom" {
+			legacyTags = []string{method}
+		}
+		tagsJSON, err := marshalTags(legacyTags)
+		if err != nil {
+			return nil, err
+		}
+		setClauses = append(setClauses, fmt.Sprintf("tags = $%d", argN))
+		args = append(args, tagsJSON)
 		argN++
 	}
 	if len(parameters) > 0 {
@@ -282,20 +317,12 @@ func (s *Service) UpdateExperiment(
 
 	query := fmt.Sprintf(
 		`UPDATE experiments SET %s WHERE id = $%d
-		 RETURNING id, project_id, iteration_id, method, parameters, result_summary,
-		           notes_page_id, performed_by, performed_at, status,
-		           COALESCE(seq, 0), COALESCE(code, ''),
-		           created_by, created_at, updated_at`,
+		 RETURNING `+experimentSelectCols,
 		setSQL, idArg,
 	)
 
 	var e Experiment
-	err := s.pool.QueryRow(ctx, query, args...).Scan(
-		&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &e.Parameters,
-		&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
-		&e.Status, &e.Seq, &e.Code,
-		&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
-	)
+	err = scanExperiment(s.pool.QueryRow(ctx, query, args...), &e)
 	if err == pgx.ErrNoRows {
 		return nil, platform.NotFound("experiment.not_found", "experiment not found")
 	}

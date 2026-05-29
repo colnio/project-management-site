@@ -33,6 +33,17 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+/** Clear in-memory auth and hard-navigate so route guards re-run (logout / expired session). */
+export function forceAuthExit(): void {
+  setAccessToken(null);
+  const path = window.location.pathname;
+  if (path === '/login' || path === '/register') {
+    window.location.reload();
+    return;
+  }
+  window.location.replace('/login');
+}
+
 async function doFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const token = authCallbacks.getToken();
   const headers = new Headers(init.headers);

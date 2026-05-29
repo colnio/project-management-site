@@ -31,6 +31,7 @@ export const keys = {
   projectExperiments: (id: string) => ['projects', id, 'experiments'] as const,
   projectIterations: (id: string) => ['projects', id, 'iterations'] as const,
   projectArtifacts: (id: string) => ['projects', id, 'artifacts'] as const,
+  projectExperimentTags: (id: string) => ['projects', id, 'experiment-tags'] as const,
   // ── detail keys ──
   iteration: (id: string) => ['iterations', id] as const,
   iterationSamples: (id: string) => ['iterations', id, 'samples'] as const,
@@ -87,6 +88,53 @@ export function useProject(projectId: string | undefined) {
     queryKey: projectId ? keys.project(projectId) : ['projects', 'none'],
     queryFn: () => api.get<Project>(`/v1/projects/${projectId}`),
     enabled: !!projectId,
+  });
+}
+
+export interface ExperimentTag {
+  id: string;
+  project_id: string;
+  label: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useProjectExperimentTags(projectId: string | undefined) {
+  return useQuery({
+    queryKey: projectId ? keys.projectExperimentTags(projectId) : ['projects', 'none', 'experiment-tags'],
+    queryFn: () =>
+      api
+        .get<ExperimentTag[] | null>(`/v1/projects/${projectId}/experiment-tags`)
+        .then(r => r ?? []),
+    enabled: !!projectId,
+  });
+}
+
+export function useCreateExperimentTag(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { label: string }) =>
+      api.post<ExperimentTag>(`/v1/projects/${projectId}/experiment-tags`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectExperimentTags(projectId) }),
+  });
+}
+
+export function useUpdateExperimentTag(projectId: string, tagId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { label: string }) =>
+      api.patch<ExperimentTag>(`/v1/projects/${projectId}/experiment-tags/${tagId}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectExperimentTags(projectId) }),
+  });
+}
+
+export function useDeleteExperimentTag(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tagId: string) =>
+      api.delete<{ ok: boolean }>(`/v1/projects/${projectId}/experiment-tags/${tagId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectExperimentTags(projectId) }),
   });
 }
 
@@ -368,6 +416,7 @@ export function useCreateExperiment(projectId: string) {
   return useMutation({
     mutationFn: (body: {
       method?: string;
+      tags?: string[];
       iteration_id?: string;
       status?: string;
       parameters?: Record<string, unknown>;
@@ -383,6 +432,7 @@ export function useUpdateExperiment(experimentId: string, projectId: string) {
   return useMutation({
     mutationFn: (body: {
       method?: string;
+      tags?: string[];
       iteration_id?: string;
       status?: string;
       parameters?: Record<string, unknown>;

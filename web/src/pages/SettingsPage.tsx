@@ -19,6 +19,7 @@ import { api, ApiError } from '@/api/client';
 import type { User } from '@/api/types';
 import { WorkspaceAutonomySection } from '@/components/AutonomyConfig';
 import { CalendarSubscriptionPanel } from '@/components/CalendarSubscriptionPanel';
+import { AppearanceSection } from '@/components/AppearanceSection';
 
 const TITLE_OPTIONS = [
   { value: '', label: 'Select role…' },
@@ -606,6 +607,10 @@ export function SettingsPage() {
 
         <SectionCard title="Profile">
           <ProfileSection />
+        </SectionCard>
+
+        <SectionCard title="Appearance">
+          <AppearanceSection />
         </SectionCard>
 
         <SectionCard title="Notifications">

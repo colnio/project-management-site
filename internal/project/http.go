@@ -88,6 +88,43 @@ func Register(api huma.API, svc *Service) {
 		Description: "Removes a collaborator's per-project role, reverting them to their workspace-level access. Requires owner role on the project.",
 		Tags:        []string{"projects"},
 	}, svc.handleRemoveCollaborator)
+
+	// Experiment tags (project-defined labels for experiments).
+	huma.Register(api, huma.Operation{
+		OperationID: "project-experiment-tags-list",
+		Method:      http.MethodGet,
+		Path:        "/v1/projects/{id}/experiment-tags",
+		Summary:     "List experiment tags",
+		Description: "Returns custom experiment tags defined for this project. Requires viewer role.",
+		Tags:        []string{"projects"},
+	}, svc.handleListExperimentTags)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "project-experiment-tag-create",
+		Method:      http.MethodPost,
+		Path:        "/v1/projects/{id}/experiment-tags",
+		Summary:     "Create an experiment tag",
+		Description: "Adds a tag label that can be assigned to experiments in this project. Requires editor role.",
+		Tags:        []string{"projects"},
+	}, svc.handleCreateExperimentTag)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "project-experiment-tag-update",
+		Method:      http.MethodPatch,
+		Path:        "/v1/projects/{id}/experiment-tags/{tag_id}",
+		Summary:     "Update an experiment tag",
+		Description: "Renames an experiment tag. Requires editor role.",
+		Tags:        []string{"projects"},
+	}, svc.handleUpdateExperimentTag)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "project-experiment-tag-delete",
+		Method:      http.MethodDelete,
+		Path:        "/v1/projects/{id}/experiment-tags/{tag_id}",
+		Summary:     "Delete an experiment tag",
+		Description: "Removes a tag definition from the project. Requires editor role.",
+		Tags:        []string{"projects"},
+	}, svc.handleDeleteExperimentTag)
 }
 
 // ─── Create project ────────────────────────────────────────────────────────────

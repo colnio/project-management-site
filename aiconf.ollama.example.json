@@ -1,0 +1,8 @@
+{
+  "active": "ollama",
+  "ollama": {
+    "model": "qwen2.5:14b-instruct",
+    "token": "ollama",
+    "api_base": "http://localhost:11434/v1"
+  }
+}

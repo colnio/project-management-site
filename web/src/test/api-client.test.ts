@@ -4,7 +4,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from './setup';
-import { configureClient, apiFetch, setAccessToken, ApiError } from '../api/client';
+import {
+  configureClient,
+  apiFetch,
+  setAccessToken,
+  getAccessToken,
+  ApiError,
+  forceAuthExit,
+} from '../api/client';
 
 describe('apiFetch — 401 refresh logic', () => {
   const onRefresh = vi.fn();
@@ -63,6 +70,21 @@ describe('apiFetch — 401 refresh logic', () => {
     await expect(apiFetch('/v1/protected-fail')).rejects.toBeInstanceOf(ApiError);
     expect(onRefresh).toHaveBeenCalledTimes(1);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it('forceAuthExit clears token and navigates to login', () => {
+    setAccessToken('tok');
+    const replace = vi.fn();
+    const reload = vi.fn();
+    vi.stubGlobal('location', { pathname: '/settings', replace, reload });
+
+    forceAuthExit();
+
+    expect(getAccessToken()).toBeNull();
+    expect(replace).toHaveBeenCalledWith('/login');
+    expect(reload).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
   });
 
   it('throws ApiError with the status code on non-401 error', async () => {

@@ -5,7 +5,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { setIsAuthenticated, setProfileComplete } from './router';
 import { router } from './router';
-import { initTweaks } from './hooks/useTweaks';
+import { initTweaks } from './hooks/appearancePrefs';
 import './styles/global.css';
 
 // Apply persisted theme/density/accent before first render.

@@ -7,7 +7,17 @@ export type User = components['schemas']['UserJSON'];
 export type Workspace = components['schemas']['Workspace'];
 export type Project = components['schemas']['Project'];
 export type Sample = components['schemas']['Sample'];
-export type Experiment = components['schemas']['Experiment'];
+export type Experiment = components['schemas']['Experiment'] & {
+  /** Project-defined labels; primary display tag is also in `method`. */
+  tags?: string[];
+};
+
+/** Tags to show in the UI (falls back to legacy single `method`). */
+export function experimentDisplayTags(e: Pick<Experiment, 'method' | 'tags'>): string[] {
+  if (e.tags && e.tags.length > 0) return e.tags;
+  if (e.method && e.method !== 'custom') return [e.method];
+  return [];
+}
 export type Iteration = components['schemas']['Iteration'];
 export type Artifact = components['schemas']['Artifact'];
 export type LoginOutput = components['schemas']['LoginOutputBody_3ca2d2c'];

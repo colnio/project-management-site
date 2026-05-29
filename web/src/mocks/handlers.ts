@@ -156,6 +156,31 @@ export const handlers = [
   http.get('/v1/projects/:id/iterations', () => HttpResponse.json([])),
   http.get('/v1/projects/:id/artifacts', () => HttpResponse.json([])),
 
+  http.get('/v1/projects/:id/experiment-tags', () => HttpResponse.json([])),
+  http.post('/v1/projects/:id/experiment-tags', async ({ request }) => {
+    const body = await request.json() as { label: string };
+    return HttpResponse.json({
+      id: `tag_${Date.now()}`,
+      project_id: 'proj_nmc',
+      label: body.label,
+      position: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }),
+  http.patch('/v1/projects/:id/experiment-tags/:tagId', async ({ request, params }) => {
+    const body = await request.json() as { label: string };
+    return HttpResponse.json({
+      id: params.tagId,
+      project_id: params.id,
+      label: body.label,
+      position: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }),
+  http.delete('/v1/projects/:id/experiment-tags/:tagId', () => HttpResponse.json({ ok: true })),
+
   // Artifact endpoints
   http.post('/v1/projects/:id/artifacts', async ({ request }) => {
     const body = await request.json() as { filename: string; content_type: string; size_bytes: number; type?: string };

@@ -255,8 +255,11 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 
 ## 7. AI integration with Ollama
 
-- **Endpoint**: `OLLAMA_BASE_URL=http://localhost:11434`, route `/v1/chat/completions`. Models via
-  `AI_CHAT_MODEL` and `AI_WORKFLOW_MODEL` (default `qwen2.5:7b-instruct`).
+- **Config**: copy `aiconf.ollama.example.json` → `aiconf.local.json` (gitignored) with
+  `active: "ollama"`, `api_base: "http://localhost:11434/v1"`, and `model: "qwen2.5:14b-instruct"`
+  (recommended for tool-calling on a ~16GB Mac). Run `ollama serve` on the host (not in Compose).
+- **Endpoint**: Ollama OpenAI-compatible `/v1/chat/completions` at `http://localhost:11434/v1`.
+  Legacy `.env` keys `OLLAMA_BASE_URL` / `AI_CHAT_MODEL` are not read by the orchestrator.
 - **Streaming**: Ollama supports `stream: true`; relay deltas to the browser over SSE from Go.
   This matches the production SSE design, so no frontend rework is needed for the OpenRouter swap.
 - **Tool-calling reliability**: local 7B–14B models call tools less reliably than frontier models.

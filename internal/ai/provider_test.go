@@ -98,3 +98,38 @@ func TestLoadProvider_OpenRouter(t *testing.T) {
 		t.Fatalf("unexpected provider: %+v", p)
 	}
 }
+
+func TestLoadProvider_Ollama(t *testing.T) {
+	conf := map[string]any{
+		"active": "ollama",
+		"ollama": map[string]any{
+			"model":    "qwen2.5:14b-instruct",
+			"token":    "ollama",
+			"api_base": "http://localhost:11434/v1",
+		},
+	}
+	data, _ := json.Marshal(conf)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "aiconf.json")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AICONF_PATH", path)
+
+	p, err := LoadProvider()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected non-nil provider")
+	}
+	if p.Model != "qwen2.5:14b-instruct" {
+		t.Errorf("model = %q, want qwen2.5:14b-instruct", p.Model)
+	}
+	if p.APIBase != "http://localhost:11434/v1" {
+		t.Errorf("api_base = %q", p.APIBase)
+	}
+	if p.Token != "ollama" {
+		t.Error("expected token ollama")
+	}
+}

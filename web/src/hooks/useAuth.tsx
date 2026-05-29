@@ -7,9 +7,10 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import { configureClient, setAccessToken, getAccessToken } from '@/api/client';
+import { configureClient, setAccessToken, getAccessToken, forceAuthExit } from '@/api/client';
 import { api } from '@/api/client';
 import type { User, LoginOutput, RefreshOutput, RegisterOutput } from '@/api/types';
+import { applyAppearanceForUser } from '@/hooks/appearancePrefs';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,10 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleUnauthorized = useCallback(() => {
     if (unauthorizedRef.current) return;
     unauthorizedRef.current = true;
-    setAccessToken(null);
-    setUser(null);
-    setStatus('unauthenticated');
-    unauthorizedRef.current = false;
+    forceAuthExit();
   }, []);
 
   // Attempt silent refresh using httpOnly cookie
@@ -60,11 +58,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fetch the full user object
       const me = await api.get<User>('/v1/me');
       setUser(me);
+      applyAppearanceForUser(me.id);
       setStatus('authenticated');
       return data.access_token;
     } catch {
       setAccessToken(null);
       setUser(null);
+      const path = window.location.pathname;
+      if (path !== '/login' && path !== '/register') {
+        forceAuthExit();
+        return null;
+      }
       setStatus('unauthenticated');
       return null;
     }
@@ -91,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     setAccessToken(data.access_token);
     setUser(data.user);
+    applyAppearanceForUser(data.user.id);
     setStatus('authenticated');
   }, []);
 
@@ -98,9 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.post('/v1/auth/logout');
     } finally {
-      setAccessToken(null);
-      setUser(null);
-      setStatus('unauthenticated');
+      forceAuthExit();
     }
   }, []);
 
@@ -119,7 +122,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     const me = await api.get<User>('/v1/me');
     setUser(me);
+    applyAppearanceForUser(me.id);
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      applyAppearanceForUser(user.id);
+    }
+  }, [user?.id]);
 
   return (
     <AuthContext.Provider value={{ status, user, login, logout, register, refreshUser }}>

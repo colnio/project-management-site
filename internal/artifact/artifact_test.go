@@ -453,7 +453,7 @@ func TestAttachToExperiment_RoundTrip(t *testing.T) {
 		t.Fatalf("create artifact: %v", err)
 	}
 
-	exp, err := env.expSvc.CreateExperiment(ctxWithP, proj.ID, "XRD", nil, "", nil, "planned", nil, owner.ID)
+	exp, err := env.expSvc.CreateExperiment(ctxWithP, proj.ID, "XRD", nil, nil, "", nil, "planned", nil, owner.ID)
 	if err != nil {
 		t.Fatalf("create experiment: %v", err)
 	}

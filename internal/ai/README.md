@@ -2,9 +2,9 @@
 
 ## Provider boundary
 
-The AI model client is contained in **`client.go`** only. To swap providers, change `NewHTTPClient` — the rest of the codebase sees only the `Client` interface. Both supported providers (GlowByte/litellm and OpenRouter) are OpenAI-compatible (`POST {APIBase}/chat/completions`).
+The AI model client is contained in **`client.go`** only. To swap providers, change `NewHTTPClient` — the rest of the codebase sees only the `Client` interface. All providers (Ollama, GlowByte/litellm, OpenRouter) are OpenAI-compatible (`POST {APIBase}/chat/completions`).
 
-Config is loaded from `aiconf.local.json` (gitignored) via `LoadProvider()`. The active provider's token is **never logged**. If the config file is absent or unparseable, `LoadProvider` returns `nil` and the service boots in disabled mode (all AI endpoints return 503 `ai.unavailable`).
+Config is loaded from `aiconf.local.json` (gitignored) via `LoadProvider()`. Set `active` to `ollama`, `glowbyte`, or `openrouter` and fill the matching block. For local dev, copy `aiconf.ollama.example.json` to `aiconf.local.json` (or set `AICONF_PATH`). The active provider's token is **never logged**. If the config file is absent or unparseable, `LoadProvider` returns `nil` and the service boots in disabled mode (all AI endpoints return 503 `ai.unavailable`).
 
 ## Internal-token → REST tool pattern
 

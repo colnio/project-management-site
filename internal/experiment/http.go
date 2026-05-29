@@ -30,7 +30,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/experiments",
 		Summary:     "List experiments in a project",
-		Description: "Returns experiments in a project with optional filters: `iteration_id`, `method`, and `sample_id`. Requires viewer role on the project.",
+		Description: "Returns experiments in a project with optional filters: `iteration_id`, `method` (matches primary method or any tag), and `sample_id`. Requires viewer role on the project.",
 		Tags:        []string{"experiments"},
 	}, svc.handleListExperiments)
 
@@ -87,7 +87,8 @@ func Register(api huma.API, svc *Service) {
 type createExperimentInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Method        string          `json:"method,omitempty" enum:"cycling,synthesis,SEM,XRD,EIS,weighing,drying,custom" example:"EIS"`
+		Method        string          `json:"method,omitempty" maxLength:"64" example:"EIS"`
+		Tags          []string        `json:"tags,omitempty" doc:"Project-defined tag labels (multi-select)."`
 		Parameters    json.RawMessage `json:"parameters,omitempty"`
 		ResultSummary string          `json:"result_summary,omitempty" example:"Impedance at 1 kHz: 42 Ω·cm²"`
 		IterationID   *uuid.UUID      `json:"iteration_id,omitempty"`
@@ -122,6 +123,7 @@ func (s *Service) handleCreateExperiment(ctx context.Context, in *createExperime
 	exp, err := s.CreateExperiment(ctx,
 		projectID,
 		in.Body.Method,
+		in.Body.Tags,
 		in.Body.Parameters,
 		in.Body.ResultSummary,
 		in.Body.IterationID,
@@ -235,7 +237,8 @@ func (s *Service) handleGetExperiment(ctx context.Context, in *getExperimentInpu
 type updateExperimentInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Method        string          `json:"method,omitempty" enum:"cycling,synthesis,SEM,XRD,EIS,weighing,drying,custom"`
+		Method        string          `json:"method,omitempty" maxLength:"64"`
+		Tags          []string        `json:"tags,omitempty" doc:"Replaces all tags when provided (send full selection)."`
 		Parameters    json.RawMessage `json:"parameters,omitempty"`
 		ResultSummary *string         `json:"result_summary,omitempty"`
 		IterationID   *uuid.UUID      `json:"iteration_id,omitempty"`
@@ -271,9 +274,15 @@ func (s *Service) handleUpdateExperiment(ctx context.Context, in *updateExperime
 		return nil, err
 	}
 
+	var tagsUpdate *[]string
+	if in.Body.Tags != nil {
+		tagsUpdate = &in.Body.Tags
+	}
+
 	updated, err := s.UpdateExperiment(ctx,
 		expID,
 		in.Body.Method,
+		tagsUpdate,
 		in.Body.Parameters,
 		in.Body.ResultSummary,
 		in.Body.IterationID,
