@@ -434,6 +434,9 @@ export function PageEditorCore({
 
   const editor = useCreateBlockNote({ schema: refBlockSchema });
 
+  // True while we are programmatically seeding the editor so onChange is suppressed.
+  const loadingRef = useRef(false);
+
   const loadedRef = useRef(false);
   useEffect(() => {
     if (!pageData || loadedRef.current) return;
@@ -441,7 +444,9 @@ export function PageEditorCore({
     try {
       const blocks = normalizeBlocks(pageData.blocks);
       if (blocks.length > 0) {
+        loadingRef.current = true;
         editor.replaceBlocks(editor.document, blocks as Parameters<typeof editor.replaceBlocks>[1]);
+        queueMicrotask(() => { loadingRef.current = false; });
       }
     } catch { /* ignore */ }
   }, [pageData, editor]);
@@ -491,6 +496,7 @@ export function PageEditorCore({
   // ─── Auto-save triggers ──────────────────────────────────────────────────────
 
   const onEditorChange = useCallback(() => {
+    if (loadingRef.current) return;
     setIsDirty(true);
     if (saveStatus !== 'conflict') setSaveStatusNotify('idle');
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -528,7 +534,11 @@ export function PageEditorCore({
     etagRef.current = fresh._etag ?? '';
     try {
       const blocks = normalizeBlocks(fresh.blocks);
-      if (blocks.length > 0) editor.replaceBlocks(editor.document, blocks as Parameters<typeof editor.replaceBlocks>[1]);
+      if (blocks.length > 0) {
+        loadingRef.current = true;
+        editor.replaceBlocks(editor.document, blocks as Parameters<typeof editor.replaceBlocks>[1]);
+        queueMicrotask(() => { loadingRef.current = false; });
+      }
     } catch { /* ignore */ }
     setConflictPage(null);
     setIsDirty(false);
@@ -747,7 +757,9 @@ export function PageEditorCore({
             try {
               const blocks = fresh.blocks;
               if (Array.isArray(blocks) && blocks.length > 0) {
+                loadingRef.current = true;
                 editor.replaceBlocks(editor.document, blocks as Parameters<typeof editor.replaceBlocks>[1]);
+                queueMicrotask(() => { loadingRef.current = false; });
               }
             } catch { /* ignore */ }
             setSaveStatusNotify('saved');

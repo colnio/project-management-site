@@ -182,11 +182,19 @@ export function useRejectToolCall(convId: string) {
 
 // ─── Autonomy ─────────────────────────────────────────────────────────────────
 
+const DEFAULT_AUTONOMY_CONFIG: AutonomyConfig = {
+  scope: 'workspace',
+  scope_id: '',
+  mode: 'read_only',
+  allowed_tools: [],
+};
+
 export function useWorkspaceAutonomy(workspaceId: string | undefined) {
   return useQuery({
     queryKey: workspaceId ? aiKeys.workspaceAutonomy(workspaceId) : ['workspaces', 'none', 'autonomy'],
-    queryFn: () => api.get<AutonomyConfig>(`/v1/workspaces/${workspaceId}/autonomy`),
+    queryFn: () => api.get<AutonomyConfig | null>(`/v1/workspaces/${workspaceId}/autonomy`),
     enabled: !!workspaceId,
+    select: (data): AutonomyConfig => data ?? { ...DEFAULT_AUTONOMY_CONFIG, scope_id: workspaceId ?? '' },
   });
 }
 
