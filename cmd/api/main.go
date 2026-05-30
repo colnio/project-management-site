@@ -20,6 +20,7 @@ import (
 
 	"github.com/colnio/project-management-site/internal/admin"
 	"github.com/colnio/project-management-site/internal/ai"
+	"github.com/colnio/project-management-site/internal/appearance"
 	"github.com/colnio/project-management-site/internal/approval"
 	"github.com/colnio/project-management-site/internal/artifact"
 	"github.com/colnio/project-management-site/internal/audit"
@@ -207,6 +208,8 @@ func run() error {
 	inbox.Register(srv.API, inboxSvc)
 	notify.Register(srv.API, notifySvc)
 	notify.RegisterPublic(srv.Router, notifySvc)
+	appearanceSvc := appearance.NewService(pool, auditRec)
+	appearance.Register(srv.API, appearanceSvc)
 	ai.Register(srv.API, aiSvc)
 	ai.RegisterWorkflows(srv.API, aiSvc, workflows)
 	// SSE streaming chat — chi route (not huma) because it's Server-Sent Events.

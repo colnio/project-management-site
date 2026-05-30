@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import { setIsAuthenticated, setProfileComplete } from './router';
 import { router } from './router';
 import { initTweaks } from './hooks/appearancePrefs';
+import { useAppearanceSync } from './hooks/useAppearanceSync';
 import './styles/global.css';
 
 // Apply persisted theme/density/accent before first render.
@@ -25,6 +26,9 @@ const queryClient = new QueryClient({
 // Bridge component that wires auth state to the router guard
 function AppBridge() {
   const { status, user } = useAuth();
+
+  // Sync per-user appearance prefs with the backend (fetch on login, flush on change).
+  useAppearanceSync();
 
   // Expose auth status and profile completion to route guards
   setIsAuthenticated(() => status === 'authenticated');

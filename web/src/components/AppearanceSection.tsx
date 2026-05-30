@@ -1,13 +1,13 @@
 /**
- * User Settings → Appearance: layout, density, accent, fonts (per-user localStorage).
+ * User Settings → Appearance: density, accent, palette, fonts (per-user localStorage + server sync).
  */
 import {
-  useOverviewLayout,
   useAccent,
   useDensity,
   useFontFamily,
+  usePalette,
   ACCENT_DEFAULTS,
-  type OverviewLayout,
+  PALETTE_DEFAULTS,
   type Density,
   type FontFamily,
 } from '@/hooks/useTweaks';
@@ -65,12 +65,6 @@ function Seg<T extends string>({
   );
 }
 
-const LAYOUT_OPTS: { id: OverviewLayout; label: string }[] = [
-  { id: 'editorial', label: 'Editorial' },
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'stream', label: 'Stream' },
-];
-
 const DENSITY_OPTS: { id: Density; label: string }[] = [
   { id: 'compact', label: 'Compact' },
   { id: 'regular', label: 'Regular' },
@@ -83,12 +77,88 @@ const FONT_OPTS: { id: FontFamily; label: string }[] = [
   { id: 'serif', label: 'Serif' },
 ];
 
+const PALETTE_LABELS: Record<string, string> = {
+  '--paper': 'Background',
+  '--ink': 'Text',
+  '--accent': 'Accent',
+  '--good': 'Good',
+  '--warn': 'Warning',
+  '--bad': 'Error',
+  '--info': 'Info',
+};
+
+function ColorRow({
+  token,
+  label,
+  value,
+  onChange,
+}: {
+  token: string;
+  label: string;
+  value: string;
+  onChange: (token: string, val: string) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '5px 0',
+      }}
+    >
+      <input
+        type="color"
+        value={value}
+        onChange={e => onChange(token, e.target.value)}
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 5,
+          border: '1.5px solid var(--line-2)',
+          padding: 2,
+          background: 'var(--paper-2)',
+          cursor: 'default',
+          flexShrink: 0,
+        }}
+        title={token}
+      />
+      <span
+        style={{
+          fontSize: 12.5,
+          color: 'var(--ink)',
+          flex: 1,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: 'var(--mono)',
+          fontSize: 11,
+          color: 'var(--muted)',
+          letterSpacing: '0.02em',
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export function AppearanceSection() {
   const { user } = useAuth();
-  const [layout, setLayout] = useOverviewLayout();
   const [accent, setAccent] = useAccent();
   const [density, setDensity] = useDensity();
   const [font, setFont] = useFontFamily();
+  const [palette, setPaletteToken, resetPalette] = usePalette();
+
+  // Resolve displayed color: palette override wins, else the PALETTE_DEFAULTS.
+  function resolvedColor(token: string): string {
+    return palette[token] ?? PALETTE_DEFAULTS[token] ?? '#000000';
+  }
+
+  const hasCustomPalette = Object.keys(palette).length > 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -97,11 +167,6 @@ export function AppearanceSection() {
         {user?.email ? ` (${user.email})` : ''}. Use the sun/moon control in the sidebar for light
         and dark mode.
       </p>
-
-      <div>
-        <FieldLabel>Overview layout</FieldLabel>
-        <Seg options={LAYOUT_OPTS} value={layout} onChange={setLayout} />
-      </div>
 
       <div>
         <FieldLabel>Density</FieldLabel>
@@ -115,7 +180,7 @@ export function AppearanceSection() {
 
       <div>
         <FieldLabel>Accent color</FieldLabel>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           {ACCENT_DEFAULTS.map(color => (
             <button
               key={color}
@@ -123,16 +188,103 @@ export function AppearanceSection() {
               onClick={() => setAccent(color)}
               title={color}
               aria-label={`Accent ${color}`}
-              aria-pressed={accent === color}
+              aria-pressed={accent === color && !palette['--accent']}
               style={{
                 width: 28,
                 height: 28,
                 borderRadius: '50%',
                 background: color,
-                border: `2px solid ${accent === color ? 'var(--ink)' : 'transparent'}`,
-                boxShadow: accent === color ? '0 0 0 1px var(--ink)' : 'none',
+                border: `2px solid ${accent === color && !palette['--accent'] ? 'var(--ink)' : 'transparent'}`,
+                boxShadow: accent === color && !palette['--accent'] ? '0 0 0 1px var(--ink)' : 'none',
                 cursor: 'default',
                 flexShrink: 0,
+              }}
+            />
+          ))}
+          {/* Custom accent via color picker */}
+          <label
+            title="Custom accent"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              cursor: 'default',
+            }}
+          >
+            <input
+              type="color"
+              value={resolvedColor('--accent')}
+              onChange={e => {
+                const hex = e.target.value;
+                setAccent(hex);
+                setPaletteToken('--accent', hex);
+              }}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                border: `2px solid ${palette['--accent'] ? 'var(--ink)' : 'var(--line-2)'}`,
+                padding: 2,
+                background: 'var(--paper-2)',
+                cursor: 'default',
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
+              custom
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            marginBottom: 8,
+          }}
+        >
+          <FieldLabel>Color palette</FieldLabel>
+          {hasCustomPalette && (
+            <button
+              type="button"
+              onClick={resetPalette}
+              style={{
+                fontSize: 11,
+                color: 'var(--muted)',
+                fontFamily: 'var(--mono)',
+                padding: '2px 7px',
+                borderRadius: 4,
+                border: '1px solid var(--line)',
+                background: 'var(--paper-2)',
+                cursor: 'default',
+                marginBottom: 8,
+              }}
+            >
+              Reset to defaults
+            </button>
+          )}
+        </div>
+        <div
+          style={{
+            border: '1px solid var(--line)',
+            borderRadius: 6,
+            background: 'var(--paper-2)',
+            padding: '4px 12px',
+          }}
+        >
+          {Object.keys(PALETTE_DEFAULTS).map(token => (
+            <ColorRow
+              key={token}
+              token={token}
+              label={PALETTE_LABELS[token] ?? token}
+              value={resolvedColor(token)}
+              onChange={(tok, val) => {
+                setPaletteToken(tok, val);
+                // Keep the accent hook in sync when the accent token is changed here
+                if (tok === '--accent') setAccent(val);
               }}
             />
           ))}
