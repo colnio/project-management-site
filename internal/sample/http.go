@@ -83,6 +83,7 @@ type createSampleInput struct {
 		Kind        string          `json:"kind,omitempty" enum:"precursor,electrode,cell,module,derivative,other" example:"electrode"`
 		Properties  json.RawMessage `json:"properties,omitempty"`
 		Status      string          `json:"status,omitempty" enum:"active,consumed,archived,failed" example:"active"`
+		Tags        []string        `json:"tags,omitempty" doc:"Project-defined tag labels (multi-select)."`
 	}
 }
 
@@ -117,7 +118,7 @@ func (s *Service) handleCreateSample(ctx context.Context, in *createSampleInput)
 
 	sm, err := s.createSample(ctx, projectID,
 		in.Body.Identifier, in.Body.Name, in.Body.Description,
-		in.Body.Kind, in.Body.Properties, in.Body.Status, p.UserID)
+		in.Body.Kind, in.Body.Properties, in.Body.Status, in.Body.Tags, p.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -219,6 +220,7 @@ type patchSampleInput struct {
 		Status      *string         `json:"status,omitempty"`
 		Identifier  *string         `json:"identifier,omitempty"`
 		Properties  json.RawMessage `json:"properties,omitempty"`
+		Tags        []string        `json:"tags,omitempty" doc:"Replaces all tags when provided (send full selection)."`
 	}
 }
 
@@ -256,9 +258,14 @@ func (s *Service) handlePatchSample(ctx context.Context, in *patchSampleInput) (
 		}
 	}
 
+	var tagsUpdate *[]string
+	if in.Body.Tags != nil {
+		tagsUpdate = &in.Body.Tags
+	}
+
 	updated, err := s.patchSample(ctx, sampleID,
 		in.Body.Name, in.Body.Description, in.Body.Kind,
-		in.Body.Status, in.Body.Identifier, in.Body.Properties)
+		in.Body.Status, in.Body.Identifier, in.Body.Properties, tagsUpdate)
 	if err != nil {
 		return nil, err
 	}

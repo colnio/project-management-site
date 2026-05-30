@@ -6,7 +6,10 @@ import type { components } from './schema.d.ts';
 export type User = components['schemas']['UserJSON'];
 export type Workspace = components['schemas']['Workspace'];
 export type Project = components['schemas']['Project'];
-export type Sample = components['schemas']['Sample'];
+export type Sample = components['schemas']['Sample'] & {
+  /** Project-defined tag labels assigned to this sample. */
+  tags?: string[];
+};
 export type Experiment = components['schemas']['Experiment'] & {
   /** Project-defined labels; primary display tag is also in `method`. */
   tags?: string[];
@@ -16,6 +19,12 @@ export type Experiment = components['schemas']['Experiment'] & {
 export function experimentDisplayTags(e: Pick<Experiment, 'method' | 'tags'>): string[] {
   if (e.tags && e.tags.length > 0) return e.tags;
   if (e.method && e.method !== 'custom') return [e.method];
+  return [];
+}
+
+/** Tags assigned to a sample. */
+export function sampleDisplayTags(s: Pick<Sample, 'tags'>): string[] {
+  if (s.tags && s.tags.length > 0) return s.tags;
   return [];
 }
 export type Iteration = components['schemas']['Iteration'];

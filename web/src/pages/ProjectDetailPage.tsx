@@ -15,10 +15,12 @@ import {
   useCreateSample,
   useCreateExperiment,
   useProjectExperimentTags,
+  useProjectSampleTags,
   useWorkspaceMembers,
   useArchiveProject,
 } from '@/hooks/useQueries';
 import { ExperimentTagsManager } from '@/components/ExperimentTagsManager';
+import { SampleTagsManager } from '@/components/SampleTagsManager';
 import { NewIterationWizard } from '@/components/wizards/NewIterationWizard';
 import { ShareDialog } from '@/components/ShareDialog';
 import { EditProjectDialog } from '@/components/EditProjectDialog';
@@ -412,11 +414,19 @@ function CreateSampleDialog({ projectId, onClose }: { projectId: string; onClose
   const [identifier, setIdentifier] = useState('');
   const [name, setName] = useState('');
   const [kind, setKind] = useState('other');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const createSample = useCreateSample(projectId);
+  const { data: tags = [] } = useProjectSampleTags(projectId);
+
+  const toggleTag = (label: string) => {
+    setSelectedTags(prev =>
+      prev.includes(label) ? prev.filter(t => t !== label) : [...prev, label],
+    );
+  };
 
   const handleCreate = async () => {
     if (!identifier.trim()) return;
-    await createSample.mutateAsync({ identifier: identifier.trim(), name, kind });
+    await createSample.mutateAsync({ identifier: identifier.trim(), name, kind, tags: selectedTags });
     onClose();
   };
 
@@ -438,7 +448,7 @@ function CreateSampleDialog({ projectId, onClose }: { projectId: string; onClose
             <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Name</div>
             <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="Descriptive name" />
           </div>
-          <div>
+          <div style={{ marginBottom: tags.length > 0 ? 16 : 0 }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Kind</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {KINDS.map(k => (
@@ -448,6 +458,24 @@ function CreateSampleDialog({ projectId, onClose }: { projectId: string; onClose
               ))}
             </div>
           </div>
+          {tags.length > 0 && (
+            <div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Tags (optional)</div>
+              <div className="choice-row">
+                {tags.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => toggleTag(t.label)}
+                    className={`status-opt${selectedTags.includes(t.label) ? ' sel' : ''}`}
+                    aria-pressed={selectedTags.includes(t.label)}
+                  >
+                    <span className="pill">{t.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="modal-foot">
           <button className="top-btn" onClick={onClose}>Cancel</button>
@@ -512,27 +540,35 @@ function SampleCard({ sample: s }: { sample: Sample }) {
 
 function SamplesTab({ projectId }: { projectId: string }) {
   const { data: samples = [], isLoading, isError } = useProjectSamples(projectId);
+  const { data: sampleTags = [] } = useProjectSampleTags(projectId);
   const [createOpen, setCreateOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [filterKind, setFilterKind] = useState('');
+  const [filterTag, setFilterTag] = useState('');
 
   if (isLoading) return <LoadingState message="Loading samples…" />;
   if (isError) return <ErrorState message="Failed to load samples." />;
 
   const KINDS = ['precursor', 'electrode', 'cell', 'module', 'derivative', 'other'];
-  const filtered = filterKind ? samples.filter((s: Sample) => s.kind === filterKind) : samples;
+  let filtered = filterKind ? samples.filter((s: Sample) => s.kind === filterKind) : samples;
+  if (filterTag) {
+    filtered = filtered.filter((s: Sample) => (s.tags ?? []).includes(filterTag));
+  }
 
   return (
     <div className="page-wrap wide">
       {createOpen && <CreateSampleDialog projectId={projectId} onClose={() => setCreateOpen(false)} />}
+      {tagsOpen && <SampleTagsManager projectId={projectId} onClose={() => setTagsOpen(false)} />}
       <div className="section-h" style={{ marginBottom: 14 }}>
         <h2>Samples</h2>
         <span className="meta">{samples.length} total</span>
-        <div className="right">
+        <div className="right" style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="top-btn" onClick={() => setTagsOpen(true)}>Manage tags</button>
           <button className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New sample</button>
         </div>
       </div>
       {/* Kind filter */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: sampleTags.length > 0 ? 8 : 16 }}>
         <button onClick={() => setFilterKind('')} className={`status-opt${filterKind === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
         {KINDS.map(k => (
           <button key={k} onClick={() => setFilterKind(filterKind === k ? '' : k)} className={`status-opt${filterKind === k ? ' sel' : ''}`}>
@@ -540,6 +576,17 @@ function SamplesTab({ projectId }: { projectId: string }) {
           </button>
         ))}
       </div>
+      {/* Tag filter */}
+      {sampleTags.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
+          <button type="button" onClick={() => setFilterTag('')} className={`status-opt${filterTag === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All tags</button>
+          {sampleTags.map(t => (
+            <button key={t.id} type="button" onClick={() => setFilterTag(filterTag === t.label ? '' : t.label)} className={`status-opt${filterTag === t.label ? ' sel' : ''}`}>
+              <span className="pill">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {filtered.length === 0 ? <EmptyState message="No samples." /> : (
         <div className="records three">
           {filtered.map((s: Sample) => <SampleCard key={s.id} sample={s} />)}

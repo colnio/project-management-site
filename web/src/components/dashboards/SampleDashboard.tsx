@@ -25,10 +25,13 @@ import {
   useSample,
   useSampleLineage,
   useProjectExperiments,
+  useProjectSampleTags,
+  useUpdateSample,
 } from '@/hooks/useQueries';
 import { useSampleArtifacts, useArtifact } from '@/hooks/useArtifactQueries';
 import { ArtEmbed } from '@/components/embeds/ArtEmbeds';
 import type { Sample, Artifact } from '@/api/types';
+import { sampleDisplayTags } from '@/api/types';
 import type { LineageGraph } from '@/hooks/useQueries';
 
 // ─── Identifier strip ─────────────────────────────────────────────────────────
@@ -275,6 +278,9 @@ function LineageFlow({ sampleId }: { sampleId: string }) {
 
 export function SampleDashboard({ sampleId }: { sampleId: string }) {
   const { data: sample, isLoading, isError } = useSample(sampleId);
+  const projectId = sample?.project_id ?? '';
+  const { data: availableTags = [] } = useProjectSampleTags(projectId || undefined);
+  const updateSample = useUpdateSample(sampleId, projectId);
 
   // suppress unused warning for artifact unused in this read-only view
   const [_artifactDetail, setArtifactDetail] = useState<Artifact | null>(null);
@@ -283,12 +289,27 @@ export function SampleDashboard({ sampleId }: { sampleId: string }) {
   if (isLoading) return <LoadingState message="Loading sample dashboard…" />;
   if (isError || !sample) return <ErrorState message="Failed to load sample." />;
 
+  const assignedTags = sampleDisplayTags(sample);
+
+  const toggleTag = (label: string) => {
+    const next = assignedTags.includes(label)
+      ? assignedTags.filter(t => t !== label)
+      : [...assignedTags, label];
+    void updateSample.mutateAsync({ tags: next });
+  };
+
   return (
     <div>
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 400, letterSpacing: '-0.01em', marginBottom: 8 }}>
-          {sample.name || sample.identifier}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '3px 10px 3px 4px', background: 'var(--paper-2)', border: '1px solid var(--line)', borderRadius: 6 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: 'var(--ember)', letterSpacing: '-0.01em' }}>
+            {sample.identifier}
+          </span>
+          {assignedTags.map(label => (
+            <span key={label} className="pill">{label}</span>
+          ))}
+          <StatusPill status={sample.status} />
         </div>
         <IdentifierStrip sample={sample} />
         {sample.description && (
@@ -297,6 +318,29 @@ export function SampleDashboard({ sampleId }: { sampleId: string }) {
           </p>
         )}
       </div>
+
+      {/* Tag assignment */}
+      <div className="section-h"><h2>Tags</h2></div>
+      {availableTags.length === 0 ? (
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--muted)' }}>
+          No project tags yet — add tags from the project Samples tab (Manage tags).
+        </p>
+      ) : (
+        <div className="choice-row" style={{ marginBottom: 20 }}>
+          {availableTags.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => toggleTag(t.label)}
+              className={`status-opt${assignedTags.includes(t.label) ? ' sel' : ''}`}
+              aria-pressed={assignedTags.includes(t.label)}
+              disabled={updateSample.isPending}
+            >
+              <span className="pill">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Artifact embeds */}
       <SampleArtifactEmbeds sampleId={sampleId} />

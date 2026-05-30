@@ -24,7 +24,7 @@ func (s *Service) CreateSampleAuthorized(
 	if _, _, err := s.projects.Authorize(ctx, p, projectID, org.RoleEditor); err != nil {
 		return nil, err
 	}
-	sm, err := s.createSample(ctx, projectID, identifier, name, description, kind, properties, status, p.UserID)
+	sm, err := s.createSample(ctx, projectID, identifier, name, description, kind, properties, status, nil, p.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (s *Service) CreateSampleForTest(
 	status string,
 	createdBy uuid.UUID,
 ) (*Sample, error) {
-	return s.createSample(ctx, projectID, identifier, name, description, kind, properties, status, createdBy)
+	return s.createSample(ctx, projectID, identifier, name, description, kind, properties, status, nil, createdBy)
 }
 
 // PatchSampleForTest exposes patchSample for use in tests and records the audit entry.
@@ -57,7 +57,7 @@ func (s *Service) PatchSampleForTest(
 	name, description, kind, status, identifier *string,
 	properties json.RawMessage,
 ) (*Sample, error) {
-	sm, err := s.patchSample(ctx, id, name, description, kind, status, identifier, properties)
+	sm, err := s.patchSample(ctx, id, name, description, kind, status, identifier, properties, nil)
 	if err != nil {
 		return nil, err
 	}

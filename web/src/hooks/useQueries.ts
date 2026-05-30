@@ -33,6 +33,7 @@ export const keys = {
   projectIterations: (id: string) => ['projects', id, 'iterations'] as const,
   projectArtifacts: (id: string) => ['projects', id, 'artifacts'] as const,
   projectExperimentTags: (id: string) => ['projects', id, 'experiment-tags'] as const,
+  projectSampleTags: (id: string) => ['projects', id, 'sample-tags'] as const,
   // ── detail keys ──
   iteration: (id: string) => ['iterations', id] as const,
   iterationSamples: (id: string) => ['iterations', id, 'samples'] as const,
@@ -136,6 +137,53 @@ export function useDeleteExperimentTag(projectId: string) {
     mutationFn: (tagId: string) =>
       api.delete<{ ok: boolean }>(`/v1/projects/${projectId}/experiment-tags/${tagId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectExperimentTags(projectId) }),
+  });
+}
+
+export interface SampleTag {
+  id: string;
+  project_id: string;
+  label: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useProjectSampleTags(projectId: string | undefined) {
+  return useQuery({
+    queryKey: projectId ? keys.projectSampleTags(projectId) : ['projects', 'none', 'sample-tags'],
+    queryFn: () =>
+      api
+        .get<SampleTag[] | null>(`/v1/projects/${projectId}/sample-tags`)
+        .then(r => r ?? []),
+    enabled: !!projectId,
+  });
+}
+
+export function useCreateSampleTag(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { label: string }) =>
+      api.post<SampleTag>(`/v1/projects/${projectId}/sample-tags`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectSampleTags(projectId) }),
+  });
+}
+
+export function useUpdateSampleTag(projectId: string, tagId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { label: string }) =>
+      api.patch<SampleTag>(`/v1/projects/${projectId}/sample-tags/${tagId}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectSampleTags(projectId) }),
+  });
+}
+
+export function useDeleteSampleTag(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tagId: string) =>
+      api.delete<{ ok: boolean }>(`/v1/projects/${projectId}/sample-tags/${tagId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectSampleTags(projectId) }),
   });
 }
 
@@ -362,6 +410,7 @@ export function useCreateSample(projectId: string) {
       kind?: string;
       status?: string;
       properties?: Record<string, unknown>;
+      tags?: string[];
     }) => api.post<Sample>(`/v1/projects/${projectId}/samples`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectSamples(projectId) }),
   });
@@ -377,6 +426,7 @@ export function useUpdateSample(sampleId: string, projectId: string) {
       kind?: string;
       status?: string;
       properties?: Record<string, unknown>;
+      tags?: string[];
     }) => api.patch<Sample>(`/v1/samples/${sampleId}`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.sample(sampleId) });

@@ -39,6 +39,7 @@ type Sample struct {
 	Properties        json.RawMessage `json:"properties"`
 	Status            string          `json:"status"`
 	DescriptionPageID *uuid.UUID      `json:"description_page_id,omitempty"`
+	Tags              []string        `json:"tags,omitempty"`
 	CreatedBy         uuid.UUID       `json:"created_by"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
@@ -71,15 +72,10 @@ func NewService(
 // Exported for future cross-module use (e.g. experiment module).
 func (s *Service) GetSample(ctx context.Context, id uuid.UUID) (*Sample, error) {
 	var sm Sample
-	err := s.pool.QueryRow(ctx,
-		`SELECT id, project_id, identifier, name, description, kind,
-		        properties, status, description_page_id, created_by, created_at, updated_at
-		 FROM samples WHERE id = $1`,
+	err := scanSample(s.pool.QueryRow(ctx,
+		`SELECT `+sampleSelectCols+` FROM samples WHERE id = $1`,
 		id,
-	).Scan(
-		&sm.ID, &sm.ProjectID, &sm.Identifier, &sm.Name, &sm.Description, &sm.Kind,
-		&sm.Properties, &sm.Status, &sm.DescriptionPageID, &sm.CreatedBy, &sm.CreatedAt, &sm.UpdatedAt,
-	)
+	), &sm)
 	if err == pgx.ErrNoRows {
 		return nil, platform.NotFound("sample.not_found", "sample not found")
 	}
@@ -96,6 +92,7 @@ func (s *Service) createSample(
 	identifier, name, description, kind string,
 	properties json.RawMessage,
 	status string,
+	tagLabels []string,
 	createdBy uuid.UUID,
 ) (*Sample, error) {
 	if kind == "" {
@@ -108,18 +105,27 @@ func (s *Service) createSample(
 		properties = json.RawMessage("{}")
 	}
 
+	var err error
+	tagLabels = normalizeTagLabels(tagLabels)
+	if len(tagLabels) > 0 {
+		tagLabels, err = s.canonicalizeTagLabels(ctx, projectID, tagLabels)
+		if err != nil {
+			return nil, err
+		}
+	}
+	tagsJSON, err := marshalTags(tagLabels)
+	if err != nil {
+		return nil, err
+	}
+
 	var sm Sample
-	err := s.pool.QueryRow(ctx,
+	err = scanSample(s.pool.QueryRow(ctx,
 		`INSERT INTO samples
-		   (project_id, identifier, name, description, kind, properties, status, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, project_id, identifier, name, description, kind,
-		           properties, status, description_page_id, created_by, created_at, updated_at`,
-		projectID, identifier, name, description, kind, []byte(properties), status, createdBy,
-	).Scan(
-		&sm.ID, &sm.ProjectID, &sm.Identifier, &sm.Name, &sm.Description, &sm.Kind,
-		&sm.Properties, &sm.Status, &sm.DescriptionPageID, &sm.CreatedBy, &sm.CreatedAt, &sm.UpdatedAt,
-	)
+		   (project_id, identifier, name, description, kind, properties, status, tags, created_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING `+sampleSelectCols,
+		projectID, identifier, name, description, kind, []byte(properties), status, tagsJSON, createdBy,
+	), &sm)
 	if err != nil {
 		// Detect unique constraint violation on (project_id, identifier).
 		if isUniqueViolation(err) {
@@ -132,9 +138,7 @@ func (s *Service) createSample(
 
 // listSamples returns samples for a project, optionally filtered by kind.
 func (s *Service) listSamples(ctx context.Context, projectID uuid.UUID, kind string) ([]*Sample, error) {
-	query := `SELECT id, project_id, identifier, name, description, kind,
-	                 properties, status, description_page_id, created_by, created_at, updated_at
-	          FROM samples WHERE project_id = $1`
+	query := `SELECT ` + sampleSelectCols + ` FROM samples WHERE project_id = $1`
 	args := []any{projectID}
 	if kind != "" {
 		query += " AND kind = $2"
@@ -151,10 +155,7 @@ func (s *Service) listSamples(ctx context.Context, projectID uuid.UUID, kind str
 	var result []*Sample
 	for rows.Next() {
 		var sm Sample
-		if err := rows.Scan(
-			&sm.ID, &sm.ProjectID, &sm.Identifier, &sm.Name, &sm.Description, &sm.Kind,
-			&sm.Properties, &sm.Status, &sm.DescriptionPageID, &sm.CreatedBy, &sm.CreatedAt, &sm.UpdatedAt,
-		); err != nil {
+		if err := scanSample(rows, &sm); err != nil {
 			return nil, fmt.Errorf("sample: scan sample: %w", err)
 		}
 		result = append(result, &sm)
@@ -167,11 +168,13 @@ func (s *Service) listSamples(ctx context.Context, projectID uuid.UUID, kind str
 
 // patchSample applies partial updates to a sample. Only non-empty/non-nil
 // fields are applied. properties (when non-nil) replaces the existing JSONB.
+// tagLabels (when non-nil) replaces all tags.
 func (s *Service) patchSample(
 	ctx context.Context,
 	id uuid.UUID,
 	name, description, kind, status, identifier *string,
 	properties json.RawMessage,
+	tagLabels *[]string,
 ) (*Sample, error) {
 	// Build dynamic SET clause.
 	setClauses := []string{"updated_at = now()"}
@@ -202,6 +205,25 @@ func (s *Service) patchSample(
 	if len(properties) > 0 {
 		appendArg("properties", []byte(properties))
 	}
+	if tagLabels != nil {
+		// Load the sample to get project_id for tag canonicalization.
+		existing, err := s.GetSample(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		labels := normalizeTagLabels(*tagLabels)
+		if len(labels) > 0 {
+			labels, err = s.canonicalizeTagLabels(ctx, existing.ProjectID, labels)
+			if err != nil {
+				return nil, err
+			}
+		}
+		tagsJSON, err := marshalTags(labels)
+		if err != nil {
+			return nil, err
+		}
+		appendArg("tags", tagsJSON)
+	}
 
 	query := "UPDATE samples SET "
 	for i, c := range setClauses {
@@ -210,15 +232,10 @@ func (s *Service) patchSample(
 		}
 		query += c
 	}
-	query += ` WHERE id = $1
-	           RETURNING id, project_id, identifier, name, description, kind,
-	                     properties, status, description_page_id, created_by, created_at, updated_at`
+	query += ` WHERE id = $1 RETURNING ` + sampleSelectCols
 
 	var sm Sample
-	err := s.pool.QueryRow(ctx, query, args...).Scan(
-		&sm.ID, &sm.ProjectID, &sm.Identifier, &sm.Name, &sm.Description, &sm.Kind,
-		&sm.Properties, &sm.Status, &sm.DescriptionPageID, &sm.CreatedBy, &sm.CreatedAt, &sm.UpdatedAt,
-	)
+	err := scanSample(s.pool.QueryRow(ctx, query, args...), &sm)
 	if err == pgx.ErrNoRows {
 		return nil, platform.NotFound("sample.not_found", "sample not found")
 	}
@@ -346,10 +363,7 @@ func (s *Service) getLineage(ctx context.Context, sampleID uuid.UUID) (*LineageG
 	var nodes []*Sample
 	if len(nodeIDs) > 0 {
 		rows, err := s.pool.Query(ctx,
-			`SELECT id, project_id, identifier, name, description, kind,
-			        properties, status, description_page_id, created_by, created_at, updated_at
-			 FROM samples WHERE id = ANY($1)
-			 ORDER BY created_at`,
+			`SELECT `+sampleSelectCols+` FROM samples WHERE id = ANY($1) ORDER BY created_at`,
 			nodeIDs,
 		)
 		if err != nil {
@@ -358,10 +372,7 @@ func (s *Service) getLineage(ctx context.Context, sampleID uuid.UUID) (*LineageG
 		defer rows.Close()
 		for rows.Next() {
 			var sm Sample
-			if err := rows.Scan(
-				&sm.ID, &sm.ProjectID, &sm.Identifier, &sm.Name, &sm.Description, &sm.Kind,
-				&sm.Properties, &sm.Status, &sm.DescriptionPageID, &sm.CreatedBy, &sm.CreatedAt, &sm.UpdatedAt,
-			); err != nil {
+			if err := scanSample(rows, &sm); err != nil {
 				return nil, fmt.Errorf("sample: scan lineage node: %w", err)
 			}
 			nodes = append(nodes, &sm)

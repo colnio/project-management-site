@@ -125,6 +125,43 @@ func Register(api huma.API, svc *Service) {
 		Description: "Removes a tag definition from the project. Requires editor role.",
 		Tags:        []string{"projects"},
 	}, svc.handleDeleteExperimentTag)
+
+	// Sample tags (project-defined labels for samples).
+	huma.Register(api, huma.Operation{
+		OperationID: "project-sample-tags-list",
+		Method:      http.MethodGet,
+		Path:        "/v1/projects/{id}/sample-tags",
+		Summary:     "List sample tags",
+		Description: "Returns custom sample tags defined for this project. Requires viewer role.",
+		Tags:        []string{"projects"},
+	}, svc.handleListSampleTags)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "project-sample-tag-create",
+		Method:      http.MethodPost,
+		Path:        "/v1/projects/{id}/sample-tags",
+		Summary:     "Create a sample tag",
+		Description: "Adds a tag label that can be assigned to samples in this project. Requires editor role.",
+		Tags:        []string{"projects"},
+	}, svc.handleCreateSampleTag)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "project-sample-tag-update",
+		Method:      http.MethodPatch,
+		Path:        "/v1/projects/{id}/sample-tags/{tag_id}",
+		Summary:     "Update a sample tag",
+		Description: "Renames a sample tag. Requires editor role.",
+		Tags:        []string{"projects"},
+	}, svc.handleUpdateSampleTag)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "project-sample-tag-delete",
+		Method:      http.MethodDelete,
+		Path:        "/v1/projects/{id}/sample-tags/{tag_id}",
+		Summary:     "Delete a sample tag",
+		Description: "Removes a sample tag definition from the project. Requires editor role.",
+		Tags:        []string{"projects"},
+	}, svc.handleDeleteSampleTag)
 }
 
 // ─── Create project ────────────────────────────────────────────────────────────
