@@ -46,14 +46,18 @@ export interface ActionItem {
 
 export interface AuditEntry {
   actor: string;
-  via_token_id?: string;
-  via_ai_conversation_id?: string;
+  via_token_id?: string | null;
+  via_ai_conversation_id?: string | null;
   action: string;
   resource_type: string;
   resource_id: string;
   request_payload_digest?: string;
   response_status: number;
   created_at: string;
+  // Display-time enrichment fields (resolved on the server, omitted when blank)
+  project_id?: string;
+  project_name?: string;
+  workspace_name?: string;
 }
 
 export interface MemberView {

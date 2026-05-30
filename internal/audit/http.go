@@ -41,6 +41,12 @@ type AuditEntryView struct {
 	RequestPayloadDigest string     `json:"request_payload_digest,omitempty"`
 	ResponseStatus       int        `json:"response_status"`
 	CreatedAt            time.Time  `json:"created_at"`
+
+	// Display-time enrichment: resolved workspace/project context.
+	// Populated on the read path; never stored in audit_log.
+	ProjectID     string `json:"project_id,omitempty"`
+	ProjectName   string `json:"project_name,omitempty"`
+	WorkspaceName string `json:"workspace_name,omitempty"`
 }
 
 // GetAuditOutput is the response body for GET /v1/audit.
@@ -97,10 +103,13 @@ func (svc *Service) HandleListAudit(ctx context.Context, in *GetAuditInput) (*Ge
 		return nil, platform.Errorf(http.StatusInternalServerError, "audit.list_failed", "failed to list audit entries")
 	}
 
+	resolver := newContextResolver(svc.rec.pool)
+
 	out := &GetAuditOutput{}
 	out.Body.NextCursor = nextCursor
 	out.Body.Items = make([]AuditEntryView, len(entries))
 	for i, e := range entries {
+		rctx := resolver.Resolve(ctx, e.ResourceType, e.ResourceID)
 		out.Body.Items[i] = AuditEntryView{
 			Actor:                e.Actor.String(),
 			ViaTokenID:           e.ViaTokenID,
@@ -111,6 +120,9 @@ func (svc *Service) HandleListAudit(ctx context.Context, in *GetAuditInput) (*Ge
 			RequestPayloadDigest: e.RequestPayloadDigest,
 			ResponseStatus:       e.ResponseStatus,
 			CreatedAt:            e.CreatedAt,
+			ProjectID:            rctx.ProjectID,
+			ProjectName:          rctx.ProjectName,
+			WorkspaceName:        rctx.WorkspaceName,
 		}
 	}
 	return out, nil

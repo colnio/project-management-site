@@ -186,6 +186,82 @@ function WorkflowsSection() {
 
 // ─── Audit log section ────────────────────────────────────────────────────────
 
+/** Derive a source label + style from the via_* delegation fields. */
+function AuditSourceBadge({ entry }: { entry: AuditEntry }) {
+  if (entry.via_ai_conversation_id) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+        background: 'var(--pill-active-bg, #fef3cd)', color: 'var(--ember, #b45309)',
+        border: '1px solid #f3d78a', borderRadius: 99,
+        padding: '1px 7px', fontFamily: 'var(--mono)', fontSize: 10,
+        fontWeight: 600, whiteSpace: 'nowrap',
+      }}>
+        AI
+      </span>
+    );
+  }
+  if (entry.via_token_id) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+        background: 'var(--paper-3, #eef2ff)', color: 'var(--ink-2, #3b4266)',
+        border: '1px solid var(--line-2, #d0d5e8)', borderRadius: 99,
+        padding: '1px 7px', fontFamily: 'var(--mono)', fontSize: 10,
+        fontWeight: 600, whiteSpace: 'nowrap',
+      }}>
+        🔑 API
+      </span>
+    );
+  }
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      background: 'var(--paper-2, #f6f7f9)', color: 'var(--ink-2, #3b4266)',
+      border: '1px solid var(--line, #e2e5ed)', borderRadius: 99,
+      padding: '1px 7px', fontFamily: 'var(--mono)', fontSize: 10,
+      fontWeight: 600, whiteSpace: 'nowrap',
+    }}>
+      👤 Manual
+    </span>
+  );
+}
+
+/** Show resolved project + workspace, or fall back to resource_type. */
+function AuditContextCell({ entry }: { entry: AuditEntry }) {
+  if (entry.project_name) {
+    return (
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {entry.project_name}
+        </div>
+        {entry.workspace_name && (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            workspace {entry.workspace_name}
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (entry.workspace_name) {
+    return (
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          workspace {entry.workspace_name}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted)' }}>
+      {entry.resource_type}
+    </span>
+  );
+}
+
+// Grid: Source | Action | Project/Workspace | Actor | When
+const AUDIT_GRID = '72px 1fr 160px 140px 110px';
+
 function AuditSection() {
   const { data: entries = [], isLoading, isError } = useAuditLog();
   const { data: users = [] } = useAdminUsers();
@@ -204,21 +280,37 @@ function AuditSection() {
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 120px', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--line)', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: AUDIT_GRID,
+        gap: 10, padding: '6px 0', borderBottom: '1px solid var(--line)',
+        fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--ink-2)',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
+      }}>
+        <span>Source</span>
         <span>Action</span>
-        <span>Resource</span>
+        <span>Project / Workspace</span>
         <span>Actor</span>
         <span>When</span>
       </div>
       {(entries as AuditEntry[]).slice(0, 20).map((e, i) => (
-        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 120px', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--line)', alignItems: 'start', fontSize: 12 }}>
-          <span style={{ fontWeight: 500 }}>{e.action}</span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted)' }}>{e.resource_type}</span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.actor}>
+        <div key={i} style={{
+          display: 'grid', gridTemplateColumns: AUDIT_GRID,
+          gap: 10, padding: '9px 0', borderBottom: '1px solid var(--line)',
+          alignItems: 'center', fontSize: 12,
+        }}>
+          <AuditSourceBadge entry={e} />
+          <span style={{ fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.action}>
+            {e.action}
+          </span>
+          <AuditContextCell entry={e} />
+          <span style={{
+            fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--ink-2)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }} title={e.actor}>
             {actorLabels.get(e.actor) ?? formatUserLabel({ user_id: e.actor })}
           </span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>
-            {new Date(e.created_at).toLocaleString()}
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--ink-2)' }}>
+            {fmtDate(e.created_at)}
           </span>
         </div>
       ))}
