@@ -171,6 +171,18 @@ func (s *Service) fetchAuditItems(ctx context.Context, wsID uuid.UUID) ([]Item, 
 		projectIDStrs[i] = id.String()
 	}
 
+	// Build a project ID -> name lookup for human-readable body strings.
+	projectNames, err := s.projects.GetProjectNames(ctx, projectIDs)
+	if err != nil {
+		return nil, fmt.Errorf("inbox: audit fetch project names: %w", err)
+	}
+
+	// Fetch workspace name for workspace-scoped audit entries.
+	ws, err := s.org.GetWorkspace(ctx, wsID)
+	if err != nil {
+		return nil, fmt.Errorf("inbox: audit fetch workspace: %w", err)
+	}
+
 	rows, err := s.pool.Query(ctx,
 		`SELECT al.id, al.action, al.resource_type, al.resource_id, al.created_at
 		 FROM audit_log al
@@ -195,11 +207,25 @@ func (s *Service) fetchAuditItems(ctx context.Context, wsID uuid.UUID) ([]Item, 
 		if err := rows.Scan(&id, &action, &resourceType, &resourceID, &createdAt); err != nil {
 			return nil, fmt.Errorf("inbox: audit scan: %w", err)
 		}
+
+		// Build a human-readable body using resolved names where possible.
+		body := resourceType + " " + resourceID
+		switch resourceType {
+		case "project":
+			if rid, parseErr := uuid.Parse(resourceID); parseErr == nil {
+				if name, ok := projectNames[rid]; ok {
+					body = "project " + name
+				}
+			}
+		case "workspace":
+			body = "workspace " + ws.Name
+		}
+
 		items = append(items, Item{
 			ID:        id,
 			Kind:      "system",
 			Title:     action,
-			Body:      resourceType + " " + resourceID,
+			Body:      body,
 			Link:      "",
 			CreatedAt: createdAt,
 		})

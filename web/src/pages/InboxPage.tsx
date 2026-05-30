@@ -82,7 +82,8 @@ function ApprovalActions({ itemId }: { itemId: string }) {
         className="top-btn"
         style={{ fontSize: 11, color: 'var(--good)', padding: '2px 10px' }}
         disabled={decide.isPending}
-        onClick={() => {
+        onClick={(e) => {
+          e.stopPropagation();
           decide.mutate(
             { requestId: itemId, approve: true },
             { onSuccess: () => setDecided('approved') },
@@ -95,7 +96,8 @@ function ApprovalActions({ itemId }: { itemId: string }) {
         className="top-btn"
         style={{ fontSize: 11, color: 'var(--bad)', padding: '2px 10px' }}
         disabled={decide.isPending}
-        onClick={() => {
+        onClick={(e) => {
+          e.stopPropagation();
           decide.mutate(
             { requestId: itemId, approve: false },
             { onSuccess: () => setDecided('rejected') },
@@ -122,7 +124,7 @@ function InboxRow({ item }: { item: InboxItem }) {
         gap: 12,
         padding: '11px 4px',
         borderBottom: '1px solid var(--line)',
-        cursor: item.link && !isApproval ? 'default' : undefined,
+        cursor: item.link ? 'pointer' : undefined,
       }}
     >
       <span
@@ -163,7 +165,7 @@ function InboxRow({ item }: { item: InboxItem }) {
     </div>
   );
 
-  const safeLink = !isApproval ? safeAppPath(item.link) : null;
+  const safeLink = item.link ? safeAppPath(item.link) : null;
   if (safeLink) {
     return <a href={safeLink}>{inner}</a>;
   }
