@@ -36,6 +36,17 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
+// ─── Bootstrap dedup ─────────────────────────────────────────────────────────
+//
+// React StrictMode double-mounts components in dev, so the mount effect in
+// AuthProvider runs twice before the first invocation completes. The refresh
+// token is single-use (the backend rotates it atomically), so the second call
+// would receive a 401 and navigate to /login. We deduplicate at the module
+// level: the first call captures the in-flight promise; the second returns it
+// directly. The promise is cleared in `.finally` so subsequent (real) refresh
+// calls — e.g. after a token rotation — start fresh.
+let bootstrapPromise: Promise<string | null> | null = null;
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -50,27 +61,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     forceAuthExit();
   }, []);
 
-  // Attempt silent refresh using httpOnly cookie
+  // Attempt silent refresh using httpOnly cookie.
+  // Uses the module-level bootstrapPromise to deduplicate concurrent calls
+  // (e.g. from React StrictMode's double-mount in development).
   const attemptRefresh = useCallback(async (): Promise<string | null> => {
-    try {
-      const data = await api.post<RefreshOutput>('/v1/auth/refresh');
-      setAccessToken(data.access_token);
-      // Fetch the full user object
-      const me = await api.get<User>('/v1/me');
-      setUser(me);
-      applyAppearanceForUser(me.id);
-      setStatus('authenticated');
-      return data.access_token;
-    } catch {
-      setAccessToken(null);
-      setUser(null);
-      const path = window.location.pathname;
-      if (path !== '/login' && path !== '/register') {
-        forceAuthExit();
+    if (bootstrapPromise) return bootstrapPromise;
+    bootstrapPromise = (async () => {
+      try {
+        const data = await api.post<RefreshOutput>('/v1/auth/refresh');
+        setAccessToken(data.access_token);
+        // Fetch the full user object
+        const me = await api.get<User>('/v1/me');
+        setUser(me);
+        applyAppearanceForUser(me.id);
+        setStatus('authenticated');
+        return data.access_token;
+      } catch {
+        setAccessToken(null);
+        setUser(null);
+        const path = window.location.pathname;
+        if (path !== '/login' && path !== '/register') {
+          forceAuthExit();
+          return null;
+        }
+        setStatus('unauthenticated');
         return null;
       }
-      setStatus('unauthenticated');
-      return null;
+    })();
+    try {
+      return await bootstrapPromise;
+    } finally {
+      bootstrapPromise = null;
     }
   }, []);
 

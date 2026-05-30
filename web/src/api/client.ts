@@ -8,6 +8,14 @@
 let accessToken: string | null = null;
 let refreshingPromise: Promise<string | null> | null = null;
 
+// Auth endpoints that should never trigger the 401→refresh→retry loop.
+// Login and register return 401 for bad credentials — treating that as an
+// expired session would silently reload the page and wipe the error state.
+const AUTH_ENDPOINTS_NO_RETRY = ['/v1/auth/refresh', '/v1/auth/login', '/v1/auth/register'];
+function shouldSkipRefreshRetry(url: string): boolean {
+  return AUTH_ENDPOINTS_NO_RETRY.some(p => url.includes(p));
+}
+
 // Callbacks registered by auth context
 type AuthCallbacks = {
   getToken: () => string | null;
@@ -64,7 +72,7 @@ export async function apiFetchRaw(
 ): Promise<Response> {
   let response = await doFetch(url, init);
 
-  if (response.status === 401 && !url.includes('/v1/auth/refresh')) {
+  if (response.status === 401 && !shouldSkipRefreshRetry(url)) {
     if (!refreshingPromise) {
       refreshingPromise = authCallbacks.onRefresh().finally(() => {
         refreshingPromise = null;
@@ -91,9 +99,10 @@ export async function apiFetch<T>(
 ): Promise<T> {
   let response = await doFetch(url, init);
 
-  // Do NOT run the refresh-retry for the refresh endpoint itself, otherwise
-  // a failing refresh re-enters attemptRefresh and deadlocks on its own promise.
-  if (response.status === 401 && !url.includes('/v1/auth/refresh')) {
+  // Do NOT run the refresh-retry for auth endpoints (refresh, login, register).
+  // Login/register return 401 for bad credentials — we must surface those as
+  // real errors, not silently reload the page via the session-expiry path.
+  if (response.status === 401 && !shouldSkipRefreshRetry(url)) {
     // Attempt a single refresh
     if (!refreshingPromise) {
       refreshingPromise = authCallbacks.onRefresh().finally(() => {
