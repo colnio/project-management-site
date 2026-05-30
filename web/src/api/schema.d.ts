@@ -4,6 +4,216 @@
  */
 
 export interface paths {
+    "/v1/admin/broadcasts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send admin email broadcast
+         * @description Sends a mandatory email to the selected audience. Requires admin or PI role.
+         */
+        post: operations["admin-broadcast-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all users
+         * @description Returns all users in the system. Requires admin or PI global role.
+         */
+        get: operations["admin-users-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reject a pending user registration
+         * @description Deletes a user only if their status is 'pending'. Used to reject pending registrations. Requires admin or PI global role.
+         */
+        delete: operations["admin-users-delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a user's status or global role
+         * @description Updates a user's status and/or global role. Requires admin or PI global role.
+         */
+        patch: operations["admin-users-update"];
+        trace?: never;
+    };
+    "/v1/ai/conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get messages for an AI conversation */
+        get: operations["ai-get-conversation-messages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/conversations/{id}/tool-calls/{tcid}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a proposed AI tool call */
+        post: operations["ai-approve-tool-call"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/conversations/{id}/tool-calls/{tcid}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a proposed AI tool call */
+        post: operations["ai-reject-tool-call"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a workflow run by ID */
+        get: operations["ai-get-workflow-run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List available AI risk-assessment workflows */
+        get: operations["ai-list-workflows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/workflows/{key}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a risk-assessment workflow synchronously */
+        post: operations["ai-run-workflow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/approval-requests/{id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List comments on an approval request
+         * @description Returns all comments on an approval request ordered oldest-first. Caller must be a recipient or project member.
+         */
+        get: operations["approval-list-comments"];
+        put?: never;
+        /**
+         * Post a comment on an approval request
+         * @description Posts a threaded review comment on an approval request. Any project participant may comment.
+         */
+        post: operations["approval-create-comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/approval-requests/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide on an approval request
+         * @description Approves or rejects a pending approval request. Caller must be a recipient or project editor.
+         */
+        post: operations["approval-decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/artifacts/{id}": {
         parameters: {
             query?: never;
@@ -11,11 +221,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an artifact */
+        /**
+         * Get an artifact
+         * @description Returns a single artifact by ID including its presigned download URL if the upload is complete. Requires viewer role on the artifact's project.
+         */
         get: operations["artifact-get"];
         put?: never;
         post?: never;
-        /** Delete an artifact */
+        /**
+         * Delete an artifact
+         * @description Deletes an artifact record and its associated S3 object. Requires an authenticated session (ownership is checked internally).
+         */
         delete: operations["artifact-delete"];
         options?: never;
         head?: never;
@@ -31,7 +247,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mark artifact upload complete */
+        /**
+         * Mark artifact upload complete
+         * @description Transitions an artifact from `pending` to `ready` after the file has been uploaded to the presigned URL. Requires an authenticated session.
+         */
         post: operations["artifact-complete"];
         delete?: never;
         options?: never;
@@ -46,7 +265,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List audit log entries */
+        /**
+         * List audit log entries
+         * @description Returns a cursor-paginated list of immutable audit log entries. Supports filtering by `actor`, `resource_type`, and `resource_id`. Requires system-admin role; token-scoped callers must also carry the `read:audit` scope.
+         */
         get: operations["list-audit"];
         put?: never;
         post?: never;
@@ -65,7 +287,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Local email+password login */
+        /**
+         * Local email+password login
+         * @description Authenticates a user with an email and password. Returns a short-lived `access_token` (JWT) in the body and sets a `refresh_token` HttpOnly cookie.
+         */
         post: operations["auth-login"];
         delete?: never;
         options?: never;
@@ -82,42 +307,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revoke refresh session (logout) */
+        /**
+         * Revoke refresh session (logout)
+         * @description Revokes the caller's current refresh session and clears the `refresh_token` cookie. Subsequent refresh attempts will fail.
+         */
         post: operations["auth-logout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/oidc/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** OIDC callback — exchange code for session */
-        get: operations["auth-oidc-callback"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/oidc/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Begin OIDC login flow */
-        get: operations["auth-oidc-login"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -133,12 +327,107 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rotate refresh token and issue a new access token */
+        /**
+         * Rotate refresh token and issue a new access token
+         * @description Rotates the `refresh_token` cookie (single-use) and returns a fresh `access_token`. The frontend retries any 401 automatically via this endpoint.
+         */
         post: operations["auth-refresh"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a new account
+         * @description Creates a new user account with status='pending'. The account must be approved by an admin before the user can log in.
+         */
+        post: operations["auth-register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cal/me/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get or lazily create the caller's iCal subscription
+         * @description Returns the caller's iCal subscription details including the feed URL (`ics_url`). A subscription is created automatically on first call. Requires an authenticated session.
+         */
+        get: operations["calendar-subscription-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update the caller's iCal subscription scope
+         * @description Changes the iCal feed scope to `all_visible_projects` or `per_project` (with an explicit `project_ids` list). Requires an authenticated session.
+         */
+        patch: operations["calendar-subscription-update"];
+        trace?: never;
+    };
+    "/v1/cal/me/subscription/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the caller's iCal subscription token
+         * @description Invalidates the current iCal token and generates a new one. The old feed URL stops working immediately. Requires an authenticated session.
+         */
+        post: operations["calendar-subscription-rotate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an event
+         * @description Returns a single calendar event by ID. Requires viewer role on the event's project.
+         */
+        get: operations["calendar-event-get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an event
+         * @description Permanently deletes a calendar event. Requires editor role on the event's project.
+         */
+        delete: operations["calendar-event-delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an event
+         * @description Applies a partial update to a calendar event. All fields are optional; omit to keep existing values. Requires editor role on the event's project.
+         */
+        patch: operations["calendar-event-update"];
         trace?: never;
     };
     "/v1/experiments/{eid}/artifacts": {
@@ -148,10 +437,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List artifacts for an experiment */
+        /**
+         * List artifacts for an experiment
+         * @description Returns all artifacts attached to an experiment. Requires an authenticated session.
+         */
         get: operations["artifact-list-experiment"];
         put?: never;
-        /** Attach an artifact to an experiment */
+        /**
+         * Attach an artifact to an experiment
+         * @description Links an existing artifact to an experiment in a given role (raw_data, analysis, report, calibration, photo, other). Requires an authenticated session.
+         */
         post: operations["artifact-attach-experiment"];
         delete?: never;
         options?: never;
@@ -166,14 +461,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an experiment */
+        /**
+         * Get an experiment
+         * @description Returns a single experiment by ID including its method, parameters, and result summary. Requires viewer role on the experiment's project.
+         */
         get: operations["experiment-get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update an experiment */
+        /**
+         * Update an experiment
+         * @description Applies a partial update to an experiment (method, parameters, result_summary, status, etc.). Requires editor role on the experiment's project.
+         */
         patch: operations["experiment-update"];
         trace?: never;
     };
@@ -184,10 +485,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List samples linked to an experiment */
+        /**
+         * List samples linked to an experiment
+         * @description Returns all samples associated with an experiment including their roles and notes. Requires viewer role on the experiment's project.
+         */
         get: operations["experiment-sample-list"];
         put?: never;
-        /** Link a sample to an experiment */
+        /**
+         * Link a sample to an experiment
+         * @description Associates an existing sample with an experiment in a given role (subject, reference, control, byproduct). Requires editor role on the experiment's project.
+         */
         post: operations["experiment-sample-link"];
         delete?: never;
         options?: never;
@@ -205,7 +512,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Unlink a sample from an experiment */
+        /**
+         * Unlink a sample from an experiment
+         * @description Removes the association between a sample and an experiment. Requires editor role on the experiment's project.
+         */
         delete: operations["experiment-sample-unlink"];
         options?: never;
         head?: never;
@@ -221,7 +531,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Accept a workspace invite */
+        /**
+         * Accept a workspace invite
+         * @description Accepts a workspace invite by token, creating an account for the user if they don't exist yet. No authentication required — the invite token acts as a one-time credential.
+         */
         post: operations["org-invite-accept"];
         delete?: never;
         options?: never;
@@ -236,16 +549,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an iteration */
+        /**
+         * Get an iteration
+         * @description Returns a single iteration by ID. Requires viewer role on the iteration's project.
+         */
         get: operations["iteration-get"];
         put?: never;
         post?: never;
-        /** Delete an iteration */
+        /**
+         * Delete an iteration
+         * @description Permanently deletes an iteration and its sample associations. Requires editor role on the iteration's project.
+         */
         delete: operations["iteration-delete"];
         options?: never;
         head?: never;
-        /** Update an iteration */
+        /**
+         * Update an iteration
+         * @description Applies a partial update to an iteration (title, status, dates, position). Requires editor role on the iteration's project.
+         */
         patch: operations["iteration-update"];
+        trace?: never;
+    };
+    "/v1/iterations/{id}/risks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List risks for an iteration
+         * @description Returns risks scoped to an iteration. Authorizes via the iteration's project. Requires viewer role.
+         */
+        get: operations["risk-list-by-iteration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/iterations/{id}/samples": {
@@ -255,10 +597,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List samples linked to an iteration */
+        /**
+         * List samples linked to an iteration
+         * @description Returns all samples associated with an iteration including their roles and notes. Requires viewer role on the iteration's project.
+         */
         get: operations["iteration-samples-list"];
         put?: never;
-        /** Link a sample to an iteration */
+        /**
+         * Link a sample to an iteration
+         * @description Associates an existing sample with an iteration in a given role (input, output, passthrough). Requires editor role on the iteration's project.
+         */
         post: operations["iteration-sample-link"];
         delete?: never;
         options?: never;
@@ -276,7 +624,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Unlink a sample from an iteration */
+        /**
+         * Unlink a sample from an iteration
+         * @description Removes the association between a sample and an iteration. Requires editor role on the iteration's project.
+         */
         delete: operations["iteration-sample-unlink"];
         options?: never;
         head?: never;
@@ -290,7 +641,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get current authenticated user */
+        /**
+         * Get current authenticated user
+         * @description Returns the authenticated user's profile. Requires a valid `Authorization: Bearer <access_token>` header.
+         */
         get: operations["auth-me"];
         put?: never;
         post?: never;
@@ -300,6 +654,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/appearance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get appearance preferences */
+        get: operations["appearance-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update appearance preferences */
+        patch: operations["appearance-patch"];
+        trace?: never;
+    };
+    "/v1/me/notification-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List notification preferences */
+        get: operations["notify-preferences-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update notification preferences */
+        patch: operations["notify-preferences-patch"];
+        trace?: never;
+    };
+    "/v1/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update current user's profile
+         * @description Updates the authenticated user's profile fields and marks profile as completed.
+         */
+        patch: operations["auth-me-profile"];
+        trace?: never;
+    };
+    "/v1/meetings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a meeting
+         * @description Returns a single meeting by ID. Requires workspace membership.
+         */
+        get: operations["meeting-get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a meeting
+         * @description Deletes a meeting. Requires workspace membership.
+         */
+        delete: operations["meeting-delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a meeting
+         * @description Applies a partial update to a meeting. Requires workspace membership.
+         */
+        patch: operations["meeting-patch"];
+        trace?: never;
+    };
     "/v1/pages/{id}": {
         parameters: {
             query?: never;
@@ -307,9 +745,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a page with current blocks */
+        /**
+         * Get a page with current blocks
+         * @description Returns the page metadata, the current revision's blocks (JSON array), and a markdown export. The ETag in the response must be sent as `If-Match` on subsequent writes. Requires viewer role on the page's project.
+         */
         get: operations["page-get"];
-        /** Update page blocks (requires If-Match) */
+        /**
+         * Update page blocks (requires If-Match)
+         * @description Writes a new revision for the page. Send the ETag from a prior GET as the `If-Match` header; a mismatch returns 412. Set `candidate=true` to stage an AI-generated draft for approval instead of advancing the current revision. Requires editor role on the project.
+         */
         put: operations["page-update"];
         post?: never;
         delete?: never;
@@ -327,7 +771,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve a candidate revision */
+        /**
+         * Approve a candidate revision
+         * @description Promotes a candidate revision to the current revision, superseding the previous current. Used in the AI-assisted editing workflow. Requires editor role on the project.
+         */
         post: operations["page-candidate-approve"];
         delete?: never;
         options?: never;
@@ -344,7 +791,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reject a candidate revision */
+        /**
+         * Reject a candidate revision
+         * @description Marks a candidate revision as rejected without changing the current revision. Requires editor role on the project.
+         */
         post: operations["page-candidate-reject"];
         delete?: never;
         options?: never;
@@ -359,7 +809,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List active page presence (within 30 s) */
+        /**
+         * List active page presence (within 30 s)
+         * @description Returns users who have sent a heartbeat for this page in the last 30 seconds, useful for showing concurrent editors. Requires viewer role on the project.
+         */
         get: operations["page-presence-list"];
         put?: never;
         post?: never;
@@ -378,7 +831,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Update presence heartbeat */
+        /**
+         * Update presence heartbeat
+         * @description Records or refreshes a client's active editing presence for a page. Presence entries expire after 30 seconds without a heartbeat. Requires viewer role on the project.
+         */
         post: operations["page-presence-heartbeat"];
         delete?: never;
         options?: never;
@@ -395,7 +851,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Restore a page to a previous revision */
+        /**
+         * Restore a page to a previous revision
+         * @description Creates a new revision whose content matches a previous one, advancing `current_revision_id` to the restored snapshot. Requires editor role on the project.
+         */
         post: operations["page-restore"];
         delete?: never;
         options?: never;
@@ -410,7 +869,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List page revisions (newest-first) */
+        /**
+         * List page revisions (newest-first)
+         * @description Returns a cursor-paginated list of revisions for a page, newest first. Pass `before=<revision_id>` and `limit` (default 50, max 100) to paginate. Requires viewer role on the project.
+         */
         get: operations["page-revisions-list"];
         put?: never;
         post?: never;
@@ -427,15 +889,80 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a project */
+        /**
+         * Get a project
+         * @description Returns a single project by ID along with an ETag for optimistic-concurrency updates. Requires viewer role on the project.
+         */
         get: operations["project-get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update a project */
+        /**
+         * Update a project
+         * @description Applies a partial update (name, description, visibility) to a project. Requires editor role on the project.
+         */
         patch: operations["project-update"];
+        trace?: never;
+    };
+    "/v1/projects/{id}/ai/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List AI conversations for a project */
+        get: operations["ai-list-conversations"];
+        put?: never;
+        /** Create an AI conversation */
+        post: operations["ai-create-conversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/ai/risk-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** AI risk register review for a project */
+        post: operations["ai-risk-review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/approval-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List approval requests for a project
+         * @description Returns all approval requests for a project ordered newest-first.
+         */
+        get: operations["approval-list"];
+        put?: never;
+        /**
+         * Create an approval request
+         * @description Creates a new approval request for a project. Requires project editor access.
+         */
+        post: operations["approval-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/projects/{id}/archive": {
@@ -447,7 +974,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Archive a project */
+        /**
+         * Archive a project
+         * @description Marks a project as archived, hiding it from default list results. Requires owner role on the project.
+         */
         post: operations["project-archive"];
         delete?: never;
         options?: never;
@@ -462,11 +992,35 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List artifacts in a project */
+        /**
+         * List artifacts in a project
+         * @description Returns all artifacts registered in a project, regardless of upload status. Requires viewer role on the project.
+         */
         get: operations["artifact-list"];
         put?: never;
-        /** Create an artifact and get a presigned upload URL */
+        /**
+         * Create an artifact and get a presigned upload URL
+         * @description Registers a new artifact record and returns a presigned S3 PUT URL. Upload the file directly to the URL, then call the complete endpoint. Requires viewer role on the project (project auth is implicit via the service).
+         */
         post: operations["artifact-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/autonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get project AI autonomy config */
+        get: operations["ai-get-project-autonomy"];
+        /** Set project AI autonomy config */
+        put: operations["ai-put-project-autonomy"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -480,10 +1034,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List project collaborators */
+        /**
+         * List project collaborators
+         * @description Returns the list of per-project collaborators (role overrides beyond workspace membership). Requires viewer role on the project.
+         */
         get: operations["project-collaborators-list"];
         put?: never;
-        /** Add a project collaborator */
+        /**
+         * Add a project collaborator
+         * @description Grants a user a specific role on the project, looked up by email. Requires owner role on the project.
+         */
         post: operations["project-collaborator-add"];
         delete?: never;
         options?: never;
@@ -501,11 +1061,86 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a project collaborator */
+        /**
+         * Remove a project collaborator
+         * @description Removes a collaborator's per-project role, reverting them to their workspace-level access. Requires owner role on the project.
+         */
         delete: operations["project-collaborator-remove"];
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List project events
+         * @description Returns events for a project, optionally bounded by `from` and `to` timestamps (RFC 3339). Requires viewer role on the project.
+         */
+        get: operations["calendar-event-list"];
+        put?: never;
+        /**
+         * Create a project event
+         * @description Creates a calendar event (deadline, milestone, meeting, reminder, or custom) within a project. Supports recurring events via an RFC 5545 recurrence rule. Requires editor role on the project.
+         */
+        post: operations["calendar-event-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/experiment-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List experiment tags
+         * @description Returns custom experiment tags defined for this project. Requires viewer role.
+         */
+        get: operations["project-experiment-tags-list"];
+        put?: never;
+        /**
+         * Create an experiment tag
+         * @description Adds a tag label that can be assigned to experiments in this project. Requires editor role.
+         */
+        post: operations["project-experiment-tag-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/experiment-tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an experiment tag
+         * @description Removes a tag definition from the project. Requires editor role.
+         */
+        delete: operations["project-experiment-tag-delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an experiment tag
+         * @description Renames an experiment tag. Requires editor role.
+         */
+        patch: operations["project-experiment-tag-update"];
         trace?: never;
     };
     "/v1/projects/{id}/experiments": {
@@ -515,10 +1150,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List experiments in a project */
+        /**
+         * List experiments in a project
+         * @description Returns experiments in a project with optional filters: `iteration_id`, `method` (matches primary method or any tag), and `sample_id`. Requires viewer role on the project.
+         */
         get: operations["experiment-list"];
         put?: never;
-        /** Create an experiment */
+        /**
+         * Create an experiment
+         * @description Creates a new experiment run (measurement, synthesis, etc.) within a project. Optionally associates the experiment with an iteration. Requires editor role on the project.
+         */
         post: operations["experiment-create"];
         delete?: never;
         options?: never;
@@ -533,10 +1174,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List iterations in a project */
+        /**
+         * List iterations in a project
+         * @description Returns all iterations for a project ordered by position. Requires viewer role on the project.
+         */
         get: operations["iteration-list"];
         put?: never;
-        /** Create an iteration */
+        /**
+         * Create an iteration
+         * @description Creates a new iteration (sprint / experimental batch) within a project. Optional start/end dates and a status control the iteration lifecycle. Requires editor role on the project.
+         */
         post: operations["iteration-create"];
         delete?: never;
         options?: never;
@@ -551,14 +1198,93 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List pages for a project
+         * @description Returns a list of page summaries (including derived title) for a project. Optionally filter by `parent_type` and `parent_id`. Results are ordered by updated_at descending. Requires viewer role on the project.
+         */
+        get: operations["page-list"];
         put?: never;
-        /** Create a page */
+        /**
+         * Create a page
+         * @description Creates a new content-addressable page attached to a parent entity (project, iteration, sample, or experiment). Returns the page and its initial blocks along with an ETag. Requires editor role on the project.
+         */
         post: operations["page-create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/risks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List risks in a project
+         * @description Returns all risks for a project ordered by seq. Requires viewer role.
+         */
+        get: operations["risk-list-by-project"];
+        put?: never;
+        /**
+         * Create a risk
+         * @description Creates a new risk entry within a project. Requires editor role.
+         */
+        post: operations["risk-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/sample-tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List sample tags
+         * @description Returns custom sample tags defined for this project. Requires viewer role.
+         */
+        get: operations["project-sample-tags-list"];
+        put?: never;
+        /**
+         * Create a sample tag
+         * @description Adds a tag label that can be assigned to samples in this project. Requires editor role.
+         */
+        post: operations["project-sample-tag-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/sample-tags/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a sample tag
+         * @description Removes a sample tag definition from the project. Requires editor role.
+         */
+        delete: operations["project-sample-tag-delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a sample tag
+         * @description Renames a sample tag. Requires editor role.
+         */
+        patch: operations["project-sample-tag-update"];
         trace?: never;
     };
     "/v1/projects/{id}/samples": {
@@ -568,10 +1294,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List samples in a project */
+        /**
+         * List samples in a project
+         * @description Returns all samples in a project, optionally filtered by `kind`. Requires viewer role on the project.
+         */
         get: operations["sample-list"];
         put?: never;
-        /** Create a sample */
+        /**
+         * Create a sample
+         * @description Creates a new physical or virtual sample within a project. Supports freeform JSON properties for domain-specific metadata. Requires editor role on the project.
+         */
         post: operations["sample-create"];
         delete?: never;
         options?: never;
@@ -586,7 +1318,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a revision with full content */
+        /**
+         * Get a revision with full content
+         * @description Returns a specific revision including its content blocks and markdown export. Requires viewer role on the revision's page's project.
+         */
         get: operations["revision-get"];
         put?: never;
         post?: never;
@@ -603,10 +1338,57 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Line diff between two revisions' markdown exports */
+        /**
+         * Line diff between two revisions' markdown exports
+         * @description Returns a line-based LCS diff between the markdown exports of two revisions on the same page. Pass the other revision's ID as `against`. Requires viewer role on the project.
+         */
         get: operations["revision-diff"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a risk
+         * @description Deletes a risk entry. Requires editor role on the risk's project.
+         */
+        delete: operations["risk-delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a risk
+         * @description Applies a partial update to a risk. Requires editor role on the risk's project.
+         */
+        patch: operations["risk-patch"];
+        trace?: never;
+    };
+    "/v1/risks/{id}/pi-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Flag / clear PI review
+         * @description Sets or clears the flagged_for_pi_review flag on a risk. Requires editor role.
+         */
+        post: operations["risk-set-pi-review"];
         delete?: never;
         options?: never;
         head?: never;
@@ -620,14 +1402,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a sample */
+        /**
+         * Get a sample
+         * @description Returns a single sample by ID including its properties and current status. Requires viewer role on the sample's project.
+         */
         get: operations["sample-get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update a sample */
+        /**
+         * Update a sample
+         * @description Applies a partial update to a sample's fields (name, status, properties, etc.). Requires editor role on the sample's project.
+         */
         patch: operations["sample-patch"];
         trace?: never;
     };
@@ -638,7 +1426,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get sample lineage graph */
+        /**
+         * Get sample lineage graph
+         * @description Returns the full ancestor/descendant graph of a sample as a set of nodes and directed edges. Requires viewer role on the sample's project.
+         */
         get: operations["sample-lineage"];
         put?: never;
         post?: never;
@@ -657,7 +1448,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add a sample relation */
+        /**
+         * Add a sample relation
+         * @description Records a directed relationship (e.g. derived_from, split_from) between two samples for lineage tracking. Requires editor role on the parent sample's project.
+         */
         post: operations["sample-relation-add"];
         delete?: never;
         options?: never;
@@ -672,10 +1466,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List artifacts for a sample */
+        /**
+         * List artifacts for a sample
+         * @description Returns all artifacts attached to a sample. Requires an authenticated session.
+         */
         get: operations["artifact-list-sample"];
         put?: never;
-        /** Attach an artifact to a sample */
+        /**
+         * Attach an artifact to a sample
+         * @description Links an existing artifact to a sample in a given role (specimen_image, datasheet, reference, other). Requires an authenticated session.
+         */
         post: operations["artifact-attach-sample"];
         delete?: never;
         options?: never;
@@ -690,10 +1490,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List personal access tokens */
+        /**
+         * List personal access tokens
+         * @description Returns metadata for all personal access tokens owned by the caller (raw token values are never returned). Requires an authenticated session.
+         */
         get: operations["auth-token-list"];
         put?: never;
-        /** Create a personal access token */
+        /**
+         * Create a personal access token
+         * @description Creates a new long-lived personal access token (PAT) scoped to specific operations. The raw token is returned only once — store it securely. Requires an authenticated session.
+         */
         post: operations["auth-token-create"];
         delete?: never;
         options?: never;
@@ -711,7 +1517,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke a personal access token */
+        /**
+         * Revoke a personal access token
+         * @description Permanently revokes a personal access token. The caller must own the token. Requires an authenticated session.
+         */
         delete: operations["auth-token-revoke"];
         options?: never;
         head?: never;
@@ -725,10 +1534,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List workspaces the caller is a member of */
+        /**
+         * List workspaces the caller is a member of
+         * @description Returns all workspaces the authenticated user belongs to. System admins see all workspaces.
+         */
         get: operations["org-workspace-list"];
         put?: never;
-        /** Create a workspace */
+        /**
+         * Create a workspace
+         * @description Creates a new workspace. The authenticated user becomes the workspace owner automatically.
+         */
         post: operations["org-workspace-create"];
         delete?: never;
         options?: never;
@@ -743,8 +1558,66 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a workspace */
+        /**
+         * Get a workspace
+         * @description Returns a single workspace by ID. Requires workspace membership or system-admin role.
+         */
         get: operations["org-workspace-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/ai/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get AI usage summary for a workspace */
+        get: operations["ai-get-workspace-usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/autonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get workspace AI autonomy config */
+        get: operations["ai-get-workspace-autonomy"];
+        /** Set workspace AI autonomy config */
+        put: operations["ai-put-workspace-autonomy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workspace inbox
+         * @description Returns an aggregated feed of actionable items for the workspace: PI-flagged risks, pending AI proposals, and recent audit activity. Capped at 50 items, ordered newest-first. Requires workspace membership.
+         */
+        get: operations["inbox-list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -762,8 +1635,35 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Invite a user to a workspace */
+        /**
+         * Invite a user to a workspace
+         * @description Generates an invite token for a given email address and desired role. Send the token to the recipient; they use the accept endpoint to join. Requires workspace owner or admin role.
+         */
         post: operations["org-invite-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List meetings in a workspace
+         * @description Returns all meetings in the workspace ordered by start_at descending. Requires workspace membership.
+         */
+        get: operations["meeting-list"];
+        put?: never;
+        /**
+         * Create a meeting
+         * @description Creates a new meeting record in the workspace. Optionally linked to a project. Requires workspace membership.
+         */
+        post: operations["meeting-create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -777,10 +1677,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List workspace members */
+        /**
+         * List workspace members
+         * @description Returns all members and their workspace roles. Requires workspace membership or system-admin role.
+         */
         get: operations["org-workspace-members-list"];
         put?: never;
-        /** Add or update a workspace member */
+        /**
+         * Add or update a workspace member
+         * @description Grants an existing user a role in the workspace, or updates their role if already a member. Requires workspace owner or admin role. To invite a new user first use the invite endpoint.
+         */
         post: operations["org-workspace-member-add"];
         delete?: never;
         options?: never;
@@ -798,7 +1704,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a workspace member */
+        /**
+         * Remove a workspace member
+         * @description Removes a user from the workspace, revoking access to all workspace-visible projects. Requires workspace owner or admin role.
+         */
         delete: operations["org-workspace-member-remove"];
         options?: never;
         head?: never;
@@ -812,10 +1721,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List projects in a workspace */
+        /**
+         * List projects in a workspace
+         * @description Returns all projects the caller can access in the workspace. Pass `include_archived=true` to include archived projects. Requires workspace membership.
+         */
         get: operations["project-list"];
         put?: never;
-        /** Create a project */
+        /**
+         * Create a project
+         * @description Creates a new project inside the given workspace. Requires the caller to be a workspace member.
+         */
         post: operations["project-create"];
         delete?: never;
         options?: never;
@@ -891,6 +1806,88 @@ export interface components {
             /** @enum {string} */
             relation_type: "derived_from" | "split_from" | "assembled_into" | "tested_as" | "duplicate_of";
         };
+        AdminUserJSON: {
+            /** Format: date-time */
+            created_at: string;
+            display_name: string;
+            email: string;
+            first_name: string;
+            global_role: string;
+            id: string;
+            last_name: string;
+            profile_completed: boolean;
+            status: string;
+            title: string;
+        };
+        AiConversationListOutputBody_391ae20d: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AiConversationListOutputBody_391ae20d.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["Conversation"][] | null;
+        };
+        AiCreateConversationInputBody_2090184d: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AiCreateConversationInputBody_2090184d.json
+             */
+            readonly $schema?: string;
+            skill?: string;
+            title: string;
+        };
+        AiMessagesOutputBody_7acac85f: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AiMessagesOutputBody_7acac85f.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["Message"][] | null;
+        };
+        AiRiskReviewInputBody_e49665f2: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AiRiskReviewInputBody_e49665f2.json
+             */
+            readonly $schema?: string;
+            iteration_id?: string;
+        };
+        AiRiskReviewOutputBody_ce2254b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AiRiskReviewOutputBody_ce2254b.json
+             */
+            readonly $schema?: string;
+            review: string;
+        };
+        ApprovalRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ApprovalRequest.json
+             */
+            readonly $schema?: string;
+            ai_review: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            /** Format: date-time */
+            decided_at?: string;
+            decided_by?: string;
+            description: string;
+            id: string;
+            iteration_id?: string;
+            project_id: string;
+            recipients: components["schemas"]["RecipientSnapshot"][] | null;
+            status: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         ApproveCandidateOutputBody_dc8c628f: {
             /**
              * Format: uri
@@ -952,6 +1949,8 @@ export interface components {
             actor: string;
             /** Format: date-time */
             created_at: string;
+            project_id?: string;
+            project_name?: string;
             request_payload_digest?: string;
             resource_id: string;
             resource_type: string;
@@ -959,14 +1958,55 @@ export interface components {
             response_status: number;
             via_ai_conversation_id?: string;
             via_token_id?: string;
+            workspace_name?: string;
         };
-        Collaborator: {
+        AutonomyConfig: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AutonomyConfig.json
+             */
+            readonly $schema?: string;
+            AllowedTools: string[] | null;
+            ID: string;
+            Mode: string;
+            Scope: string;
+            ScopeID: string;
+        };
+        AutonomyPutInputBody_564d9700: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AutonomyPutInputBody_564d9700.json
+             */
+            readonly $schema?: string;
+            allowed_tools: string[] | null;
+            mode: string;
+        };
+        CollaboratorView: {
             /** Format: date-time */
             created_at: string;
+            display_name: string;
+            email: string;
             id: string;
             project_id: string;
             role: string;
             user_id: string;
+        };
+        Comment: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/Comment.json
+             */
+            readonly $schema?: string;
+            approval_request_id: string;
+            author_id: string;
+            author_name: string;
+            body: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
         };
         CompleteArtifactInputBody_5c18d754: {
             /**
@@ -975,6 +2015,33 @@ export interface components {
              * @example //schemas/CompleteArtifactInputBody_5c18d754.json
              */
             readonly $schema?: string;
+        };
+        Conversation: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/Conversation.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            project_id: string;
+            skill?: string;
+            started_by: string;
+            title: string;
+        };
+        CreateApprovalInputBody_2b7e5689: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateApprovalInputBody_2b7e5689.json
+             */
+            readonly $schema?: string;
+            ai_review: string;
+            description: string;
+            iteration_id?: string;
+            recipient_user_ids: string[] | null;
         };
         CreateArtifactInputBody_fdd1aa6b: {
             /**
@@ -1004,22 +2071,91 @@ export interface components {
             method: string;
             upload_url: string;
         };
-        CreateExperimentInputBody_9fe615bc: {
+        CreateBroadcastInputBody_8fab77a1: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/CreateExperimentInputBody_9fe615bc.json
+             * @example //schemas/CreateBroadcastInputBody_8fab77a1.json
+             */
+            readonly $schema?: string;
+            audience: string;
+            body: string;
+            subject: string;
+            user_ids?: string[] | null;
+            workspace_id?: string;
+        };
+        CreateBroadcastOutputBody_22c8f91d: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateBroadcastOutputBody_22c8f91d.json
+             */
+            readonly $schema?: string;
+            id: string;
+            /** Format: int64 */
+            recipients_queued: number;
+        };
+        CreateCommentInputBody_bf3fd92b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateCommentInputBody_bf3fd92b.json
+             */
+            readonly $schema?: string;
+            body: string;
+        };
+        CreateEventInputBody_66b3ed94: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateEventInputBody_66b3ed94.json
+             */
+            readonly $schema?: string;
+            all_day?: boolean;
+            description?: string;
+            /** Format: date-time */
+            end_at?: string;
+            experiment_id?: string;
+            iteration_id?: string;
+            /** @enum {string} */
+            kind?: "deadline" | "milestone_end" | "meeting" | "reminder" | "custom";
+            recurrence_rule?: string;
+            sample_id?: string;
+            /** Format: date-time */
+            start_at: string;
+            title: string;
+        };
+        CreateExperimentInputBody_7450777a: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateExperimentInputBody_7450777a.json
              */
             readonly $schema?: string;
             iteration_id?: string;
-            /** @enum {string} */
-            method?: "cycling" | "synthesis" | "SEM" | "XRD" | "EIS" | "weighing" | "drying" | "custom";
+            /** @example EIS */
+            method?: string;
             parameters?: unknown;
             /** Format: date-time */
             performed_at?: string;
+            /** @example Impedance at 1 kHz: 42 Ω·cm² */
             result_summary?: string;
-            /** @enum {string} */
+            /**
+             * @example completed
+             * @enum {string}
+             */
             status?: "planned" | "in_progress" | "completed" | "failed";
+            /** @description Project-defined tag labels (multi-select). */
+            tags?: string[] | null;
+        };
+        CreateExperimentTagInputBody_1e9d483b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateExperimentTagInputBody_1e9d483b.json
+             */
+            readonly $schema?: string;
+            label: string;
         };
         CreateInviteInputBody_aeeb055a: {
             /**
@@ -1060,17 +2196,41 @@ export interface components {
             status?: "planned" | "active" | "done" | "blocked";
             title: string;
         };
-        CreatePageInputBody_51b40d80: {
+        CreateMeetingInputBody_58290626: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/CreatePageInputBody_51b40d80.json
+             * @example //schemas/CreateMeetingInputBody_58290626.json
+             */
+            readonly $schema?: string;
+            action_items?: unknown;
+            agenda?: string;
+            attendees?: unknown;
+            chair?: string;
+            decisions?: unknown;
+            /** Format: date-time */
+            end_at?: string;
+            /** @enum {string} */
+            kind?: "sync" | "review" | "planning" | "retro" | "kickoff" | "other";
+            location?: string;
+            notes?: string;
+            project_id?: string;
+            /** Format: date-time */
+            start_at: string;
+            title: string;
+        };
+        CreatePageInputBody_93c50bb6: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreatePageInputBody_93c50bb6.json
              */
             readonly $schema?: string;
             blocks: unknown;
             parent_id: string;
             /** @enum {string} */
             parent_type: "project" | "iteration" | "sample" | "experiment";
+            slot?: string;
         };
         CreatePageOutputBody_d29aa8ae: {
             /**
@@ -1082,33 +2242,74 @@ export interface components {
             blocks: unknown;
             page: components["schemas"]["Page"];
         };
-        CreateProjectInputBody_ea74934a: {
+        CreateProjectInputBody_ca37e3fc: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/CreateProjectInputBody_ea74934a.json
+             * @example //schemas/CreateProjectInputBody_ca37e3fc.json
              */
             readonly $schema?: string;
+            /** @example Investigating ionic conductivity of LLZO at room temperature. */
             description?: string;
+            /** @example Solid-State Electrolyte Study */
             name: string;
-            /** @enum {string} */
+            /**
+             * @example workspace
+             * @enum {string}
+             */
             visibility?: "workspace" | "private";
         };
-        CreateSampleInputBody_ecc34345: {
+        CreateRiskInputBody_3858050c: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/CreateSampleInputBody_ecc34345.json
+             * @example //schemas/CreateRiskInputBody_3858050c.json
              */
             readonly $schema?: string;
-            description?: string;
-            identifier: string;
+            impact_description?: string;
+            impact_headline?: string;
+            iteration_id?: string;
             /** @enum {string} */
+            likelihood: "high" | "med" | "low";
+            mitigation?: string;
+            plan_b?: string;
+            title: string;
+        };
+        CreateSampleInputBody_941ec721: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateSampleInputBody_941ec721.json
+             */
+            readonly $schema?: string;
+            /** @example Sintered at 1150 °C for 12 h in O2 atmosphere. */
+            description?: string;
+            /** @example EL-2024-042 */
+            identifier: string;
+            /**
+             * @example electrode
+             * @enum {string}
+             */
             kind?: "precursor" | "electrode" | "cell" | "module" | "derivative" | "other";
+            /** @example LLZO Pellet A */
             name?: string;
             properties?: unknown;
-            /** @enum {string} */
+            /**
+             * @example active
+             * @enum {string}
+             */
             status?: "active" | "consumed" | "archived" | "failed";
+            /** @description Project-defined tag labels (multi-select). */
+            tags?: string[] | null;
+        };
+        CreateSampleTagInputBody_1e9d483b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateSampleTagInputBody_1e9d483b.json
+             */
+            readonly $schema?: string;
+            label: string;
         };
         CreateTokenInputBody_3ff65732: {
             /**
@@ -1145,11 +2346,83 @@ export interface components {
             readonly $schema?: string;
             name: string;
         };
+        DecideApprovalInputBody_9f20f2f4: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DecideApprovalInputBody_9f20f2f4.json
+             */
+            readonly $schema?: string;
+            approve: boolean;
+        };
+        DecideApprovalOutputBody_a426baf7: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DecideApprovalOutputBody_a426baf7.json
+             */
+            readonly $schema?: string;
+            status: string;
+        };
+        DeleteEventOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DeleteEventOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        DeleteExperimentTagOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DeleteExperimentTagOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
         DeleteIterationOutputBody_ecbffc4e: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
              * @example //schemas/DeleteIterationOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        DeleteMeetingOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DeleteMeetingOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        DeleteRiskOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DeleteRiskOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        DeleteSampleTagOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DeleteSampleTagOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        DeleteUserOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DeleteUserOutputBody_ecbffc4e.json
              */
             readonly $schema?: string;
             ok: boolean;
@@ -1183,6 +2456,33 @@ export interface components {
             /** @description Human-readable error message */
             message: string;
         };
+        Event: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/Event.json
+             */
+            readonly $schema?: string;
+            all_day: boolean;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            description: string;
+            /** Format: date-time */
+            end_at?: string;
+            experiment_id?: string;
+            id: string;
+            iteration_id?: string;
+            kind: string;
+            project_id: string;
+            recurrence_rule?: string;
+            sample_id?: string;
+            /** Format: date-time */
+            start_at: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         Experiment: {
             /**
              * Format: uri
@@ -1190,7 +2490,7 @@ export interface components {
              * @example //schemas/Experiment.json
              */
             readonly $schema?: string;
-            code?: string;
+            code: string;
             /** Format: date-time */
             created_at: string;
             created_by: string;
@@ -1204,8 +2504,10 @@ export interface components {
             performed_by?: string;
             project_id: string;
             result_summary: string;
-            seq?: number;
+            /** Format: int64 */
+            seq: number;
             status: string;
+            tags?: string[] | null;
             /** Format: date-time */
             updated_at: string;
         };
@@ -1229,6 +2531,27 @@ export interface components {
             role?: string;
             sample_id: string;
         };
+        ExperimentTag: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ExperimentTag.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            label: string;
+            /** Format: int64 */
+            position: number;
+            project_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        FunctionCall: {
+            arguments: string;
+            name: string;
+        };
         GetAuditOutputBody_17ed8982: {
             /**
              * Format: uri
@@ -1239,11 +2562,20 @@ export interface components {
             items: components["schemas"]["AuditEntryView"][] | null;
             next_cursor?: string;
         };
-        GetPageOutputBody_7748c735: {
+        GetOutputBody_d51808b3: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/GetPageOutputBody_7748c735.json
+             * @example //schemas/GetOutputBody_d51808b3.json
+             */
+            readonly $schema?: string;
+            prefs: unknown;
+        };
+        GetPageOutputBody_566cf299: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/GetPageOutputBody_566cf299.json
              */
             readonly $schema?: string;
             blocks: unknown;
@@ -1253,6 +2585,7 @@ export interface components {
             parent_id: string;
             parent_type: string;
             project_id: string;
+            slot: string;
         };
         GetRevisionOutputBody_1ccb1704: {
             /**
@@ -1263,6 +2596,15 @@ export interface components {
             readonly $schema?: string;
             blocks: unknown;
             revision: components["schemas"]["Revision"];
+        };
+        Item: {
+            body: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            kind: string;
+            link: string;
+            title: string;
         };
         Iteration: {
             /**
@@ -1347,6 +2689,33 @@ export interface components {
             readonly $schema?: string;
             ok: boolean;
         };
+        ListApprovalsOutputBody_97f98609: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ListApprovalsOutputBody_97f98609.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["ApprovalRequest"][] | null;
+        };
+        ListCommentsOutputBody_1f15f322: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ListCommentsOutputBody_1f15f322.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["Comment"][] | null;
+        };
+        ListPagesOutputBody_2694c9a1: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ListPagesOutputBody_2694c9a1.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["PageListItem"][] | null;
+        };
         ListRevisionsOutputBody_e0ac082b: {
             /**
              * Format: uri
@@ -1386,6 +2755,47 @@ export interface components {
             readonly $schema?: string;
             ok: boolean;
         };
+        Meeting: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/Meeting.json
+             */
+            readonly $schema?: string;
+            action_items: unknown;
+            agenda: string;
+            attendees: unknown;
+            chair?: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            decisions: unknown;
+            /** Format: date-time */
+            end_at?: string;
+            id: string;
+            kind: string;
+            location: string;
+            notes: string;
+            project_id?: string;
+            /** Format: date-time */
+            start_at: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            workspace_id: string;
+        };
+        MemberView: {
+            /** Format: date-time */
+            created_at: string;
+            display_name: string;
+            email: string;
+            id: string;
+            role: string;
+            /** Format: date-time */
+            user_created_at: string;
+            user_id: string;
+            workspace_id: string;
+        };
         Membership: {
             /**
              * Format: uri
@@ -1400,15 +2810,18 @@ export interface components {
             user_id: string;
             workspace_id: string;
         };
-        OidcLoginOutputBody_e24bc5fa: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example //schemas/OidcLoginOutputBody_e24bc5fa.json
-             */
-            readonly $schema?: string;
-            authorization_url: string;
-            state: string;
+        Message: {
+            content: string;
+            conversation_id: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            name?: string;
+            role: string;
+            /** Format: int64 */
+            seq: number;
+            tool_call_id?: string;
+            tool_calls?: components["schemas"]["ToolCall"][] | null;
         };
         PATInfo: {
             /** Format: date-time */
@@ -1431,14 +2844,98 @@ export interface components {
             parent_id: string;
             parent_type: string;
             project_id: string;
+            slot: string;
             /** Format: date-time */
             updated_at: string;
         };
-        PatchSampleInputBody_9fd9bd31: {
+        PageListItem: {
+            current_revision_id?: string;
+            id: string;
+            parent_id: string;
+            parent_type: string;
+            project_id: string;
+            slot: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PatchInputBody_d51808b3: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/PatchSampleInputBody_9fd9bd31.json
+             * @example //schemas/PatchInputBody_d51808b3.json
+             */
+            readonly $schema?: string;
+            prefs: unknown;
+        };
+        PatchMeetingInputBody_6dd75684: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/PatchMeetingInputBody_6dd75684.json
+             */
+            readonly $schema?: string;
+            action_items?: unknown;
+            agenda?: string;
+            attendees?: unknown;
+            decisions?: unknown;
+            kind?: string;
+            location?: string;
+            notes?: string;
+            /** Format: date-time */
+            start_at?: string;
+            title?: string;
+        };
+        PatchOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/PatchOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        PatchPreferencesInputBody_b36ea99b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/PatchPreferencesInputBody_b36ea99b.json
+             */
+            readonly $schema?: string;
+            preferences: {
+                [key: string]: boolean;
+            };
+        };
+        PatchPreferencesOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/PatchPreferencesOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        PatchRiskInputBody_429ef1ca: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/PatchRiskInputBody_429ef1ca.json
+             */
+            readonly $schema?: string;
+            flagged_for_pi_review?: boolean;
+            impact_description?: string;
+            impact_headline?: string;
+            likelihood?: string;
+            mitigation?: string;
+            plan_b?: string;
+            status?: string;
+            title?: string;
+        };
+        PatchSampleInputBody_84a655ad: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/PatchSampleInputBody_84a655ad.json
              */
             readonly $schema?: string;
             description?: string;
@@ -1447,6 +2944,15 @@ export interface components {
             name?: string;
             properties?: unknown;
             status?: string;
+            /** @description Replaces all tags when provided (send full selection). */
+            tags?: string[] | null;
+        };
+        PreferenceItem: {
+            category: string;
+            description: string;
+            enabled: boolean;
+            label: string;
+            mandatory: boolean;
         };
         PresenceEntry: {
             /** Format: date-time */
@@ -1503,6 +3009,11 @@ export interface components {
             visibility: string;
             workspace_id: string;
         };
+        RecipientSnapshot: {
+            display_name: string;
+            email: string;
+            user_id: string;
+        };
         RefreshOutputBody_2dfb9844: {
             /**
              * Format: uri
@@ -1511,6 +3022,27 @@ export interface components {
              */
             readonly $schema?: string;
             access_token: string;
+        };
+        RegisterInputBody_ea242edd: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/RegisterInputBody_ea242edd.json
+             */
+            readonly $schema?: string;
+            email: string;
+            password: string;
+            password_confirm: string;
+        };
+        RegisterOutputBody_56008cab: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/RegisterOutputBody_56008cab.json
+             */
+            readonly $schema?: string;
+            message: string;
+            status: string;
         };
         RejectCandidateOutputBody_37b9e702: {
             /**
@@ -1581,6 +3113,45 @@ export interface components {
             readonly $schema?: string;
             ok: boolean;
         };
+        Risk: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/Risk.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            flagged_for_pi_review: boolean;
+            id: string;
+            impact_description: string;
+            impact_headline: string;
+            iteration_id?: string;
+            likelihood: string;
+            mitigation: string;
+            plan_b: string;
+            project_id: string;
+            /** Format: int64 */
+            seq: number;
+            source: string;
+            status: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            workflow_run_id?: string;
+        };
+        RunWorkflowInputBody_8e690ab7: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/RunWorkflowInputBody_8e690ab7.json
+             */
+            readonly $schema?: string;
+            experiment_id?: string;
+            project_id: string;
+            sample_id?: string;
+        };
         Sample: {
             /**
              * Format: uri
@@ -1600,6 +3171,7 @@ export interface components {
             project_id: string;
             properties: unknown;
             status: string;
+            tags?: string[] | null;
             /** Format: date-time */
             updated_at: string;
         };
@@ -1630,6 +3202,67 @@ export interface components {
             parent_sample_id: string;
             relation_type: string;
         };
+        SampleTag: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/SampleTag.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            label: string;
+            /** Format: int64 */
+            position: number;
+            project_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SetPIReviewInputBody_9f3da132: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/SetPIReviewInputBody_9f3da132.json
+             */
+            readonly $schema?: string;
+            flagged: boolean;
+        };
+        SubscriptionResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/SubscriptionResponse.json
+             */
+            readonly $schema?: string;
+            ics_url: string;
+            project_ids: string[] | null;
+            scope: string;
+            token: string;
+        };
+        ToolCall: {
+            function: components["schemas"]["FunctionCall"];
+            id: string;
+            type: string;
+        };
+        ToolCallRecord: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ToolCallRecord.json
+             */
+            readonly $schema?: string;
+            conversation_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            executed_by?: string;
+            id: string;
+            input_json?: unknown;
+            output_json?: unknown;
+            run_id?: string;
+            status: string;
+            tool: string;
+        };
         UnlinkSampleOutputBody_ecbffc4e: {
             /**
              * Format: uri
@@ -1639,22 +3272,53 @@ export interface components {
             readonly $schema?: string;
             ok: boolean;
         };
-        UpdateExperimentInputBody_a5aa94fa: {
+        UpdateEventInputBody_28dbca51: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/UpdateExperimentInputBody_a5aa94fa.json
+             * @example //schemas/UpdateEventInputBody_28dbca51.json
+             */
+            readonly $schema?: string;
+            all_day?: boolean;
+            description?: string;
+            /** Format: date-time */
+            end_at?: string;
+            experiment_id?: string;
+            iteration_id?: string;
+            /** @enum {string} */
+            kind?: "deadline" | "milestone_end" | "meeting" | "reminder" | "custom";
+            recurrence_rule?: string;
+            sample_id?: string;
+            /** Format: date-time */
+            start_at?: string;
+            title?: string;
+        };
+        UpdateExperimentInputBody_c4625564: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UpdateExperimentInputBody_c4625564.json
              */
             readonly $schema?: string;
             iteration_id?: string;
-            /** @enum {string} */
-            method?: "cycling" | "synthesis" | "SEM" | "XRD" | "EIS" | "weighing" | "drying" | "custom";
+            method?: string;
             parameters?: unknown;
             /** Format: date-time */
             performed_at?: string;
             result_summary?: string;
             /** @enum {string} */
             status?: "planned" | "in_progress" | "completed" | "failed";
+            /** @description Replaces all tags when provided (send full selection). */
+            tags?: string[] | null;
+        };
+        UpdateExperimentTagInputBody_1e9d483b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UpdateExperimentTagInputBody_1e9d483b.json
+             */
+            readonly $schema?: string;
+            label: string;
         };
         UpdateIterationInputBody_d2fab08e: {
             /**
@@ -1697,6 +3361,19 @@ export interface components {
             page: components["schemas"]["Page"];
             revision: components["schemas"]["Revision"];
         };
+        UpdateProfileInputBody_9b038344: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UpdateProfileInputBody_9b038344.json
+             */
+            readonly $schema?: string;
+            description: string;
+            display_name?: string;
+            first_name: string;
+            last_name: string;
+            title: string;
+        };
         UpdateProjectInputBody_28f240d4: {
             /**
              * Format: uri
@@ -1709,6 +3386,62 @@ export interface components {
             /** @enum {string} */
             visibility?: "workspace" | "private";
         };
+        UpdateSampleTagInputBody_1e9d483b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UpdateSampleTagInputBody_1e9d483b.json
+             */
+            readonly $schema?: string;
+            label: string;
+        };
+        UpdateSubscriptionInputBody_4648d1ee: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UpdateSubscriptionInputBody_4648d1ee.json
+             */
+            readonly $schema?: string;
+            project_ids?: string[];
+            /** @enum {string} */
+            scope?: "all_visible_projects" | "per_project";
+        };
+        UpdateUserInputBody_e23782ce: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UpdateUserInputBody_e23782ce.json
+             */
+            readonly $schema?: string;
+            global_role?: string;
+            status?: string;
+        };
+        UpdateUserOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UpdateUserOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        UsageSummary: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UsageSummary.json
+             */
+            readonly $schema?: string;
+            model: string;
+            /** Format: double */
+            monthly_cap: number;
+            /** Format: double */
+            pct: number;
+            /** Format: double */
+            spent_month: number;
+            /** Format: double */
+            spent_today: number;
+        };
         UserJSON: {
             /**
              * Format: uri
@@ -1718,20 +3451,68 @@ export interface components {
             readonly $schema?: string;
             /** Format: date-time */
             created_at: string;
+            description: string;
             display_name: string;
             email: string;
+            first_name: string;
+            global_role: string;
             id: string;
-            /** @deprecated use global_role instead */
-            is_system_admin?: boolean;
-            /** @enum {string} */
-            global_role: 'admin' | 'pi' | 'member';
-            /** @enum {string} */
-            status: 'pending' | 'approved' | 'suspended';
+            last_name: string;
             profile_completed: boolean;
-            first_name?: string;
-            last_name?: string;
-            title?: string;
-            description?: string;
+            status: string;
+            title: string;
+        };
+        WorkflowListOutputBody_de249ea3: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/WorkflowListOutputBody_de249ea3.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["WorkflowSummary"][] | null;
+        };
+        WorkflowRun: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/WorkflowRun.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            error?: string;
+            experiment_id?: string;
+            id: string;
+            output?: unknown;
+            project_id?: string;
+            result_page_id?: string;
+            sample_id?: string;
+            started_by: string;
+            status: string;
+            step_results: unknown;
+            /** Format: date-time */
+            updated_at: string;
+            workflow_key: string;
+        };
+        WorkflowStep: {
+            expects?: {
+                [key: string]: string;
+            };
+            id: string;
+            output_format?: string;
+            prompt?: string;
+            sources?: string[] | null;
+            type: string;
+        };
+        WorkflowSummary: {
+            description: string;
+            key: string;
+            outputSchema: {
+                [key: string]: string;
+            };
+            scope: string;
+            steps: components["schemas"]["WorkflowStep"][] | null;
+            title: string;
         };
         Workspace: {
             /**
@@ -1758,6 +3539,425 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "admin-broadcast-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBroadcastInputBody_8fab77a1"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateBroadcastOutputBody_22c8f91d"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-users-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserJSON"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-users-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteUserOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-users-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserInputBody_e23782ce"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateUserOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-get-conversation-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiMessagesOutputBody_7acac85f"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-approve-tool-call": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                tcid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCallRecord"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-reject-tool-call": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                tcid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCallRecord"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-get-workflow-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRun"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-list-workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowListOutputBody_de249ea3"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-run-workflow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunWorkflowInputBody_8e690ab7"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRun"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "approval-list-comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListCommentsOutputBody_1f15f322"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "approval-create-comment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommentInputBody_bf3fd92b"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comment"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "approval-decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideApprovalInputBody_9f20f2f4"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecideApprovalOutputBody_a426baf7"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "artifact-get": {
         parameters: {
             query?: never;
@@ -1959,67 +4159,6 @@ export interface operations {
             };
         };
     };
-    "auth-oidc-callback": {
-        parameters: {
-            query?: {
-                code?: string;
-                state?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    Location?: string;
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "auth-oidc-login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OidcLoginOutputBody_e24bc5fa"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "auth-refresh": {
         parameters: {
             query?: never;
@@ -2039,6 +4178,227 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RefreshOutputBody_2dfb9844"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "auth-register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterInputBody_ea242edd"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterOutputBody_56008cab"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "calendar-subscription-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "calendar-subscription-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSubscriptionInputBody_4648d1ee"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "calendar-subscription-rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "calendar-event-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "calendar-event-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteEventOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "calendar-event-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEventInputBody_28dbca51"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"];
                 };
             };
             /** @description Error */
@@ -2160,7 +4520,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateExperimentInputBody_a5aa94fa"];
+                "application/json": components["schemas"]["UpdateExperimentInputBody_c4625564"];
             };
         };
         responses: {
@@ -2412,6 +4772,37 @@ export interface operations {
             };
         };
     };
+    "risk-list-by-iteration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Risk"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "iteration-samples-list": {
         parameters: {
             query?: never;
@@ -2539,6 +4930,260 @@ export interface operations {
             };
         };
     };
+    "appearance-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetOutputBody_d51808b3"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "appearance-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchInputBody_d51808b3"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatchOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "notify-preferences-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceItem"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "notify-preferences-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchPreferencesInputBody_b36ea99b"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatchPreferencesOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "auth-me-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileInputBody_9b038344"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserJSON"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "meeting-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Meeting"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "meeting-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteMeetingOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "meeting-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchMeetingInputBody_6dd75684"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Meeting"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "page-get": {
         parameters: {
             query?: never;
@@ -2557,7 +5202,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GetPageOutputBody_7748c735"];
+                    "application/json": components["schemas"]["GetPageOutputBody_566cf299"];
                 };
             };
             /** @description Error */
@@ -2877,6 +5522,173 @@ export interface operations {
             };
         };
     };
+    "ai-list-conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiConversationListOutputBody_391ae20d"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-create-conversation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiCreateConversationInputBody_2090184d"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conversation"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-risk-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiRiskReviewInputBody_e49665f2"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRiskReviewOutputBody_ce2254b"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "approval-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListApprovalsOutputBody_97f98609"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "approval-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApprovalInputBody_2b7e5689"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequest"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "project-archive": {
         parameters: {
             query?: never;
@@ -2974,6 +5786,72 @@ export interface operations {
             };
         };
     };
+    "ai-get-project-autonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutonomyConfig"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-put-project-autonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutonomyPutInputBody_564d9700"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutonomyConfig"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "project-collaborators-list": {
         parameters: {
             query?: never;
@@ -2991,7 +5869,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Collaborator"][] | null;
+                    "application/json": components["schemas"]["CollaboratorView"][] | null;
                 };
             };
             /** @description Error */
@@ -3072,6 +5950,209 @@ export interface operations {
             };
         };
     };
+    "calendar-event-list": {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "calendar-event-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEventInputBody_66b3ed94"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-experiment-tags-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentTag"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-experiment-tag-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExperimentTagInputBody_1e9d483b"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentTag"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-experiment-tag-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteExperimentTagOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-experiment-tag-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExperimentTagInputBody_1e9d483b"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentTag"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "experiment-list": {
         parameters: {
             query?: {
@@ -3118,7 +6199,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateExperimentInputBody_9fe615bc"];
+                "application/json": components["schemas"]["CreateExperimentInputBody_7450777a"];
             };
         };
         responses: {
@@ -3208,6 +6289,40 @@ export interface operations {
             };
         };
     };
+    "page-list": {
+        parameters: {
+            query?: {
+                parent_type?: "project" | "iteration" | "sample" | "experiment";
+                parent_id?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListPagesOutputBody_2694c9a1"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "page-create": {
         parameters: {
             query?: never;
@@ -3219,7 +6334,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreatePageInputBody_51b40d80"];
+                "application/json": components["schemas"]["CreatePageInputBody_93c50bb6"];
             };
         };
         responses: {
@@ -3231,6 +6346,206 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreatePageOutputBody_d29aa8ae"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "risk-list-by-project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Risk"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "risk-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRiskInputBody_3858050c"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Risk"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-sample-tags-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleTag"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-sample-tag-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSampleTagInputBody_1e9d483b"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleTag"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-sample-tag-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteSampleTagOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-sample-tag-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSampleTagInputBody_1e9d483b"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SampleTag"];
                 };
             };
             /** @description Error */
@@ -3288,7 +6603,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateSampleInputBody_ecc34345"];
+                "application/json": components["schemas"]["CreateSampleInputBody_941ec721"];
             };
         };
         responses: {
@@ -3376,6 +6691,107 @@ export interface operations {
             };
         };
     };
+    "risk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteRiskOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "risk-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchRiskInputBody_429ef1ca"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Risk"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "risk-set-pi-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPIReviewInputBody_9f3da132"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Risk"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "sample-get": {
         parameters: {
             query?: never;
@@ -3418,7 +6834,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PatchSampleInputBody_9fd9bd31"];
+                "application/json": components["schemas"]["PatchSampleInputBody_84a655ad"];
             };
         };
         responses: {
@@ -3760,6 +7176,134 @@ export interface operations {
             };
         };
     };
+    "ai-get-workspace-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSummary"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-get-workspace-autonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutonomyConfig"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "ai-put-workspace-autonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutonomyPutInputBody_564d9700"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutonomyConfig"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "inbox-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "org-invite-create": {
         parameters: {
             query?: never;
@@ -3795,6 +7339,72 @@ export interface operations {
             };
         };
     };
+    "meeting-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Meeting"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "meeting-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMeetingInputBody_58290626"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Meeting"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "org-workspace-members-list": {
         parameters: {
             query?: never;
@@ -3812,7 +7422,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Membership"][] | null;
+                    "application/json": components["schemas"]["MemberView"][] | null;
                 };
             };
             /** @description Error */
@@ -3937,7 +7547,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateProjectInputBody_ea74934a"];
+                "application/json": components["schemas"]["CreateProjectInputBody_ca37e3fc"];
             };
         };
         responses: {
