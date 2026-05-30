@@ -16,8 +16,10 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { LoadingState } from '@/components/LoadingState';
-import { useProjectPages, useCreatePage } from '@/hooks/usePageQueries';
+import { useProjectPages, useCreatePage, pageKeys } from '@/hooks/usePageQueries';
+import type { PageListItem } from '@/hooks/usePageQueries';
 import { PageEditorCore } from '@/components/editor/PageEditorCore';
 
 export type EntityParentType = 'project' | 'iteration' | 'sample' | 'experiment';
@@ -47,6 +49,7 @@ function makeSeedBlocks(): unknown[] {
 export function EntityPageEditor({ parentType, parentId, projectId, slot }: EntityPageEditorProps) {
   const { data: pages = [], isLoading: pagesLoading } = useProjectPages(projectId);
   const createPage = useCreatePage();
+  const queryClient = useQueryClient();
 
   const [resolvedPageId, setResolvedPageId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -82,8 +85,27 @@ export function EntityPageEditor({ parentType, parentId, projectId, slot }: Enti
       .then(result => {
         setResolvedPageId(result.page.id);
       })
-      .catch(err => {
-        console.error('EntityPageEditor: failed to create page', err);
+      .catch(async (err) => {
+        console.error('EntityPageEditor: create page failed, attempting recovery', err);
+        // Race/duplicate: refetch the project pages list and look for an
+        // existing page that matches our slot before treating this as a
+        // hard failure.
+        try {
+          const fresh = await queryClient.fetchQuery<PageListItem[]>({
+            queryKey: pageKeys.projectPages(projectId),
+            staleTime: 0,
+          });
+          const recovered = fresh.find(
+            p => p.parent_type === parentType && p.parent_id === parentId && p.slot === slot
+          );
+          if (recovered) {
+            console.info('EntityPageEditor: recovered existing page after create race', recovered.id);
+            setResolvedPageId(recovered.id);
+            return;
+          }
+        } catch (refetchErr) {
+          console.error('EntityPageEditor: recovery refetch failed', refetchErr);
+        }
         setCreateError(true);
       })
       .finally(() => {

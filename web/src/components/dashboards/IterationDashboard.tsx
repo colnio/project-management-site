@@ -64,7 +64,13 @@ function LinkedSampleReadRow({ item }: { item: IterationSample }) {
 
 // ─── IterationDashboard ───────────────────────────────────────────────────────
 
-export function IterationDashboard({ iterationId }: { iterationId: string }) {
+export function IterationDashboard({
+  iterationId,
+  showHeader = false,
+}: {
+  iterationId: string;
+  showHeader?: boolean;
+}) {
   const { data: iteration, isLoading, isError } = useIteration(iterationId);
   const { data: linkedSamples = [] } = useIterationSamples(iterationId);
 
@@ -79,23 +85,25 @@ export function IterationDashboard({ iterationId }: { iterationId: string }) {
 
   return (
     <div>
-      {/* Header summary */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', background: 'var(--paper-2)', padding: '2px 7px', borderRadius: 99, border: '1px solid var(--line)' }}>
-            #{iteration.position}
-          </span>
-          <StatusPill status={iteration.status} />
+      {/* Header summary — only shown when the parent doesn't render its own header */}
+      {showHeader && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', background: 'var(--paper-2)', padding: '2px 7px', borderRadius: 99, border: '1px solid var(--line)' }}>
+              #{iteration.position}
+            </span>
+            <StatusPill status={iteration.status} />
+          </div>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 400, letterSpacing: '-0.01em', marginBottom: 4 }}>
+            {iteration.title}
+          </div>
+          {iteration.description && (
+            <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)', lineHeight: 1.6 }}>
+              {iteration.description}
+            </p>
+          )}
         </div>
-        <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 400, letterSpacing: '-0.01em', marginBottom: 4 }}>
-          {iteration.title}
-        </div>
-        {iteration.description && (
-          <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)', lineHeight: 1.6 }}>
-            {iteration.description}
-          </p>
-        )}
-      </div>
+      )}
 
       {/* Meta grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', marginBottom: 28 }}>

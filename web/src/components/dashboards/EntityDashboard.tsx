@@ -20,7 +20,7 @@ export function EntityDashboard({ entityType, entityId }: EntityDashboardProps) 
     case 'project':
       return <ProjectDashboard projectId={entityId} />;
     case 'iteration':
-      return <IterationDashboard iterationId={entityId} />;
+      return <IterationDashboard iterationId={entityId} showHeader={true} />;
     case 'experiment':
       return <ExperimentDashboard experimentId={entityId} />;
     case 'sample':
