@@ -107,8 +107,15 @@ function RiskRow({ risk, projectId, isPI, onEdit }: RiskRowProps) {
     setPIReview.mutate({ riskId: risk.id, flagged: !risk.flagged_for_pi_review });
   };
 
+  const flagged = risk.flagged_for_pi_review;
+
   return (
-    <tr style={{ borderBottom: '1px solid var(--line)' }}>
+    <tr
+      style={{
+        borderBottom: '1px solid var(--line)',
+        background: flagged ? 'color-mix(in srgb, var(--bad) 7%, transparent)' : undefined,
+      }}
+    >
       {/* Seq */}
       <td
         style={{
@@ -118,6 +125,7 @@ function RiskRow({ risk, projectId, isPI, onEdit }: RiskRowProps) {
           color: 'var(--muted)',
           whiteSpace: 'nowrap',
           verticalAlign: 'top',
+          boxShadow: flagged ? 'inset 3px 0 0 var(--bad)' : undefined,
         }}
       >
         #{risk.seq}
@@ -155,22 +163,26 @@ function RiskRow({ risk, projectId, isPI, onEdit }: RiskRowProps) {
                 AI
               </span>
             )}
-            {risk.flagged_for_pi_review && (
+            {flagged && (
               <span
                 style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: 9.5,
-                  letterSpacing: '0.06em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontFamily: 'var(--sans)',
+                  fontSize: 10.5,
+                  letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  background: '#fce8e4',
-                  color: '#9a2a1e',
-                  border: '1px solid #f0b8b0',
+                  background: 'var(--bad)',
+                  color: '#fff',
                   borderRadius: 99,
-                  padding: '1px 5px',
+                  padding: '2px 8px',
                   fontWeight: 700,
+                  boxShadow: '0 1px 2px color-mix(in srgb, var(--bad) 40%, transparent)',
                 }}
               >
-                PI REVIEW
+                <span aria-hidden style={{ fontSize: 11, lineHeight: 1 }}>⚑</span>
+                PI Review
               </span>
             )}
           </div>
@@ -234,14 +246,14 @@ function RiskRow({ risk, projectId, isPI, onEdit }: RiskRowProps) {
               className="icon-btn"
               onClick={handleTogglePIReview}
               disabled={setPIReview.isPending}
-              title={risk.flagged_for_pi_review ? 'Clear PI review flag' : 'Flag for PI review'}
+              title={flagged ? 'Clear PI review flag' : 'Flag for PI review'}
               style={{
-                fontSize: 11,
-                color: risk.flagged_for_pi_review ? '#9a2a1e' : 'var(--muted-2)',
+                fontSize: 13,
+                color: flagged ? 'var(--bad)' : 'var(--muted-2)',
                 padding: '2px 5px',
               }}
             >
-              {risk.flagged_for_pi_review ? '⚑' : '⚐'}
+              {flagged ? '⚑' : '⚐'}
             </button>
           )}
 
@@ -331,6 +343,8 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
     );
   };
 
+  const flaggedCount = risks?.filter(r => r.flagged_for_pi_review).length ?? 0;
+
   // Derive latest updated_at for footer.
   const latestUpdate =
     risks && risks.length > 0
@@ -386,6 +400,29 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
                 }}
               >
                 {risks.length}
+              </span>
+            )}
+            {flaggedCount > 0 && (
+              <span
+                title={`${flaggedCount} risk${flaggedCount === 1 ? '' : 's'} flagged for PI review`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  marginLeft: 8,
+                  fontFamily: 'var(--sans)',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  color: '#fff',
+                  background: 'var(--bad)',
+                  borderRadius: 99,
+                  padding: '2px 8px',
+                }}
+              >
+                <span aria-hidden style={{ fontSize: 11, lineHeight: 1 }}>⚑</span>
+                {flaggedCount} PI review
               </span>
             )}
           </div>
