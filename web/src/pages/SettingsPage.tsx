@@ -418,7 +418,7 @@ function ProfileSection() {
       </div>
 
       <div>
-        <FieldLabel>Role</FieldLabel>
+        <FieldLabel>Academic Role</FieldLabel>
         <select
           className="field-input"
           value={title}

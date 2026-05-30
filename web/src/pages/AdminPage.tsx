@@ -126,7 +126,7 @@ function MembersSection({ workspaceId }: { workspaceId: string }) {
       <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 140px', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--line)', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         <span />
         <span>Member</span>
-        <span>Role</span>
+        <span>Workspace Role</span>
         <span>Joined</span>
       </div>
       {members.map(m => {
@@ -282,7 +282,7 @@ function UsersSection() {
       >
         <span>User</span>
         <span>Status</span>
-        <span>Role</span>
+        <span>Platform Role</span>
         <span>Actions</span>
       </div>
 
