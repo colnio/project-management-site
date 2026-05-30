@@ -2,6 +2,7 @@
  * User Settings → Appearance: density, accent, palette, fonts (per-user localStorage + server sync).
  */
 import {
+  useTheme,
   useAccent,
   useDensity,
   useFontFamily,
@@ -148,14 +149,21 @@ function ColorRow({
 
 export function AppearanceSection() {
   const { user } = useAuth();
+  const [theme] = useTheme();
   const [accent, setAccent] = useAccent();
   const [density, setDensity] = useDensity();
   const [font, setFont] = useFontFamily();
-  const [palette, setPaletteToken, resetPalette] = usePalette();
+  const [palette, setPaletteToken, resetPalette] = usePalette(theme);
 
-  // Resolve displayed color: palette override wins, else the PALETTE_DEFAULTS.
+  // Resolve displayed color for a palette token. An explicit override wins; otherwise
+  // read the *current theme's* computed value so the swatch reflects light vs dark.
   function resolvedColor(token: string): string {
-    return palette[token] ?? PALETTE_DEFAULTS[token] ?? '#000000';
+    if (palette[token]) return palette[token];
+    if (typeof window !== 'undefined') {
+      const computed = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+      if (computed) return computed;
+    }
+    return PALETTE_DEFAULTS[token] ?? '#000000';
   }
 
   const hasCustomPalette = Object.keys(palette).length > 0;
@@ -188,14 +196,14 @@ export function AppearanceSection() {
               onClick={() => setAccent(color)}
               title={color}
               aria-label={`Accent ${color}`}
-              aria-pressed={accent === color && !palette['--accent']}
+              aria-pressed={accent === color}
               style={{
                 width: 28,
                 height: 28,
                 borderRadius: '50%',
                 background: color,
-                border: `2px solid ${accent === color && !palette['--accent'] ? 'var(--ink)' : 'transparent'}`,
-                boxShadow: accent === color && !palette['--accent'] ? '0 0 0 1px var(--ink)' : 'none',
+                border: `2px solid ${accent === color ? 'var(--ink)' : 'transparent'}`,
+                boxShadow: accent === color ? '0 0 0 1px var(--ink)' : 'none',
                 cursor: 'default',
                 flexShrink: 0,
               }}
@@ -213,17 +221,13 @@ export function AppearanceSection() {
           >
             <input
               type="color"
-              value={resolvedColor('--accent')}
-              onChange={e => {
-                const hex = e.target.value;
-                setAccent(hex);
-                setPaletteToken('--accent', hex);
-              }}
+              value={accent}
+              onChange={e => setAccent(e.target.value)}
               style={{
                 width: 28,
                 height: 28,
                 borderRadius: '50%',
-                border: `2px solid ${palette['--accent'] ? 'var(--ink)' : 'var(--line-2)'}`,
+                border: `2px solid ${ACCENT_DEFAULTS.includes(accent) ? 'var(--line-2)' : 'var(--ink)'}`,
                 padding: 2,
                 background: 'var(--paper-2)',
                 cursor: 'default',
@@ -246,7 +250,7 @@ export function AppearanceSection() {
             marginBottom: 8,
           }}
         >
-          <FieldLabel>Color palette</FieldLabel>
+          <FieldLabel>Color palette · {theme} mode</FieldLabel>
           {hasCustomPalette && (
             <button
               type="button"
@@ -281,11 +285,7 @@ export function AppearanceSection() {
               token={token}
               label={PALETTE_LABELS[token] ?? token}
               value={resolvedColor(token)}
-              onChange={(tok, val) => {
-                setPaletteToken(tok, val);
-                // Keep the accent hook in sync when the accent token is changed here
-                if (tok === '--accent') setAccent(val);
-              }}
+              onChange={(tok, val) => setPaletteToken(tok, val)}
             />
           ))}
         </div>

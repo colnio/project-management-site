@@ -33,12 +33,15 @@ import {
   FONT_FAMILY_KEY,
 } from '@/hooks/appearancePrefs';
 
+type PaletteMap = Record<string, string>;
+
 interface ServerPrefs {
   theme?: string;
   density?: string;
   fontFamily?: string;
   accent?: string;
-  palette?: Record<string, string>;
+  // Per-theme palette overrides; a flat map is accepted for back-compat (treated as light).
+  palette?: { light?: PaletteMap; dark?: PaletteMap } | PaletteMap;
 }
 
 interface AppearanceResponse {
@@ -56,7 +59,10 @@ function buildPrefsBlob(userId: string): ServerPrefs {
     density: getDensity(userId),
     fontFamily: getFontFamily(userId),
     accent: getAccent(userId),
-    palette: getPalette(userId),
+    palette: {
+      light: getPalette(userId, 'light'),
+      dark: getPalette(userId, 'dark'),
+    },
   };
 }
 
@@ -75,8 +81,16 @@ function mergeServerPrefs(userId: string, serverPrefs: ServerPrefs): void {
     if (serverPrefs.accent && typeof serverPrefs.accent === 'string') {
       writeAppearancePref(userId, ACCENT_KEY, serverPrefs.accent);
     }
-    if (serverPrefs.palette && typeof serverPrefs.palette === 'object') {
-      savePalette(userId, serverPrefs.palette);
+    const pal = serverPrefs.palette;
+    if (pal && typeof pal === 'object') {
+      if ('light' in pal || 'dark' in pal) {
+        const nested = pal as { light?: PaletteMap; dark?: PaletteMap };
+        if (nested.light) savePalette(userId, 'light', nested.light);
+        if (nested.dark) savePalette(userId, 'dark', nested.dark);
+      } else {
+        // Back-compat: old flat palette blob → treat as the light-theme overrides.
+        savePalette(userId, 'light', pal as PaletteMap);
+      }
     }
   });
   applyAppearanceForUser(userId);

@@ -26,6 +26,7 @@ import {
   getPalette,
   savePalette,
   applyPalette,
+  applyPaletteForTheme,
   writeAppearancePref,
   applyAppearanceForUser,
   initTweaks,
@@ -57,6 +58,7 @@ export function useTheme(): [Theme, (t: Theme) => void] {
     const t = getTheme(userId);
     setThemeState(t);
     applyTheme(t);
+    applyPaletteForTheme(userId, t);
   }, [userId]);
 
   const update = useCallback(
@@ -64,6 +66,8 @@ export function useTheme(): [Theme, (t: Theme) => void] {
       writeAppearancePref(userId, THEME_KEY, t);
       setThemeState(t);
       applyTheme(t);
+      // Re-apply the palette scoped to the new theme so overrides don't leak across themes.
+      applyPaletteForTheme(userId, t);
     },
     [userId],
   );
@@ -140,38 +144,42 @@ export function useFontFamily(): [FontFamily, (f: FontFamily) => void] {
   return [font, update];
 }
 
-export function usePalette(): [
+/**
+ * Palette overrides for a specific theme. Pass the currently active theme so edits
+ * are scoped to it (a light-mode background must not bleed into dark mode).
+ */
+export function usePalette(theme: Theme): [
   PaletteOverrides,
   (token: string, value: string) => void,
   () => void,
 ] {
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  const [overrides, setOverrides] = useState<PaletteOverrides>(() => getPalette(userId));
+  const [overrides, setOverrides] = useState<PaletteOverrides>(() => getPalette(userId, theme));
 
   useEffect(() => {
-    const p = getPalette(userId);
+    const p = getPalette(userId, theme);
     setOverrides(p);
     applyPalette(p);
-  }, [userId]);
+  }, [userId, theme]);
 
   const setToken = useCallback(
     (token: string, value: string) => {
       setOverrides(prev => {
         const next = { ...prev, [token]: value };
-        savePalette(userId, next);
+        savePalette(userId, theme, next);
         applyPalette(next);
         return next;
       });
     },
-    [userId],
+    [userId, theme],
   );
 
   const reset = useCallback(() => {
-    savePalette(userId, {});
+    savePalette(userId, theme, {});
     applyPalette({});
     setOverrides({});
-  }, [userId]);
+  }, [userId, theme]);
 
   return [overrides, setToken, reset];
 }

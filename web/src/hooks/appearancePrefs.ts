@@ -21,11 +21,15 @@ export const ACCENT_DEFAULTS = [
 
 // ── Palette token support ──────────────────────────────────────────────────────
 
-/** CSS variable name → default hex value (light theme defaults from global.css) */
+/**
+ * CSS variable name → light-theme default hex (reference values from global.css).
+ * Accent is intentionally NOT here: it is theme-agnostic and managed by applyAccent
+ * (including it would make applyPalette clobber the accent preference). Palette
+ * overrides are stored per theme so a light background does not leak into dark.
+ */
 export const PALETTE_DEFAULTS: Record<string, string> = {
   '--paper': '#faf9f6',
   '--ink': '#1a1a1a',
-  '--accent': '#d97757',
   '--good': '#5a7d3a',
   '--warn': '#b5841b',
   '--bad': '#b94e3c',
@@ -180,28 +184,37 @@ export function applyFontFamily(font: FontFamily) {
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 
-export function getPalette(userId: string | null): PaletteOverrides {
-  return readStored(
-    userId,
-    PALETTE_STORAGE_KEY,
-    raw => {
-      try {
-        const obj = JSON.parse(raw);
-        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-          return obj as PaletteOverrides;
-        }
-      } catch {
-        // ignore
-      }
-      return null;
-    },
-    {},
-  );
+function parsePaletteRaw(raw: string): PaletteOverrides | null {
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      return obj as PaletteOverrides;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 }
 
-export function savePalette(userId: string | null, overrides: PaletteOverrides): void {
+/** Storage key for a theme's palette, e.g. "palette.light" / "palette.dark". */
+function paletteKey(theme: Theme): string {
+  return `${PALETTE_STORAGE_KEY}.${theme}`;
+}
+
+export function getPalette(userId: string | null, theme: Theme): PaletteOverrides {
+  const scoped = readStored<PaletteOverrides | null>(userId, paletteKey(theme), parsePaletteRaw, null);
+  if (scoped) return scoped;
+  // Back-compat: migrate the old flat "palette" key into the light theme.
+  if (theme === 'light') {
+    const legacy = readStored<PaletteOverrides | null>(userId, PALETTE_STORAGE_KEY, parsePaletteRaw, null);
+    if (legacy) return legacy;
+  }
+  return {};
+}
+
+export function savePalette(userId: string | null, theme: Theme, overrides: PaletteOverrides): void {
   try {
-    localStorage.setItem(scopedKey(userId, PALETTE_STORAGE_KEY), JSON.stringify(overrides));
+    localStorage.setItem(scopedKey(userId, paletteKey(theme)), JSON.stringify(overrides));
     if (userId) {
       localStorage.setItem(ACTIVE_USER_KEY, userId);
     }
@@ -209,6 +222,11 @@ export function savePalette(userId: string | null, overrides: PaletteOverrides):
     // ignore
   }
   notifyAppearanceChanged();
+}
+
+/** Apply the palette overrides stored for a given theme. */
+export function applyPaletteForTheme(userId: string | null, theme: Theme): void {
+  applyPalette(getPalette(userId, theme));
 }
 
 /** Apply palette overrides to the document root; tokens not in overrides revert to CSS defaults. */
@@ -235,11 +253,12 @@ function resolveBootUserId(): string | null {
 }
 
 export function applyAppearanceForUser(userId: string | null) {
-  applyTheme(getTheme(userId));
+  const theme = getTheme(userId);
+  applyTheme(theme);
   applyAccent(getAccent(userId));
   applyDensity(getDensity(userId));
   applyFontFamily(getFontFamily(userId));
-  applyPalette(getPalette(userId));
+  applyPalette(getPalette(userId, theme));
   if (userId) {
     try {
       localStorage.setItem(ACTIVE_USER_KEY, userId);
