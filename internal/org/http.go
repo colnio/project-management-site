@@ -132,7 +132,15 @@ func (s *Service) handleListWorkspaces(ctx context.Context, _ *struct{}) (*listW
 		return nil, err
 	}
 
-	list, err := s.ListWorkspacesForUser(ctx, p.UserID)
+	var (
+		list []*Workspace
+		err  error
+	)
+	if p.IsPrivileged() {
+		list, err = s.ListAllWorkspaces(ctx)
+	} else {
+		list, err = s.ListWorkspacesForUser(ctx, p.UserID)
+	}
 	if err != nil {
 		return nil, err
 	}

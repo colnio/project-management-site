@@ -409,8 +409,9 @@ func TestResolveAccessForPrincipal_SystemAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve access for principal: %v", err)
 	}
-	if role != org.RoleViewer {
-		t.Errorf("expected viewer for system admin bump, got %s", role)
+	// Privileged users (admin/PI) who are not explicit members get bumped to editor.
+	if role != org.RoleEditor {
+		t.Errorf("expected editor for system admin bump, got %s", role)
 	}
 }
 

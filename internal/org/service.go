@@ -202,6 +202,30 @@ func (s *Service) ListWorkspacesForUser(ctx context.Context, userID uuid.UUID) (
 	return result, rows.Err()
 }
 
+// ListAllWorkspaces returns every workspace in the system, regardless of membership.
+// It is intended for privileged principals (admin/PI) only; callers must enforce that.
+func (s *Service) ListAllWorkspaces(ctx context.Context) ([]*Workspace, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, name, slug, created_by, created_at, updated_at
+		 FROM workspaces
+		 ORDER BY created_at`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("org: list all workspaces: %w", err)
+	}
+	defer rows.Close()
+
+	var result []*Workspace
+	for rows.Next() {
+		var ws Workspace
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Slug, &ws.CreatedBy, &ws.CreatedAt, &ws.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("org: scan workspace: %w", err)
+		}
+		result = append(result, &ws)
+	}
+	return result, rows.Err()
+}
+
 // ─── Membership management ────────────────────────────────────────────────────
 
 // WorkspaceRole returns the user's role in the workspace, or ("", false, nil) if not a member.

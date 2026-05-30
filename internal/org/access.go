@@ -185,7 +185,7 @@ func (s *Service) ResolveAccessForProjects(
 	out := make(map[uuid.UUID]Role, len(inputs))
 	for _, in := range inputs {
 		role := resolveAccessFromParts(overrideExists, hasWS, wsRole, in.Visibility, collabByProject[in.ProjectID])
-		if p.IsPrivileged() && !role.CanRead() {
+		if p.IsPrivileged() && !role.CanWrite() {
 			_ = s.rec.Record(ctx, audit.Entry{
 				Actor:        p.UserID,
 				ViaTokenID:   p.ViaTokenID,
@@ -193,7 +193,7 @@ func (s *Service) ResolveAccessForProjects(
 				ResourceType: "workspace",
 				ResourceID:   workspaceID.String(),
 			})
-			role = RoleViewer
+			role = RoleEditor
 		}
 		out[in.ProjectID] = role
 	}
@@ -230,15 +230,17 @@ func resolveAccessFromParts(overrideExists, hasWS bool, wsRole, visibility, coll
 
 // ResolveAccessForPrincipal is a convenience wrapper that also handles
 // privileged users (admin or PI): if p.IsPrivileged() is true and the
-// resolved role is none/viewer, it bumps the effective role to at least viewer
-// (and records an audit entry when that bump is what grants access).
+// resolved role is below editor, it bumps the effective role to at least
+// RoleEditor (and records an audit entry when that bump is what grants access).
+// If the real resolved role is already editor or higher, it is returned as-is
+// so that owners are never downgraded.
 func (s *Service) ResolveAccessForPrincipal(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID, projectVisibility string, projectID *uuid.UUID) (Role, error) {
 	role, err := s.ResolveAccess(ctx, p.UserID, workspaceID, projectVisibility, projectID)
 	if err != nil {
 		return RoleNone, err
 	}
 
-	if p.IsPrivileged() && !role.CanRead() {
+	if p.IsPrivileged() && !role.CanWrite() {
 		// Privileged-user override bump — audit this.
 		_ = s.rec.Record(ctx, audit.Entry{
 			Actor:        p.UserID,
@@ -247,7 +249,7 @@ func (s *Service) ResolveAccessForPrincipal(ctx context.Context, p *platform.Pri
 			ResourceType: "workspace",
 			ResourceID:   workspaceID.String(),
 		})
-		return RoleViewer, nil
+		return RoleEditor, nil
 	}
 	return role, nil
 }
