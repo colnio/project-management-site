@@ -43,3 +43,9 @@ go.work.sum
 
 # Local dev runtime (scripts/dev-local.sh)
 .dev/
+
+# Playwright MCP scratch output (snapshots, screenshots, console logs)
+.playwright-mcp/
+
+# Local pnpm content-addressable store
+.pnpm-store/
