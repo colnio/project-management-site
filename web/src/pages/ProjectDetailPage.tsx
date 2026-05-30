@@ -34,6 +34,7 @@ import { ProjectDashboard } from '@/components/dashboards/ProjectDashboard';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 import { experimentDisplayTags } from '@/api/types';
 import { memberLabel } from '@/lib/userDisplay';
+import { fmtDate, fmtRelative } from '@/lib/formatDate';
 import { useResolvedProjectRole } from '@/hooks/useProjectAccess';
 
 type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
@@ -76,20 +77,6 @@ function TabBar({ active, onChange, counts }: TabBarProps) {
       ))}
     </div>
   );
-}
-
-// ─── Relative time helper ─────────────────────────────────────────────────────
-
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 2) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
 }
 
 // ─── Project Header ───────────────────────────────────────────────────────────
@@ -175,7 +162,7 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
             )}
           </div>
           <div className="proj-updated">
-            Updated {relativeTime(project.updated_at)}
+            Updated {fmtRelative(project.updated_at)}
           </div>
         </div>
 
@@ -516,7 +503,7 @@ function SampleCard({ sample: s }: { sample: Sample }) {
             color: 'var(--muted-2)',
           }}
         >
-          {new Date(s.created_at).toLocaleDateString()}
+          {fmtDate(s.created_at)}
         </span>
       </div>
     </div>
@@ -670,7 +657,7 @@ function ExperimentCard({ experiment: e }: { experiment: Experiment }) {
               color: 'var(--muted-2)',
             }}
           >
-            {new Date(e.performed_at).toLocaleDateString()}
+            {fmtDate(e.performed_at)}
           </span>
         )}
       </div>
@@ -744,9 +731,9 @@ function IterationRow({ iteration: it }: { iteration: Iteration }) {
       </div>
       <div className="dates">
         {it.start_at
-          ? new Date(it.start_at).toLocaleDateString()
+          ? fmtDate(it.start_at)
           : '—'}
-        {it.end_at ? ` → ${new Date(it.end_at).toLocaleDateString()}` : ''}
+        {it.end_at ? ` → ${fmtDate(it.end_at)}` : ''}
       </div>
       <div className="right">
         <StatusPill status={it.status} />

@@ -564,6 +564,7 @@ export function NewIterationWizard({ projectId, onClose }: NewIterationWizardPro
   const [iterationId, setIterationId] = useState<string | null>(null);
 
   const [createError, setCreateError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState('');
 
   // Create the iteration when advancing from Step 2 (Basics + Protocol combined)
   const handleCreateIteration = async () => {
@@ -612,10 +613,11 @@ export function NewIterationWizard({ projectId, onClose }: NewIterationWizardPro
               <FieldLabel>Title</FieldLabel>
               <FieldInput
                 value={title}
-                onChange={setTitle}
+                onChange={v => { setTitle(v); if (v.trim()) setTitleError(''); }}
                 placeholder="e.g. Formation cycle batch 1"
                 autoFocus
               />
+              {titleError && <FormError message={titleError} />}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -671,8 +673,10 @@ export function NewIterationWizard({ projectId, onClose }: NewIterationWizardPro
             <WizardFooter
               step={1}
               total={4}
-              onNext={() => setStep(2)}
-              nextDisabled={!title.trim()}
+              onNext={() => {
+                if (!title.trim()) { setTitleError('Title is required.'); return; }
+                setStep(2);
+              }}
               nextLabel="Next →"
             />
           </>

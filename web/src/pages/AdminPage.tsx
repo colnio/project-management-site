@@ -20,6 +20,16 @@ import {
 import type { AdminUserView } from '@/api/types';
 import { useAuth } from '@/hooks/useAuth';
 import { isPrivileged } from '@/api/types';
+import { fmtDate } from '@/lib/formatDate';
+
+const MODEL_LABELS: Record<string, string> = {
+  'claude-opus-4-5': 'Claude Opus 4.5',
+  'claude-sonnet-4-5': 'Claude Sonnet 4.5',
+  'claude-haiku-4-5': 'Claude Haiku 4.5',
+  'claude-opus-4-6': 'Claude Opus 4.6',
+  'claude-sonnet-4-6': 'Claude Sonnet 4.6',
+  'claude-haiku-4-6': 'Claude Haiku 4.6',
+};
 
 // ─── Section card ─────────────────────────────────────────────────────────────
 
@@ -76,8 +86,8 @@ function AIOverviewSection({ workspaceId }: { workspaceId: string }) {
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 }}>
         {[
-          { label: 'Spent Today', value: `$${usage.spent_today.toFixed(4)}` },
-          { label: 'Spent This Month', value: `$${usage.spent_month.toFixed(4)}` },
+          { label: 'Spent Today', value: `$${usage.spent_today.toFixed(2)}` },
+          { label: 'Spent This Month', value: `$${usage.spent_month.toFixed(2)}` },
           { label: 'Monthly Cap', value: `$${usage.monthly_cap.toFixed(2)}` },
         ].map(kpi => (
           <div key={kpi.label} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '14px 16px', background: 'var(--paper-2)' }}>
@@ -105,7 +115,7 @@ function AIOverviewSection({ workspaceId }: { workspaceId: string }) {
       </div>
 
       <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>
-        Model: {usage.model}
+        Model: {MODEL_LABELS[usage.model] ?? usage.model}
       </div>
       {/* Per-feature breakdown: not exposed by API — showing totals only (deviation). */}
     </div>
@@ -140,7 +150,7 @@ function MembersSection({ workspaceId }: { workspaceId: string }) {
             </div>
             <span className="pill">{m.role}</span>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>
-              {new Date(m.created_at).toLocaleDateString()}
+              {fmtDate(m.created_at)}
             </span>
           </div>
         );
@@ -236,7 +246,7 @@ function statusPillStyle(status: string): React.CSSProperties {
   return { background: 'var(--pill-blocked-bg, #fce8e4)', color: 'var(--bad, #b94e3c)', border: '1px solid var(--pill-blocked-bd, #f0b8b0)', borderRadius: 99, padding: '1px 8px', fontFamily: 'var(--mono)', fontSize: 10.5 };
 }
 
-function UsersSection() {
+function UsersSection({ currentUserId }: { currentUserId: string | undefined }) {
   const { data: users = [], isLoading, isError } = useAdminUsers();
   const updateUser = useUpdateAdminUser();
   const deleteUser = useDeleteAdminUser();
@@ -353,7 +363,7 @@ function UsersSection() {
                   Approve
                 </button>
               )}
-              {u.status === 'approved' && (
+              {u.status === 'approved' && u.id !== currentUserId && (
                 <button
                   className="top-btn"
                   style={{ fontSize: 11, padding: '3px 8px', color: 'var(--warn)' }}
@@ -552,7 +562,7 @@ export function AdminPage() {
         )}
 
         <SectionCard title="User Management">
-          <UsersSection />
+          <UsersSection currentUserId={user?.id} />
         </SectionCard>
 
         <SectionCard title="Email Broadcast">

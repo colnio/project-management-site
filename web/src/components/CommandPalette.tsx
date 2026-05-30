@@ -22,15 +22,42 @@ interface PaletteItem {
   data: Project | Workspace | Sample | Experiment | PageListItem;
 }
 
-function fuzzyMatch(query: string, text: string): boolean {
-  if (!query) return true;
+function fuzzyMatch(query: string, text: string): number {
+  if (!query) return 1;
   const q = query.toLowerCase();
   const t = text.toLowerCase();
+
+  // Exact substring
+  if (t.includes(q)) return 1000 - t.indexOf(q);
+
+  // Word-boundary subsequence: prefer matches at start of words
+  const wordBoundary = /[\s\-_]/;
+  const positions: number[] = [];
   let qi = 0;
+  let lastBoundary = true;
   for (let i = 0; i < t.length && qi < q.length; i++) {
-    if (t[i] === q[qi]) qi++;
+    if (wordBoundary.test(t[i])) { lastBoundary = true; continue; }
+    if (lastBoundary && t[i] === q[qi]) { positions.push(i); qi++; }
+    lastBoundary = false;
   }
-  return qi === q.length;
+  if (qi === q.length && positions.length > 0) {
+    const span = positions[positions.length - 1] - positions[0] + 1;
+    return 500 - span;
+  }
+
+  // Contiguous subsequence (any position)
+  const seqPositions: number[] = [];
+  qi = 0;
+  for (let i = 0; i < t.length && qi < q.length; i++) {
+    if (t[i] === q[qi]) { seqPositions.push(i); qi++; }
+  }
+  if (qi < q.length) return 0;
+
+  const avgGap = seqPositions.length < 2 ? 0
+    : (seqPositions[seqPositions.length - 1] - seqPositions[0]) / (seqPositions.length - 1);
+  if (avgGap > 3) return 0;
+
+  return Math.max(1, 100 - Math.round(avgGap * 10));
 }
 
 export function CommandPalette({
@@ -98,7 +125,10 @@ export function CommandPalette({
       kind: 'page' as const,
       data: pg,
     })),
-  ].filter(item => fuzzyMatch(query, item.label));
+  ].map(item => ({ item, score: fuzzyMatch(query, item.label) }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ item }) => item);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {

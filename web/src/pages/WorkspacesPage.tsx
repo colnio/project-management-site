@@ -11,6 +11,7 @@ import { NewProjectWizard } from '@/components/wizards/NewProjectWizard';
 import type { Workspace } from '@/api/types';
 import { useAuth } from '@/hooks/useAuth';
 import { isPrivileged } from '@/api/types';
+import { fmtDate } from '@/lib/formatDate';
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
 
@@ -182,7 +183,7 @@ function WorkspaceSection({
                     color: 'var(--muted-2)',
                   }}
                 >
-                  {new Date(p.updated_at).toLocaleDateString()}
+                  {fmtDate(p.updated_at)}
                 </span>
               </div>
             </button>
