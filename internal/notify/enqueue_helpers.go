@@ -44,6 +44,28 @@ func (s *Service) EnqueueApprovalPending(ctx context.Context, requestID, project
 	})
 }
 
+// EnqueueApprovalComment notifies one participant that a new comment was posted.
+func (s *Service) EnqueueApprovalComment(ctx context.Context, requestID, projectID, recipientUserID uuid.UUID, toEmail, projectName, authorName, commentBody string) error {
+	snippet := strings.TrimSpace(commentBody)
+	if len(snippet) > 200 {
+		snippet = snippet[:200] + "..."
+	}
+	uid := recipientUserID
+	return s.Enqueue(ctx, EnqueueParams{
+		UserID:         &uid,
+		ToEmail:        toEmail,
+		Category:       CategoryApproval,
+		TemplateKey:    TemplateApprovalComment,
+		IdempotencyKey: fmt.Sprintf("approval-comment:%s:%s", requestID, recipientUserID),
+		Payload: map[string]any{
+			"ProjectName":    projectName,
+			"AuthorName":     authorName,
+			"CommentSnippet": snippet,
+			"ActionPath":     "/projects/" + projectID.String(),
+		},
+	})
+}
+
 // EnqueuePIFlagReview notifies a workspace owner about a PI flag.
 func (s *Service) EnqueuePIFlagReview(ctx context.Context, idempotencyKey string, ownerUserID *uuid.UUID, toEmail, projectName, actionPath, riskTitle string) error {
 	return s.Enqueue(ctx, EnqueueParams{

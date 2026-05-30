@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
+	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
 )
@@ -39,6 +40,24 @@ func Register(api huma.API, svc *Service) {
 		Description: "Approves or rejects a pending approval request. Caller must be a recipient or project editor.",
 		Tags:        []string{"approvals"},
 	}, svc.handleDecide)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "approval-list-comments",
+		Method:      http.MethodGet,
+		Path:        "/v1/approval-requests/{id}/comments",
+		Summary:     "List comments on an approval request",
+		Description: "Returns all comments on an approval request ordered oldest-first. Caller must be a recipient or project member.",
+		Tags:        []string{"approvals"},
+	}, svc.handleListComments)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "approval-create-comment",
+		Method:      http.MethodPost,
+		Path:        "/v1/approval-requests/{id}/comments",
+		Summary:     "Post a comment on an approval request",
+		Description: "Posts a threaded review comment on an approval request. Any project participant may comment.",
+		Tags:        []string{"approvals"},
+	}, svc.handleCreateComment)
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -182,4 +201,87 @@ func (s *Service) handleDecide(ctx context.Context, in *decideApprovalInput) (*d
 	out := &decideApprovalOutput{}
 	out.Body.Status = newStatus
 	return out, nil
+}
+
+// ─── List Comments ────────────────────────────────────────────────────────────
+
+type listCommentsInput struct {
+	ID string `path:"id"`
+}
+
+type listCommentsOutput struct {
+	Body struct {
+		Items []*Comment `json:"items"`
+	}
+}
+
+func (s *Service) handleListComments(ctx context.Context, in *listCommentsInput) (*listCommentsOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadApprovals); err != nil {
+		return nil, err
+	}
+
+	requestID, err := uuid.Parse(in.ID)
+	if err != nil {
+		return nil, platform.BadRequest("approval.invalid_id", "invalid approval request ID")
+	}
+
+	items, err := s.ListComments(ctx, p, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []*Comment{}
+	}
+
+	out := &listCommentsOutput{}
+	out.Body.Items = items
+	return out, nil
+}
+
+// ─── Create Comment ───────────────────────────────────────────────────────────
+
+type createCommentInput struct {
+	ID   string `path:"id"`
+	Body struct {
+		Body string `json:"body" required:"true" minLength:"1"`
+	}
+}
+
+type createCommentOutput struct {
+	Status int
+	Body   *Comment
+}
+
+func (s *Service) handleCreateComment(ctx context.Context, in *createCommentInput) (*createCommentOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteApprovals); err != nil {
+		return nil, err
+	}
+
+	requestID, err := uuid.Parse(in.ID)
+	if err != nil {
+		return nil, platform.BadRequest("approval.invalid_id", "invalid approval request ID")
+	}
+
+	c, err := s.CreateComment(ctx, p, requestID, in.Body.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        p.UserID,
+		ViaTokenID:   p.ViaTokenID,
+		Action:       "approval.comment_create",
+		ResourceType: "approval_request",
+		ResourceID:   requestID.String(),
+	})
+
+	return &createCommentOutput{Status: http.StatusCreated, Body: c}, nil
 }

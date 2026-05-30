@@ -27,11 +27,24 @@ export interface ApprovalRequest {
   updated_at: string;
 }
 
+// ─── Comment types ────────────────────────────────────────────────────────────
+
+export interface ApprovalComment {
+  id: string;
+  approval_request_id: string;
+  author_id: string;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
 // ─── Query Keys ──────────────────────────────────────────────────────────────
 
 export const approvalKeys = {
   projectApprovals: (projectId: string) =>
     ['projects', projectId, 'approval-requests'] as const,
+  comments: (requestId: string) =>
+    ['approval-requests', requestId, 'comments'] as const,
 };
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
@@ -93,6 +106,34 @@ export function useDecideApprovalRequest() {
       // Invalidate all approval request lists and inbox queries.
       void qc.invalidateQueries({ queryKey: ['projects'] });
       void qc.invalidateQueries({ queryKey: ['workspaces'] });
+    },
+  });
+}
+
+/** GET /v1/approval-requests/{id}/comments */
+export function useApprovalComments(requestId: string | undefined) {
+  return useQuery({
+    queryKey: requestId
+      ? approvalKeys.comments(requestId)
+      : ['approval-requests', 'none', 'comments'],
+    queryFn: () =>
+      api
+        .get<{ items: ApprovalComment[] } | null>(
+          `/v1/approval-requests/${requestId}/comments`,
+        )
+        .then(r => r?.items ?? []),
+    enabled: !!requestId,
+  });
+}
+
+/** POST /v1/approval-requests/{id}/comments */
+export function useCreateApprovalComment(requestId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) =>
+      api.post<ApprovalComment>(`/v1/approval-requests/${requestId}/comments`, { body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: approvalKeys.comments(requestId) });
     },
   });
 }

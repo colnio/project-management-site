@@ -63,6 +63,7 @@ type PendingItem struct {
 // ApprovalNotifier sends approval-request emails.
 type ApprovalNotifier interface {
 	EnqueueApprovalPending(ctx context.Context, requestID, projectID, recipientUserID uuid.UUID, toEmail, projectName, description, aiReview string) error
+	EnqueueApprovalComment(ctx context.Context, requestID, projectID, recipientUserID uuid.UUID, toEmail, projectName, authorName, commentBody string) error
 }
 
 // Service is the approval module's domain service.

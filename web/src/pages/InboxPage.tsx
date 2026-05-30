@@ -8,7 +8,8 @@ import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState'
 import { useInbox } from '@/hooks/useWorkspaceQueries';
 import { useCurrentWorkspace } from '@/hooks/useQueries';
 import type { InboxItem } from '@/hooks/useWorkspaceQueries';
-import { useDecideApprovalRequest } from '@/hooks/useApprovalQueries';
+import { useDecideApprovalRequest, useApprovalComments } from '@/hooks/useApprovalQueries';
+import { ApprovalCommentThread } from '@/components/ApprovalCommentThread';
 import { safeAppPath } from '@/lib/safeAppPath';
 
 // ─── Kind config ──────────────────────────────────────────────────────────────
@@ -53,6 +54,26 @@ function bucketOf(iso: string): 'today' | 'earlier' | 'older' {
   weekAgo.setDate(weekAgo.getDate() - 7);
   if (d >= weekAgo) return 'earlier';
   return 'older';
+}
+
+// ─── Comment count badge (fetches eagerly for approval items) ────────────────
+
+function ApprovalCommentCount({ requestId }: { requestId: string }) {
+  const { data: comments = [] } = useApprovalComments(requestId);
+  if (comments.length === 0) return null;
+  return (
+    <span
+      style={{
+        fontFamily: 'var(--mono)',
+        fontSize: 10.5,
+        color: 'var(--muted)',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      }}
+    >
+      {comments.length} comment{comments.length !== 1 ? 's' : ''}
+    </span>
+  );
 }
 
 // ─── Approve / Reject buttons (approval kind only) ───────────────────────────
@@ -115,17 +136,19 @@ function ApprovalActions({ itemId }: { itemId: string }) {
 function InboxRow({ item }: { item: InboxItem }) {
   const cfg = kindConfig(item.kind);
   const isApproval = item.kind === 'approval';
+  const [expanded, setExpanded] = useState(false);
 
-  const inner = (
+  const header = (
     <div
       style={{
         display: 'flex',
         alignItems: 'flex-start',
         gap: 12,
         padding: '11px 4px',
-        borderBottom: '1px solid var(--line)',
-        cursor: item.link ? 'pointer' : undefined,
+        borderBottom: expanded ? 'none' : '1px solid var(--line)',
+        cursor: isApproval ? 'pointer' : (item.link ? 'pointer' : undefined),
       }}
+      onClick={isApproval ? () => setExpanded(v => !v) : undefined}
     >
       <span
         style={{
@@ -156,7 +179,19 @@ function InboxRow({ item }: { item: InboxItem }) {
         )}
       </div>
       {isApproval ? (
-        <ApprovalActions itemId={item.id} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <ApprovalCommentCount requestId={item.id} />
+          <span
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 10.5,
+              color: 'var(--muted-2)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {expanded ? '▲' : '▼'}
+          </span>
+        </div>
       ) : (
         <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', whiteSpace: 'nowrap', flexShrink: 0, marginTop: 3 }}>
           {relativeTime(item.created_at)}
@@ -165,11 +200,27 @@ function InboxRow({ item }: { item: InboxItem }) {
     </div>
   );
 
+  if (isApproval) {
+    return (
+      <div style={{ borderBottom: '1px solid var(--line)' }}>
+        {header}
+        {expanded && (
+          <div style={{ padding: '0 4px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+              <ApprovalActions itemId={item.id} />
+            </div>
+            <ApprovalCommentThread requestId={item.id} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const safeLink = item.link ? safeAppPath(item.link) : null;
   if (safeLink) {
-    return <a href={safeLink}>{inner}</a>;
+    return <a href={safeLink}>{header}</a>;
   }
-  return inner;
+  return header;
 }
 
 // ─── Section ──────────────────────────────────────────────────────────────────

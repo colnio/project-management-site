@@ -1,0 +1,13 @@
+New comment on approval request: {{.ProjectName}}
+---
+{{.AuthorName}} commented on an approval request you are part of.
+
+Project: {{.ProjectName}}
+
+Comment:
+{{.CommentSnippet}}
+
+View the approval request:
+{{.ActionURL}}
+
+Manage notification preferences: {{.PrefsURL}}

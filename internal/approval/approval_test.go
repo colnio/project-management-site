@@ -126,6 +126,7 @@ type testEnv struct {
 }
 
 var truncateTables = []string{
+	"approval_comments",
 	"approval_requests",
 	"audit_log",
 	"risks", "iterations",
@@ -607,6 +608,161 @@ func TestInbox_PendingApprovalAppearsAsApprovalKind(t *testing.T) {
 		t.Errorf("expected approval item with ID %v in inbox, got %d items", ar.ID, len(items))
 		for _, item := range items {
 			t.Logf("  item: kind=%q id=%v title=%q", item.Kind, item.ID, item.Title)
+		}
+	}
+}
+
+// TestCreateComment_RecipientCanComment verifies that a listed recipient may post a comment.
+func TestCreateComment_RecipientCanComment(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner-cc1@approval.test", "Owner CC1")
+	recipient := env.users.seed(t, "recip-cc1@approval.test", "Recip CC1")
+	ws := setupWorkspace(t, env, owner)
+	proj := setupProject(t, env, ws.ID, owner.ID)
+
+	if err := env.orgSvc.AddMember(ctx, ws.ID, recipient.ID, "member", owner.ID); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	ar, err := env.approvalSvc.Create(ctx, principal(owner), proj.ID, nil,
+		"Comment test", "", []uuid.UUID{recipient.ID})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	c, err := env.approvalSvc.CreateComment(ctx, principal(recipient), ar.ID, "Looks good to me!")
+	if err != nil {
+		t.Fatalf("CreateComment as recipient: %v", err)
+	}
+	if c.ID == uuid.Nil {
+		t.Error("expected non-nil comment ID")
+	}
+	if c.Body != "Looks good to me!" {
+		t.Errorf("unexpected body: %q", c.Body)
+	}
+	if c.AuthorID != recipient.ID {
+		t.Errorf("expected author_id=%v, got %v", recipient.ID, c.AuthorID)
+	}
+}
+
+// TestCreateComment_ProjectMemberCanComment verifies that a project viewer (non-recipient) may comment.
+func TestCreateComment_ProjectMemberCanComment(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner-cc2@approval.test", "Owner CC2")
+	viewer := env.users.seed(t, "viewer-cc2@approval.test", "Viewer CC2")
+	ws := setupWorkspace(t, env, owner)
+	proj := setupProject(t, env, ws.ID, owner.ID)
+
+	// viewer is a workspace member (RoleViewer).
+	if err := env.orgSvc.AddMember(ctx, ws.ID, viewer.ID, "member", owner.ID); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	ar, err := env.approvalSvc.Create(ctx, principal(owner), proj.ID, nil,
+		"Comment test viewer", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	_, err = env.approvalSvc.CreateComment(ctx, principal(viewer), ar.ID, "From viewer")
+	if err != nil {
+		t.Fatalf("CreateComment as viewer: %v", err)
+	}
+}
+
+// TestCreateComment_OutsiderForbidden verifies that a non-project member cannot comment.
+func TestCreateComment_OutsiderForbidden(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner-cc3@approval.test", "Owner CC3")
+	outsider := env.users.seed(t, "outsider-cc3@approval.test", "Outsider CC3")
+	ws := setupWorkspace(t, env, owner)
+	proj := setupProject(t, env, ws.ID, owner.ID)
+
+	ar, err := env.approvalSvc.Create(ctx, principal(owner), proj.ID, nil,
+		"Forbidden comment", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	_, err = env.approvalSvc.CreateComment(ctx, principal(outsider), ar.ID, "Should fail")
+	if err == nil {
+		t.Fatal("expected forbidden error, got nil")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if em.GetStatus() != 403 {
+		t.Errorf("expected 403, got %d", em.GetStatus())
+	}
+}
+
+// TestCreateComment_EmptyBodyRejected verifies that an empty body is rejected.
+func TestCreateComment_EmptyBodyRejected(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner-cc4@approval.test", "Owner CC4")
+	ws := setupWorkspace(t, env, owner)
+	proj := setupProject(t, env, ws.ID, owner.ID)
+
+	ar, err := env.approvalSvc.Create(ctx, principal(owner), proj.ID, nil,
+		"Empty body test", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	_, err = env.approvalSvc.CreateComment(ctx, principal(owner), ar.ID, "   ")
+	if err == nil {
+		t.Fatal("expected bad request error, got nil")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if em.GetStatus() != 400 {
+		t.Errorf("expected 400, got %d", em.GetStatus())
+	}
+}
+
+// TestListComments_OrderedOldestFirst verifies that comments are returned oldest-first.
+func TestListComments_OrderedOldestFirst(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner-cc5@approval.test", "Owner CC5")
+	ws := setupWorkspace(t, env, owner)
+	proj := setupProject(t, env, ws.ID, owner.ID)
+
+	ar, err := env.approvalSvc.Create(ctx, principal(owner), proj.ID, nil,
+		"List comments test", "", nil)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	bodies := []string{"first", "second", "third"}
+	for _, b := range bodies {
+		if _, err := env.approvalSvc.CreateComment(ctx, principal(owner), ar.ID, b); err != nil {
+			t.Fatalf("CreateComment %q: %v", b, err)
+		}
+	}
+
+	list, err := env.approvalSvc.ListComments(ctx, principal(owner), ar.ID)
+	if err != nil {
+		t.Fatalf("ListComments: %v", err)
+	}
+	if len(list) != 3 {
+		t.Fatalf("expected 3 comments, got %d", len(list))
+	}
+	for i, b := range bodies {
+		if list[i].Body != b {
+			t.Errorf("comment[%d]: expected %q, got %q", i, b, list[i].Body)
 		}
 	}
 }

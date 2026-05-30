@@ -17,6 +17,7 @@ const (
 const (
 	TemplateWorkspaceInvite        = "workspace_invite"
 	TemplateApprovalRequestPending = "approval_request_pending"
+	TemplateApprovalComment        = "approval_comment"
 	TemplatePIFlagReview             = "pi_flag_review"
 	TemplateAccountApproved          = "account_approved"
 	TemplateAccountSuspended         = "account_suspended"
