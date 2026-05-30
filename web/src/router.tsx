@@ -14,6 +14,7 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { IterationDetailPage } from './pages/IterationDetailPage';
 import { SampleDetailPage } from './pages/SampleDetailPage';
 import { ExperimentDetailPage } from './pages/ExperimentDetailPage';
+import { ArtifactDetailPage } from './pages/ArtifactDetailPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PageEditorPage } from './pages/PageEditorPage';
 import { CalendarPage } from './pages/CalendarPage';
@@ -178,6 +179,12 @@ const experimentRoute = createRoute({
   component: ExperimentDetailPage,
 });
 
+const artifactRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/artifacts/$artifactId',
+  component: ArtifactDetailPage,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => authGuardRoute,
   path: '/settings',
@@ -258,6 +265,7 @@ const routeTree = rootRoute.addChildren([
     iterationRoute,
     sampleRoute,
     experimentRoute,
+    artifactRoute,
     settingsRoute,
     pageEditorRoute,
     calendarRoute,
