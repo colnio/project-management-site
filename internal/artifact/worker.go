@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -67,6 +69,7 @@ type WorkerDeps struct {
 	BucketRendered string // bucket where rendered/thumbnail outputs go
 	NBConvertURL   string
 	PublicURLBase  string // base URL exposed to browsers (e.g. http://localhost:9000)
+	Log            *slog.Logger
 }
 
 // ─── Worker ───────────────────────────────────────────────────────────────────
@@ -100,6 +103,9 @@ func (w *ProcessArtifactWorker) Work(ctx context.Context, job *river.Job[Process
 
 	art, err := loadArtifact(ctx, d.Pool, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
 		return fmt.Errorf("worker: load artifact %s: %w", id, err)
 	}
 
@@ -111,7 +117,7 @@ func (w *ProcessArtifactWorker) Work(ctx context.Context, job *river.Job[Process
 	// Download original.
 	data, err := d.Store.Get(ctx, d.BucketOrig, art.StorageKey)
 	if err != nil {
-		_ = failArtifact(ctx, d.Pool, id, err)
+		w.logFailArtifact(ctx, id, err)
 		return fmt.Errorf("worker: download original: %w", err)
 	}
 
@@ -119,17 +125,17 @@ func (w *ProcessArtifactWorker) Work(ctx context.Context, job *river.Job[Process
 	switch art.Type {
 	case "pdf":
 		if err := w.processPDF(ctx, art, data); err != nil {
-			_ = failArtifact(ctx, d.Pool, id, err)
+			w.logFailArtifact(ctx, id, err)
 			return err
 		}
 	case "ipynb":
 		if err := w.processNotebook(ctx, art, data); err != nil {
-			_ = failArtifact(ctx, d.Pool, id, err)
+			w.logFailArtifact(ctx, id, err)
 			return err
 		}
 	case "image":
 		if err := w.processImage(ctx, art, data); err != nil {
-			_ = failArtifact(ctx, d.Pool, id, err)
+			w.logFailArtifact(ctx, id, err)
 			return err
 		}
 	default:
@@ -201,9 +207,12 @@ func renderNotebook(ctx context.Context, nbconvertURL string, nb []byte) ([]byte
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxArtifactBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("nbconvert: read body: %w", err)
+	}
+	if int64(len(body)) > MaxArtifactBytes {
+		return nil, fmt.Errorf("nbconvert: response exceeds max size %d", MaxArtifactBytes)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -323,6 +332,16 @@ func setStatus(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, status str
 	_, err = pool.Exec(ctx,
 		`UPDATE artifacts SET processing_status = $2, metadata = $3 WHERE id = $1`, id, status, raw)
 	return err
+}
+
+func (w *ProcessArtifactWorker) logFailArtifact(ctx context.Context, id uuid.UUID, procErr error) {
+	if err := failArtifact(ctx, w.deps.Pool, id, procErr); err != nil {
+		log := w.deps.Log
+		if log == nil {
+			log = slog.Default()
+		}
+		log.Error("worker: failArtifact", "artifact_id", id, "err", err)
+	}
 }
 
 func failArtifact(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, procErr error) error {

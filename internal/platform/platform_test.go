@@ -43,26 +43,25 @@ func TestRequireScope_JWTSession(t *testing.T) {
 	}
 }
 
-// TestHasScope_LegacyTokenNilScopes verifies that a token caller with nil/empty
-// Scopes is treated as legacy unrestricted and returns true for all scopes.
-func TestHasScope_LegacyTokenNilScopes(t *testing.T) {
+// TestHasScope_EmptyTokenScopes verifies that token callers with nil/empty scopes
+// are denied every capability.
+func TestHasScope_EmptyTokenScopes(t *testing.T) {
 	tokenID := uuid.New()
 	p := &platform.Principal{
 		UserID:     uuid.New(),
 		Email:      "bot@example.com",
 		ViaTokenID: &tokenID,
-		Scopes:     nil, // legacy: no scope list
+		Scopes:     nil,
 	}
 	for _, s := range []string{platform.ScopeReadProjects, platform.ScopeWriteProjects, platform.ScopeReadAudit} {
-		if !p.HasScope(s) {
-			t.Errorf("legacy PAT (nil Scopes): HasScope(%q) = false, want true", s)
+		if p.HasScope(s) {
+			t.Errorf("empty-scoped PAT: HasScope(%q) = true, want false", s)
 		}
 	}
 
-	// Same with empty slice.
 	p.Scopes = []string{}
-	if !p.HasScope(platform.ScopeAdminOrg) {
-		t.Error("legacy PAT (empty Scopes): HasScope should return true")
+	if p.HasScope(platform.ScopeAdminOrg) {
+		t.Error("empty-scoped PAT: HasScope should return false")
 	}
 }
 
@@ -233,6 +232,35 @@ func TestRateLimiter_Disabled(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("disabled limiter: request %d got %d, expected 200", i+1, w.Code)
 		}
+	}
+}
+
+// TestIPRateLimiter_LoginRegister limits POST login/register by client IP.
+func TestIPRateLimiter_LoginRegister(t *testing.T) {
+	rl := platform.NewIPRateLimiter(2)
+	handler := rl.LoginRegisterMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	try := func(path string) int {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.RemoteAddr = "203.0.113.1:12345"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if try("/v1/auth/login") != http.StatusOK {
+		t.Fatal("first login should pass")
+	}
+	if try("/v1/auth/login") != http.StatusOK {
+		t.Fatal("second login should pass")
+	}
+	if try("/v1/auth/login") != http.StatusTooManyRequests {
+		t.Fatal("third login should be rate limited")
+	}
+	if try("/v1/auth/me") != http.StatusOK {
+		t.Fatal("other paths should not be limited")
 	}
 }
 

@@ -2,7 +2,9 @@ package platform
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -27,8 +29,10 @@ func (s *PgIdempotencyStore) Lookup(ctx context.Context, principalKey, key strin
 		principalKey, key,
 	).Scan(&status, &body)
 	if err != nil {
-		// pgx.ErrNoRows or any error → treat as not found; middleware proceeds.
-		return 0, nil, false, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil, false, nil
+		}
+		return 0, nil, false, err
 	}
 	return status, body, true, nil
 }

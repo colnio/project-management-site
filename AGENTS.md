@@ -23,9 +23,15 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
 4. **Enforce scopes on every authenticated handler.** Immediately after
    `platform.PrincipalFrom`, call `platform.RequireScope(p, <scope>)` with the
    correct `read:<domain>` or `write:<domain>` scope. The full scope taxonomy is
-   defined in `internal/platform/scopes.go`. A token with a non-empty scope list
-   is fully restricted; empty/nil is legacy-unrestricted. Do not add a new handler
-   without a matching `RequireScope` call. Admin endpoints use `read:admin`/`write:admin`.
+   defined in `internal/platform/scopes.go`. PAT and internal-AI tokens with a
+   **non-empty** scope list are fully restricted to those scopes (empty scopes
+   were backfilled via migration `00132`; the legacy bypass is removed). Browser
+   JWT sessions bypass scope checks. PAT management (`/v1/tokens`) and profile
+   writes require `manage:tokens` / `write:profile` and are **session-only**
+   (PAT/iai callers rejected). Do not add a new handler without a matching
+   `RequireScope` call. Admin endpoints use `read:admin`/`write:admin`.
+   **Production boot:** `config.Load()` refuses insecure defaults when
+   `APP_ENV=production` (signing keys, cookie secure, MinIO creds).
    **Auth/roles:** email/password only (OIDC removed). `users.global_role` ∈
    {admin,pi,member} replaces `is_system_admin` — use `Principal.IsPrivileged()`
    (admin∥pi), `IsAdmin()`, `IsPI()` for global checks. Self-registration is
@@ -42,6 +48,7 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
    - The AI system prompt is now injected with `project_id`, project name,
      `workspace_id`, and the current date by `internal/ai/sse.go` so the assistant
      answers project-scoped questions without prompting the user to specify a project.
+     DB-sourced values in prompts are wrapped in XML tags and marked untrusted.
    - `allTools`/`gatedTools`/`dispatchTool` in `internal/ai/tools.go` all thread
      both `projectID` and `workspaceID`. When adding new tools, follow this
      signature and add them to the appropriate gate level.
@@ -74,8 +81,9 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
   artifact 00090, calendar 00100, AI 00110–115, risk 00120, meetings 00122,
   inbox indexes 00123, meetings kickoff 00124, pages.slot 00125,
   ai_conversations.skill 00126, approval_requests 00127,
-  user accounts (global_role/status/profile) 00128.
-  Pick the next free range (≥00129) for new modules.
+  user accounts (global_role/status/profile) 00128, experiment tags 00130,
+  notify 00131, PAT scope backfill 00132, rate_limit_hits 00133.
+  Pick the next free range (≥00134) for new modules.
   Embeddable assets follow the `//go:embed` pattern: `workflows/` (workflow JSON)
   and `skills/` (skill markdown via `skills.LoadSkill`).
   The `page` module gained a new `GET /v1/projects/{id}/pages` endpoint (no new

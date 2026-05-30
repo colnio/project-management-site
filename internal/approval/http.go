@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
+	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
 )
 
@@ -121,6 +122,10 @@ func (s *Service) handleList(ctx context.Context, in *listApprovalsInput) (*list
 	projectID, err := uuid.Parse(in.ID)
 	if err != nil {
 		return nil, platform.BadRequest("approval.invalid_project_id", "invalid project ID")
+	}
+
+	if _, _, err := s.projects.Authorize(ctx, p, projectID, org.RoleViewer); err != nil {
+		return nil, err
 	}
 
 	items, err := s.ListByProject(ctx, projectID)

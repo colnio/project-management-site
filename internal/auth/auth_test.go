@@ -12,6 +12,7 @@ import (
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
 	"github.com/colnio/project-management-site/internal/config"
+	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/testsupport"
 
 	"log/slog"
@@ -129,13 +130,44 @@ func TestCreateAndGetUser(t *testing.T) {
 		t.Errorf("IDs differ: %v vs %v", u2.ID, u.ID)
 	}
 
-	// GetUserByID
 	u3, err := svc.GetUserByID(ctx, u.ID)
 	if err != nil {
 		t.Fatalf("GetUserByID: %v", err)
 	}
 	if u3.Email != u.Email {
 		t.Errorf("email mismatch")
+	}
+}
+
+func TestGetUsersByIDs(t *testing.T) {
+	svc, ctx := newTestService(t)
+
+	u1, err := svc.CreateUser(ctx, "batch1@graphene-lab.org", "Batch One")
+	if err != nil {
+		t.Fatalf("CreateUser u1: %v", err)
+	}
+	u2, err := svc.CreateUser(ctx, "batch2@graphene-lab.org", "Batch Two")
+	if err != nil {
+		t.Fatalf("CreateUser u2: %v", err)
+	}
+
+	byID, err := svc.GetUsersByIDs(ctx, []uuid.UUID{u1.ID, u2.ID, uuid.New()})
+	if err != nil {
+		t.Fatalf("GetUsersByIDs: %v", err)
+	}
+	if len(byID) != 2 {
+		t.Fatalf("expected 2 users, got %d", len(byID))
+	}
+	if byID[u1.ID].Email != "batch1@graphene-lab.org" {
+		t.Errorf("u1 email = %q", byID[u1.ID].Email)
+	}
+
+	empty, err := svc.GetUsersByIDs(ctx, nil)
+	if err != nil {
+		t.Fatalf("GetUsersByIDs empty: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("expected empty map, got %d", len(empty))
 	}
 }
 
@@ -247,7 +279,7 @@ func TestPATFullLifecycle(t *testing.T) {
 	u, _ := svc.CreateUser(ctx, "pat@graphene-lab.org", "PAT User")
 
 	// Create PAT.
-	id, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "test-token", []string{"read", "write"}, nil)
+	id, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "test-token", []string{platform.ScopeReadProjects, platform.ScopeWriteProjects}, nil)
 	if err != nil {
 		t.Fatalf("createPAT: %v", err)
 	}
@@ -287,7 +319,7 @@ func TestPATExpired(t *testing.T) {
 	u, _ := svc.CreateUser(ctx, "patexp@graphene-lab.org", "PAT Exp")
 
 	exp := time.Now().Add(-1 * time.Hour) // already expired
-	_, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "expired", []string{}, &exp)
+	_, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "expired", []string{platform.ScopeReadProjects}, &exp)
 	if err != nil {
 		t.Fatalf("createPAT: %v", err)
 	}
@@ -311,21 +343,21 @@ func TestPATScopesOnPrincipal(t *testing.T) {
 	svc, ctx := newTestService(t)
 	u, _ := svc.CreateUser(ctx, "patscopes@graphene-lab.org", "Scopes User")
 
-	scopes := []string{"samples:read", "projects:write"}
+	scopes := []string{platform.ScopeReadSamples, platform.ScopeWriteProjects}
 	_, raw, _ := auth.ExportCreatePAT(t, svc, ctx, u.ID, "scoped", scopes, nil)
 
 	p, err := svc.VerifyPAT(ctx, raw)
 	if err != nil {
 		t.Fatalf("VerifyPAT: %v", err)
 	}
-	if !p.HasScope("samples:read") {
-		t.Error("expected HasScope('samples:read') = true")
+	if !p.HasScope(platform.ScopeReadSamples) {
+		t.Error("expected HasScope('read:samples') = true")
 	}
-	if !p.HasScope("projects:write") {
-		t.Error("expected HasScope('projects:write') = true")
+	if !p.HasScope(platform.ScopeWriteProjects) {
+		t.Error("expected HasScope('write:projects') = true")
 	}
-	if p.HasScope("admin") {
-		t.Error("expected HasScope('admin') = false")
+	if p.HasScope(platform.ScopeReadAdmin) {
+		t.Error("expected HasScope('read:admin') = false")
 	}
 }
 
@@ -397,6 +429,68 @@ func TestEmailDomainAllowed(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("emailDomainAllowed(%q, %v) = %v, want %v", tc.email, tc.allowed, got, tc.want)
 		}
+	}
+}
+
+func TestPasswordTooLongRejected(t *testing.T) {
+	long := strings.Repeat("a", auth.MaxPasswordBytes+1)
+	_, err := auth.HashPassword(long)
+	if err == nil {
+		t.Fatal("expected error for password over max length")
+	}
+	hash, err := auth.HashPassword("short")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	ok, err := auth.VerifyPassword(hash, long)
+	if err != nil {
+		t.Fatalf("VerifyPassword: %v", err)
+	}
+	if ok {
+		t.Fatal("expected false for overlong password")
+	}
+}
+
+func TestPATRejectsSuspendedUser(t *testing.T) {
+	svc, ctx := newTestService(t)
+	u, _ := svc.CreateUser(ctx, "suspat@graphene-lab.org", "Suspended PAT")
+	if err := svc.SetUserStatus(ctx, u.ID, "suspended"); err != nil {
+		t.Fatalf("SetUserStatus: %v", err)
+	}
+	_, raw, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "sus", []string{platform.ScopeReadProjects}, nil)
+	if err != nil {
+		t.Fatalf("createPAT: %v", err)
+	}
+	_, err = svc.VerifyPAT(ctx, raw)
+	if err == nil {
+		t.Fatal("expected VerifyPAT to reject suspended user")
+	}
+}
+
+func TestCreatePATInvalidScope(t *testing.T) {
+	svc, ctx := newTestService(t)
+	u, _ := svc.CreateUser(ctx, "badscope@graphene-lab.org", "Bad Scope")
+	_, _, err := auth.ExportCreatePAT(t, svc, ctx, u.ID, "bad", []string{"not-a-real-scope"}, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid scope")
+	}
+}
+
+func TestSeedDevUserRejectsProduction(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	cfg := &config.Config{
+		Env:             "production",
+		JWTSigningKey:   strings.Repeat("k", 32),
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 24 * time.Hour,
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	svc, err := auth.NewService(context.Background(), pool, cfg, audit.Nop{}, log)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	if err := svc.SeedDevUser(context.Background()); err == nil {
+		t.Fatal("expected SeedDevUser to fail in production")
 	}
 }
 

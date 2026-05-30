@@ -320,6 +320,39 @@ func TestWorkerWork_ImageSucceeds(t *testing.T) {
 	}
 }
 
+// TestWorkerWork_DeletedArtifact returns nil when the row was removed (no futile retries).
+func TestWorkerWork_DeletedArtifact(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	testsupport.Truncate(t, pool,
+		"experiment_artifacts", "sample_artifacts", "artifacts",
+		"projects", "project_collaborations", "admin_overrides",
+		"workspace_memberships", "workspaces", "users",
+	)
+
+	env := buildTestEnvWithPool(t, pool)
+	store := newFakeStore()
+	art := seedArtifactRow(t, env, "image")
+
+	_, err := pool.Exec(context.Background(), `DELETE FROM artifacts WHERE id = $1`, art.ID)
+	if err != nil {
+		t.Fatalf("delete artifact row: %v", err)
+	}
+
+	worker := artifact.NewProcessArtifactWorker(artifact.WorkerDeps{
+		Pool:           pool,
+		Store:          store,
+		BucketOrig:     "originals",
+		BucketRendered: "rendered",
+		NBConvertURL:   "http://unused",
+		PublicURLBase:  "http://localhost:9000",
+	})
+
+	job := makeJob(artifact.ProcessArtifactArgs{ArtifactID: art.ID})
+	if err := worker.Work(context.Background(), job); err != nil {
+		t.Fatalf("expected nil for deleted artifact, got %v", err)
+	}
+}
+
 // TestWorkerWork_MissingOriginal tests the failure path: no object in the store.
 func TestWorkerWork_MissingOriginal(t *testing.T) {
 	pool := testsupport.NewPool(t)
@@ -390,6 +423,7 @@ func buildTestEnvWithPool(t *testing.T, pool *pgxpool.Pool) *testEnv {
 	if err != nil {
 		t.Fatalf("artifact.NewService: %v", err)
 	}
+	artifact.UsePermissiveHeadCheckerForTest(svc)
 
 	return &testEnv{
 		pool:    pool,

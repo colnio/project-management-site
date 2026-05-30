@@ -46,10 +46,17 @@ type IterationSample struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+// BlockingRiskChecker reports whether an iteration activation should be blocked
+// by the risk register (avoids importing the risk module and an import cycle).
+type BlockingRiskChecker interface {
+	HasBlockingHighRisk(ctx context.Context, iterationID uuid.UUID) (bool, error)
+}
+
 // Service is the iteration module's domain service.
 type Service struct {
 	pool     *pgxpool.Pool
 	projects *project.Service
+	riskGate BlockingRiskChecker
 	rec      audit.Recorder
 	log      *slog.Logger
 }
@@ -67,6 +74,11 @@ func NewService(
 		rec:      rec,
 		log:      log,
 	}
+}
+
+// SetBlockingRiskChecker wires the risk module for iteration activation gates.
+func (s *Service) SetBlockingRiskChecker(checker BlockingRiskChecker) {
+	s.riskGate = checker
 }
 
 // ─── Core domain API ──────────────────────────────────────────────────────────
@@ -177,18 +189,8 @@ func (s *Service) UpdateIteration(
 ) (*Iteration, error) {
 	// Gate: block transition to "active" when a HIGH-likelihood risk is open and
 	// flagged for PI review.
-	if status != nil && *status == "active" {
-		var blocked bool
-		err := s.pool.QueryRow(ctx,
-			`SELECT EXISTS(
-				SELECT 1 FROM risks
-				WHERE iteration_id = $1
-				  AND likelihood = 'high'
-				  AND flagged_for_pi_review = true
-				  AND status = 'open'
-			)`,
-			id,
-		).Scan(&blocked)
+	if status != nil && *status == "active" && s.riskGate != nil {
+		blocked, err := s.riskGate.HasBlockingHighRisk(ctx, id)
 		if err != nil {
 			return nil, fmt.Errorf("iteration: risk gate check: %w", err)
 		}

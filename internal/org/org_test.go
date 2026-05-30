@@ -73,6 +73,16 @@ func (f *fakeUsers) GetUserByID(_ context.Context, id uuid.UUID) (*auth.User, er
 	return u, nil
 }
 
+func (f *fakeUsers) GetUsersByIDs(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]*auth.User, error) {
+	out := make(map[uuid.UUID]*auth.User, len(ids))
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out[id] = u
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeUsers) CreateUser(_ context.Context, email, displayName string) (*auth.User, error) {
 	if _, exists := f.byEmail[email]; exists {
 		return nil, platform.Conflict("user.email_conflict", "email already exists")
@@ -153,7 +163,7 @@ func TestResolveAccess_WorkspaceVisible(t *testing.T) {
 	}{
 		{"owner gets owner", owner.ID, org.RoleOwner},
 		{"admin gets editor", admin.ID, org.RoleEditor},
-		{"member gets editor", member.ID, org.RoleEditor},
+		{"member gets viewer", member.ID, org.RoleViewer},
 		{"outsider gets none", outsider.ID, org.RoleNone},
 	}
 
@@ -250,7 +260,7 @@ func TestResolveAccess_MaxComposition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create workspace: %v", err)
 	}
-	// member on workspace-visible → editor
+	// member on workspace-visible → viewer (collaborator owner wins)
 	if err := svc.AddMember(ctx, ws.ID, user.ID, "member", creator.ID); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
@@ -266,7 +276,41 @@ func TestResolveAccess_MaxComposition(t *testing.T) {
 		t.Fatalf("resolve access: %v", err)
 	}
 	if role != org.RoleOwner {
-		t.Errorf("expected owner (max of editor+owner), got %s", role)
+		t.Errorf("expected owner (max of viewer+owner), got %s", role)
+	}
+}
+
+func TestListMembersEnriched(t *testing.T) {
+	svc, _, fu := newTestSvc(t)
+	ctx := context.Background()
+
+	owner := fu.seed(t, "enrich-owner@example.com", "Enrich Owner")
+	member := fu.seed(t, "enrich-member@example.com", "Enrich Member")
+
+	ws, err := svc.CreateWorkspace(ctx, "Enrich WS", owner.ID)
+	if err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	if err := svc.AddMember(ctx, ws.ID, member.ID, "member", owner.ID); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	members, err := svc.ListMembersEnriched(ctx, ws.ID)
+	if err != nil {
+		t.Fatalf("ListMembersEnriched: %v", err)
+	}
+	if len(members) != 2 {
+		t.Fatalf("expected 2 members, got %d", len(members))
+	}
+	byUser := map[uuid.UUID]org.MemberView{}
+	for _, m := range members {
+		byUser[m.UserID] = m
+	}
+	if byUser[member.ID].Email != "enrich-member@example.com" {
+		t.Errorf("member email = %q", byUser[member.ID].Email)
+	}
+	if byUser[member.ID].DisplayName != "Enrich Member" {
+		t.Errorf("member display name = %q", byUser[member.ID].DisplayName)
 	}
 }
 
@@ -292,6 +336,53 @@ func TestResolveAccess_NilProjectID(t *testing.T) {
 	}
 	if !role.CanWrite() {
 		t.Errorf("expected CanWrite for admin in workspace-level question, got %s", role)
+	}
+}
+
+func TestResolveAccessForProjects_MatchesSingular(t *testing.T) {
+	svc, pool, fu := newTestSvc(t)
+	ctx := context.Background()
+
+	owner := fu.seed(t, "batch-owner@example.com", "Batch Owner")
+	member := fu.seed(t, "batch-member@example.com", "Batch Member")
+
+	ws, err := svc.CreateWorkspace(ctx, "Batch WS", owner.ID)
+	if err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	if err := svc.AddMember(ctx, ws.ID, member.ID, "member", owner.ID); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	projectID := uuid.New()
+	_, err = pool.Exec(ctx,
+		`INSERT INTO projects (id, workspace_id, name, visibility, created_by)
+		 VALUES ($1, $2, 'Private', 'private', $3)`,
+		projectID, ws.ID, owner.ID,
+	)
+	if err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+	if err := svc.AddCollaborator(ctx, projectID, member.ID, org.RoleViewer); err != nil {
+		t.Fatalf("add collaborator: %v", err)
+	}
+
+	p := &platform.Principal{UserID: member.ID, Email: member.Email}
+	inputs := []org.ProjectAccessInput{{ProjectID: projectID, Visibility: "private"}}
+
+	roles, err := svc.ResolveAccessForProjects(ctx, p, ws.ID, inputs)
+	if err != nil {
+		t.Fatalf("batch resolve: %v", err)
+	}
+	single, err := svc.ResolveAccessForPrincipal(ctx, p, ws.ID, "private", &projectID)
+	if err != nil {
+		t.Fatalf("singular resolve: %v", err)
+	}
+	if roles[projectID] != single {
+		t.Errorf("batch role %s != singular %s", roles[projectID], single)
+	}
+	if !roles[projectID].CanRead() {
+		t.Errorf("expected member collaborator to read private project, got %s", roles[projectID])
 	}
 }
 

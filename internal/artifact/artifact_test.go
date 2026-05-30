@@ -99,6 +99,17 @@ func (f *fakeUsers) GetUserByID(_ context.Context, id uuid.UUID) (*auth.User, er
 	}
 	return u, nil
 }
+
+func (f *fakeUsers) GetUsersByIDs(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]*auth.User, error) {
+	out := make(map[uuid.UUID]*auth.User, len(ids))
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out[id] = u
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeUsers) CreateUser(_ context.Context, email, displayName string) (*auth.User, error) {
 	return nil, platform.BadRequest("not_supported", "not supported")
 }
@@ -145,6 +156,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatalf("artifact.NewService: %v", err)
 	}
+	artifact.UsePermissiveHeadCheckerForTest(svc)
 
 	return &testEnv{
 		pool:      pool,
@@ -302,6 +314,42 @@ func TestCreateArtifact_InferType(t *testing.T) {
 	}
 }
 
+func TestCreateArtifact_RejectsHTML(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	owner := env.users.seed(t, "owner@example.com", "Owner")
+	proj := seedProject(t, env, owner.ID)
+	ctxWithP := platform.WithPrincipal(ctx, principal(owner))
+
+	_, _, err := createArtifact(ctxWithP, env.svc, proj.ID, "page.html", "text/html", 100)
+	if err == nil {
+		t.Fatal("expected error for text/html")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok || em.GetStatus() != 400 {
+		t.Errorf("expected 400, got %v", err)
+	}
+}
+
+func TestCreateArtifact_SanitizesPathInFilename(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	owner := env.users.seed(t, "owner@example.com", "Owner")
+	proj := seedProject(t, env, owner.ID)
+	ctxWithP := platform.WithPrincipal(ctx, principal(owner))
+
+	art, _, err := createArtifact(ctxWithP, env.svc, proj.ID, "../../report.pdf", "application/pdf", 100)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if !strings.HasSuffix(art.StorageKey, "/report.pdf") {
+		t.Errorf("storage_key %q should end with sanitized report.pdf", art.StorageKey)
+	}
+	if strings.Contains(art.StorageKey, "..") {
+		t.Errorf("storage_key %q must not contain ..", art.StorageKey)
+	}
+}
+
 func TestCreateArtifact_ViewerForbidden(t *testing.T) {
 	env := newTestEnv(t)
 	ctx := context.Background()
@@ -319,7 +367,7 @@ func TestCreateArtifact_ViewerForbidden(t *testing.T) {
 
 	p := principal(viewer)
 	ctxWithP := platform.WithPrincipal(ctx, p)
-	_, _, err = createArtifact(ctxWithP, env.svc, privProj.ID, "file.pdf", "application/pdf", 0)
+	_, _, err = createArtifact(ctxWithP, env.svc, privProj.ID, "file.pdf", "application/pdf", 100)
 	if err == nil {
 		t.Fatal("expected forbidden error for viewer")
 	}

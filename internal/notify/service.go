@@ -317,6 +317,6 @@ func (s *Service) deliverOutbox(ctx context.Context, id uuid.UUID) error {
 
 // DigestUnsubscribeToken signs a one-click digest opt-out URL.
 func (s *Service) DigestUnsubscribeURL(userID uuid.UUID) string {
-	token := signDigestToken(s.cfg.InviteSignKey, userID)
+	token := signDigestToken(s.cfg.DigestSignKey, userID)
 	return absURL(s.cfg.WebOrigin, "/v1/notify/digest/unsubscribe?token="+token)
 }

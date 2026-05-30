@@ -22,3 +22,20 @@ func ExportRenderThumbnails(data []byte) (small, medium []byte, err error) {
 func ExportRenderNotebook(ctx context.Context, nbconvertURL string, nb []byte) ([]byte, error) {
 	return renderNotebook(ctx, nbconvertURL, nb)
 }
+
+// ExportSanitizeFilename wraps sanitizeFilename for unit tests.
+func ExportSanitizeFilename(name string) (string, error) { return sanitizeFilename(name) }
+
+// ExportValidateContentType wraps validateContentType for unit tests.
+func ExportValidateContentType(ct string) error { return validateContentType(ct) }
+
+// alwaysExistsHead is a test double that treats every object as present.
+type alwaysExistsHead struct{}
+
+func (alwaysExistsHead) ObjectExists(context.Context, string, string) error { return nil }
+
+// SetHeadCheckerForTest replaces the S3 head checker (used by artifact_test).
+func SetHeadCheckerForTest(s *Service, c objectHeadChecker) { s.headChecker = c }
+
+// UsePermissiveHeadCheckerForTest skips real S3 HeadObject in integration tests.
+func UsePermissiveHeadCheckerForTest(s *Service) { SetHeadCheckerForTest(s, alwaysExistsHead{}) }

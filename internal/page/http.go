@@ -365,23 +365,12 @@ func (s *Service) handleUpdatePage(ctx context.Context, in *updatePageInput) (*u
 		return nil, platform.BadRequest("page.invalid_blocks", "blocks must be a JSON array")
 	}
 
-	// ETag / If-Match check.
-	currentRevStr := ""
-	if pg.CurrentRevisionID != nil {
-		currentRevStr = pg.CurrentRevisionID.String()
-	}
-	if !platform.ETagMatches(in.IfMatch, currentRevStr) {
-		// Load current state for the 412 body.
-		currentState := map[string]any{"current_revision_id": currentRevStr}
-		return nil, platform.PreconditionFailed(currentState)
-	}
-
 	source := in.Body.Source
 	if source == "" {
 		source = "human"
 	}
 
-	rev, blocks, err := s.updatePage(ctx, pg, in.Body.Blocks, source, in.Body.Candidate, p.UserID)
+	rev, blocks, err := s.updatePage(ctx, pg, in.Body.Blocks, source, in.Body.Candidate, p.UserID, in.IfMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -452,7 +441,8 @@ func (s *Service) handleListRevisions(ctx context.Context, in *listRevisionsInpu
 		}
 		var cursorTime time.Time
 		err = s.pool.QueryRow(ctx,
-			`SELECT created_at FROM page_revisions WHERE id = $1`, cursorID,
+			`SELECT created_at FROM page_revisions WHERE id = $1 AND page_id = $2`,
+			cursorID, pageID,
 		).Scan(&cursorTime)
 		if err != nil {
 			return nil, platform.BadRequest("page.invalid_cursor", "cursor revision not found")
@@ -462,10 +452,11 @@ func (s *Service) handleListRevisions(ctx context.Context, in *listRevisionsInpu
 			`SELECT id, page_id, blob_hash, markdown_export, parent_revision_id,
 			        source, status, author, label, retention_class, created_at
 			 FROM page_revisions
-			 WHERE page_id = $1 AND created_at < $2
-			 ORDER BY created_at DESC
-			 LIMIT $3`,
-			pageID, cursorTime, limit+1,
+			 WHERE page_id = $1
+			   AND (created_at < $2 OR (created_at = $2 AND id < $3))
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT $4`,
+			pageID, cursorTime, cursorID, limit+1,
 		)
 		if err != nil {
 			return nil, err
@@ -491,7 +482,7 @@ func (s *Service) handleListRevisions(ctx context.Context, in *listRevisionsInpu
 			        source, status, author, label, retention_class, created_at
 			 FROM page_revisions
 			 WHERE page_id = $1
-			 ORDER BY created_at DESC
+			 ORDER BY created_at DESC, id DESC
 			 LIMIT $2`,
 			pageID, limit+1,
 		)

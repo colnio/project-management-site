@@ -244,10 +244,6 @@ func (s *Service) Decide(ctx context.Context, p *platform.Principal, requestID u
 	if err != nil {
 		return err
 	}
-	if ar.Status != "pending" {
-		return platform.BadRequest("approval.already_decided", "approval request has already been decided")
-	}
-
 	// Authorization: recipient OR project editor.
 	isRecipient := false
 	for _, r := range ar.Recipients {
@@ -267,14 +263,17 @@ func (s *Service) Decide(ctx context.Context, p *platform.Principal, requestID u
 		newStatus = "approved"
 	}
 
-	_, err = s.pool.Exec(ctx,
+	tag, err := s.pool.Exec(ctx,
 		`UPDATE approval_requests
 		 SET status = $2, decided_by = $3, decided_at = now(), updated_at = now()
-		 WHERE id = $1`,
+		 WHERE id = $1 AND status = 'pending'`,
 		requestID, newStatus, p.UserID,
 	)
 	if err != nil {
 		return fmt.Errorf("approval: decide: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return platform.Conflict("approval.already_decided", "approval request has already been decided")
 	}
 
 	_ = s.rec.Record(ctx, audit.Entry{

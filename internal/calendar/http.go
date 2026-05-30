@@ -2,6 +2,7 @@ package calendar
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"strings"
@@ -451,8 +452,10 @@ func (s *Service) ICSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate token and revocation.
-	if sub.Token != rawToken || sub.RevokedAt != nil {
+	// Validate token and revocation (constant-time compare).
+	if sub.RevokedAt != nil ||
+		len(sub.Token) != len(rawToken) ||
+		subtle.ConstantTimeCompare([]byte(sub.Token), []byte(rawToken)) != 1 {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}

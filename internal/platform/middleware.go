@@ -3,14 +3,15 @@ package platform
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 // RequestLogger emits a structured slog line per request with method, path,
-// status, and duration. The full middleware chain (auth, audit hook,
-// rate-limit, idempotency, ETag) is layered on in A4.
+// status, and duration. Sensitive path segments (e.g. calendar ICS tokens)
+// are redacted before logging.
 func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -19,7 +20,7 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			defer func() {
 				logger.Info("http_request",
 					"method", r.Method,
-					"path", r.URL.Path,
+					"path", redactLogPath(r.URL.Path),
 					"status", ww.Status(),
 					"bytes", ww.BytesWritten(),
 					"duration_ms", time.Since(start).Milliseconds(),
@@ -29,6 +30,20 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(ww, r)
 		})
 	}
+}
+
+// redactLogPath masks secrets embedded in URL paths before they reach logs.
+func redactLogPath(path string) string {
+	if !strings.HasPrefix(path, "/v1/cal/") {
+		return path
+	}
+	parts := strings.Split(path, "/")
+	// /v1/cal/{user_id}/{token} or .../{token}.ics
+	if len(parts) >= 5 && parts[4] != "" {
+		parts[4] = "[redacted]"
+		return strings.Join(parts, "/")
+	}
+	return path
 }
 
 // CORS allows the SPA dev origin with credentials so the httpOnly refresh

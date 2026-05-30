@@ -34,6 +34,7 @@ import { ProjectDashboard } from '@/components/dashboards/ProjectDashboard';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 import { experimentDisplayTags } from '@/api/types';
 import { memberLabel } from '@/lib/userDisplay';
+import { useResolvedProjectRole } from '@/hooks/useProjectAccess';
 
 type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
 
@@ -101,6 +102,7 @@ interface ProjectHeaderProps {
 function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
   const { data: project } = useProject(projectId);
   const { data: members = [] } = useWorkspaceMembers(project?.workspace_id);
+  const { canManageCollaborators } = useResolvedProjectRole(projectId);
   const [shareOpen, setShareOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -207,13 +209,15 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
             </div>
           )}
 
-          <button
-            className="top-btn"
-            title="Share"
-            onClick={() => setShareOpen(true)}
-          >
-            Share
-          </button>
+          {canManageCollaborators && (
+            <button
+              className="top-btn"
+              title="Share"
+              onClick={() => setShareOpen(true)}
+            >
+              Share
+            </button>
+          )}
           <button
             className="icon-btn"
             title="History"
@@ -288,23 +292,25 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
                   Archive project
                 </button>
                 <div style={{ height: 1, background: 'var(--line)', margin: '4px 0' }} />
-                <button
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    textAlign: 'left',
-                    padding: '8px 16px',
-                    fontSize: 13,
-                    color: 'var(--ink)',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--sans)',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--paper-2)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-                  onClick={() => { setMenuOpen(false); setShareOpen(true); }}
-                >
-                  Manage access
-                </button>
+                {canManageCollaborators && (
+                  <button
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      textAlign: 'left',
+                      padding: '8px 16px',
+                      fontSize: 13,
+                      color: 'var(--ink)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--sans)',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--paper-2)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                    onClick={() => { setMenuOpen(false); setShareOpen(true); }}
+                  >
+                    Manage access
+                  </button>
+                )}
                 <button
                   style={{
                     background: 'none',
@@ -340,7 +346,7 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
         </div>
       </div>
     </div>
-    {shareOpen && (
+    {shareOpen && canManageCollaborators && (
       <ShareDialog projectId={projectId} onClose={() => setShareOpen(false)} />
     )}
     {editOpen && (

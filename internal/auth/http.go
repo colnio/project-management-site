@@ -166,18 +166,16 @@ func (s *Service) handleRegister(ctx context.Context, in *registerInput) (*regis
 	if len(in.Body.Password) < 8 {
 		return nil, platform.Errorf(http.StatusBadRequest, "auth.password_too_short", "password must be at least 8 characters")
 	}
+	if len(in.Body.Password) > MaxPasswordBytes {
+		return nil, platform.Errorf(http.StatusBadRequest, "auth.password_too_long", "password exceeds maximum length")
+	}
 	// Check email not already taken.
 	if _, err := s.GetUserByEmail(ctx, in.Body.Email); err == nil {
 		return nil, platform.Errorf(http.StatusConflict, "auth.email_taken", "an account with that email already exists")
 	}
 
-	// Create user (defaults: global_role='member', status='pending', profile_completed=false).
-	u, err := s.CreateUser(ctx, in.Body.Email, "")
+	u, err := s.RegisterLocalUser(ctx, in.Body.Email, "", in.Body.Password)
 	if err != nil {
-		return nil, err
-	}
-	// Store password.
-	if err := s.SetPassword(ctx, u.ID, in.Body.Password); err != nil {
 		return nil, err
 	}
 
@@ -381,6 +379,9 @@ func (s *Service) handleUpdateProfile(ctx context.Context, in *updateProfileInpu
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProfile); err != nil {
+		return nil, err
+	}
 	u, err := s.UpdateProfile(ctx, p.UserID,
 		in.Body.FirstName, in.Body.LastName,
 		in.Body.Title, in.Body.Description,
@@ -424,6 +425,12 @@ func (s *Service) handleCreateToken(ctx context.Context, in *createTokenInput) (
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if !p.IsSessionOnly() {
+		return nil, platform.Forbidden("personal access token management requires a browser session")
+	}
+	if err := platform.RequireScope(p, platform.ScopeManageTokens); err != nil {
+		return nil, err
+	}
 	id, rawToken, err := s.createPAT(ctx, p.UserID, in.Body.Name, in.Body.Scopes, in.Body.ExpiresAt)
 	if err != nil {
 		return nil, err
@@ -455,6 +462,12 @@ func (s *Service) handleListTokens(ctx context.Context, _ *struct{}) (*listToken
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
 	}
+	if !p.IsSessionOnly() {
+		return nil, platform.Forbidden("personal access token management requires a browser session")
+	}
+	if err := platform.RequireScope(p, platform.ScopeManageTokens); err != nil {
+		return nil, err
+	}
 	tokens, err := s.listPATs(ctx, p.UserID)
 	if err != nil {
 		return nil, err
@@ -481,6 +494,12 @@ func (s *Service) handleRevokeToken(ctx context.Context, in *revokeTokenInput) (
 	p, ok := platform.PrincipalFrom(ctx)
 	if !ok {
 		return nil, platform.Unauthorized("not authenticated")
+	}
+	if !p.IsSessionOnly() {
+		return nil, platform.Forbidden("personal access token management requires a browser session")
+	}
+	if err := platform.RequireScope(p, platform.ScopeManageTokens); err != nil {
+		return nil, err
 	}
 	if err := s.revokePAT(ctx, p.UserID, in.ID); err != nil {
 		return nil, err

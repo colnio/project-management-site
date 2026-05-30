@@ -70,18 +70,12 @@ export function ArtifactUpload({ projectId, onDone }: ArtifactUploadProps) {
       // 2. PUT file to presigned MinIO URL (direct, not via proxy)
       setState({ phase: 'uploading', progress: 0, artifact: res.artifact });
 
-      try {
-        await uploadToPresignedUrl(
-          res.upload_url,
-          file,
-          res.headers ?? {},
-          (pct) => setState(s => ({ ...s, progress: pct }))
-        );
-      } catch (uploadErr) {
-        // CORS caveat: MinIO may reject from browser; document it but still try complete
-        console.warn('Presigned PUT error (possible MinIO CORS config caveat):', uploadErr);
-        // Still attempt complete — server-side may accept
-      }
+      await uploadToPresignedUrl(
+        res.upload_url,
+        file,
+        res.headers ?? {},
+        (pct) => setState(s => ({ ...s, progress: pct }))
+      );
 
       // 3. Mark upload complete
       setState(s => ({ ...s, phase: 'completing', progress: 100 }));

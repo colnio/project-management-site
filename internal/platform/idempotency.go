@@ -28,7 +28,12 @@ func Idempotency(store IdempotencyStore) func(http.Handler) http.Handler {
 				return
 			}
 			ctx := r.Context()
-			if status, body, found, err := store.Lookup(ctx, pkey, key); err == nil && found {
+			status, body, found, err := store.Lookup(ctx, pkey, key)
+			if err != nil {
+				writeError(w, Errorf(http.StatusServiceUnavailable, "idempotency.unavailable", "idempotency store unavailable"))
+				return
+			}
+			if found {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Idempotency-Replayed", "true")
 				w.WriteHeader(status)

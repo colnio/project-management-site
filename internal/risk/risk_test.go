@@ -95,6 +95,17 @@ func (f *fakeUsers) GetUserByID(_ context.Context, id uuid.UUID) (*auth.User, er
 	}
 	return u, nil
 }
+
+func (f *fakeUsers) GetUsersByIDs(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]*auth.User, error) {
+	out := make(map[uuid.UUID]*auth.User, len(ids))
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out[id] = u
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeUsers) CreateUser(_ context.Context, _, _ string) (*auth.User, error) {
 	return nil, platform.BadRequest("not_supported", "not supported")
 }
@@ -136,6 +147,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	projSvc := project.NewService(pool, orgSvc, fu, rec, log)
 	iterSvc := iteration.NewService(pool, projSvc, rec, log)
 	riskSvc := risk.NewService(pool, projSvc, iterSvc, rec, log)
+	iterSvc.SetBlockingRiskChecker(riskSvc)
 
 	return &testEnv{
 		pool:    pool,
@@ -283,6 +295,52 @@ func TestListFlaggedForPIReviewByWorkspace(t *testing.T) {
 	}
 }
 
+func TestUpsertFromWorkflow_ReplacesPriorAI(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "wf-owner@example.com", "WF Owner")
+	proj := seedProject(t, env, owner.ID)
+
+	run1 := uuid.New()
+	output1 := map[string]any{
+		"overall_rating": 3,
+		"summary":        "first pass",
+	}
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run1, output1, owner.ID); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+
+	var count int
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE project_id = $1 AND source = 'ai'`,
+		proj.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("after first upsert: want 1 ai risk, got %d", count)
+	}
+
+	run2 := uuid.New()
+	output2 := map[string]any{
+		"category_ratings": map[string]any{"supply": 4, "safety": 2},
+		"mitigations":      []any{"monitor"},
+	}
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run2, output2, owner.ID); err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE project_id = $1 AND source = 'ai'`,
+		proj.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count after second: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("after second upsert: want 2 category risks, got %d", count)
+	}
+}
+
 // TestCrossEntityIterationMismatch verifies that creating a risk with an
 // iteration_id belonging to a DIFFERENT project is rejected (Finding 4c).
 // The validation lives in handleCreateRisk; we exercise the handler path via
@@ -352,4 +410,79 @@ func crossEntityError(projectID, iterProjID uuid.UUID) error {
 		return platform.BadRequest("risk.iteration_mismatch", "iteration does not belong to this project")
 	}
 	return nil
+}
+
+func TestHasBlockingHighRisk(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "gate-owner@example.com", "Gate Owner")
+	proj := seedProject(t, env, owner.ID)
+	it, err := env.iterSvc.CreateIteration(ctx, proj.ID, "Gate Iter", "", "planned", nil, nil, owner.ID)
+	if err != nil {
+		t.Fatalf("create iteration: %v", err)
+	}
+
+	blocked, err := env.riskSvc.HasBlockingHighRisk(ctx, it.ID)
+	if err != nil {
+		t.Fatalf("HasBlockingHighRisk empty: %v", err)
+	}
+	if blocked {
+		t.Fatal("expected no blocking risk initially")
+	}
+
+	_, err = env.pool.Exec(ctx,
+		`INSERT INTO risks
+		   (project_id, iteration_id, seq, title, likelihood, impact_headline,
+		    impact_description, mitigation, plan_b, status, flagged_for_pi_review, created_by)
+		 VALUES ($1, $2, 1, $3, 'high', 'headline', '', '', '', 'open', true, $4)`,
+		proj.ID, it.ID, "Blocking Risk", owner.ID,
+	)
+	if err != nil {
+		t.Fatalf("insert blocking risk: %v", err)
+	}
+
+	blocked, err = env.riskSvc.HasBlockingHighRisk(ctx, it.ID)
+	if err != nil {
+		t.Fatalf("HasBlockingHighRisk: %v", err)
+	}
+	if !blocked {
+		t.Fatal("expected blocking risk")
+	}
+}
+
+func TestIterationActivate_BlockedByHighPIRisk(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "act-owner@example.com", "Act Owner")
+	proj := seedProject(t, env, owner.ID)
+	it, err := env.iterSvc.CreateIteration(ctx, proj.ID, "Activate Me", "", "planned", nil, nil, owner.ID)
+	if err != nil {
+		t.Fatalf("create iteration: %v", err)
+	}
+
+	_, err = env.pool.Exec(ctx,
+		`INSERT INTO risks
+		   (project_id, iteration_id, seq, title, likelihood, impact_headline,
+		    impact_description, mitigation, plan_b, status, flagged_for_pi_review, created_by)
+		 VALUES ($1, $2, 1, $3, 'high', 'headline', '', '', '', 'open', true, $4)`,
+		proj.ID, it.ID, "PI Blocker", owner.ID,
+	)
+	if err != nil {
+		t.Fatalf("insert risk: %v", err)
+	}
+
+	active := "active"
+	_, err = env.iterSvc.UpdateIteration(ctx, it.ID, nil, nil, &active, nil, nil, nil, owner.ID)
+	if err == nil {
+		t.Fatal("expected activation to be blocked")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok || em.GetStatus() != 409 {
+		t.Fatalf("expected 409 conflict, got %v", err)
+	}
+	if em.Code != "iteration.blocked_by_risk" {
+		t.Errorf("code = %q", em.Code)
+	}
 }

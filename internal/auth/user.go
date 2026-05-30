@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -64,6 +65,39 @@ func (s *Service) GetUserByEmail(ctx context.Context, email string) (*User, erro
 	return u, nil
 }
 
+// GetUsersByIDs returns users for the given IDs. Missing IDs are omitted from the
+// map (no error). An empty ids slice returns an empty map.
+func (s *Service) GetUsersByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*User, error) {
+	if len(ids) == 0 {
+		return map[uuid.UUID]*User{}, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, email, display_name,
+		        global_role, status,
+		        first_name, last_name, title, description, profile_completed,
+		        created_at, updated_at
+		 FROM users WHERE id = ANY($1)`,
+		ids,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("auth: get users by ids: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[uuid.UUID]*User, len(ids))
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, fmt.Errorf("auth: scan user: %w", err)
+		}
+		out[u.ID] = u
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("auth: get users by ids rows: %w", err)
+	}
+	return out, nil
+}
+
 // GetUserByID returns the user with the given ID or a platform.NotFound error.
 func (s *Service) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	row := s.pool.QueryRow(ctx,
@@ -103,6 +137,69 @@ func (s *Service) CreateUser(ctx context.Context, email, displayName string) (*U
 			return nil, platform.Conflict("user.email_conflict", "a user with that email already exists")
 		}
 		return nil, fmt.Errorf("auth: create user: %w", err)
+	}
+	return u, nil
+}
+
+// RegisterLocalUser creates a user and local credential in one transaction.
+func (s *Service) RegisterLocalUser(ctx context.Context, email, displayName, password string) (*User, error) {
+	hash, err := HashPassword(password)
+	if err != nil {
+		return nil, fmt.Errorf("auth: hash password: %w", err)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("auth: begin register tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	row := tx.QueryRow(ctx,
+		`INSERT INTO users (email, display_name) VALUES ($1,$2)
+		 RETURNING id, email, display_name,
+		           global_role, status,
+		           first_name, last_name, title, description, profile_completed,
+		           created_at, updated_at`,
+		strings.ToLower(email), displayName,
+	)
+	u, err := scanUser(row)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if isPgError(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, platform.Conflict("user.email_conflict", "a user with that email already exists")
+		}
+		return nil, fmt.Errorf("auth: create user: %w", err)
+	}
+
+	_, err = tx.Exec(ctx,
+		`INSERT INTO local_credentials (user_id, password_hash) VALUES ($1,$2)`,
+		u.ID, hash,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("auth: set password: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("auth: commit register tx: %w", err)
+	}
+	return u, nil
+}
+
+func (s *Service) getUserByIDTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*User, error) {
+	row := tx.QueryRow(ctx,
+		`SELECT id, email, display_name,
+		        global_role, status,
+		        first_name, last_name, title, description, profile_completed,
+		        created_at, updated_at
+		 FROM users WHERE id=$1`,
+		id,
+	)
+	u, err := scanUser(row)
+	if err == pgx.ErrNoRows {
+		return nil, platform.NotFound("user.not_found", "user not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("auth: get user by id: %w", err)
 	}
 	return u, nil
 }
@@ -153,13 +250,19 @@ func (s *Service) verifyLocalLogin(ctx context.Context, email, password string) 
 }
 
 // SeedDevUser upserts dev@graphene-lab.org as a platform admin with local password.
-// Idempotent — safe to call on every boot.
+// Idempotent — safe to call on every boot. Refuses to run in production.
 func (s *Service) SeedDevUser(ctx context.Context) error {
+	if s.cfg.IsProduction() {
+		return fmt.Errorf("auth: SeedDevUser must not run in production")
+	}
 	const devEmail = "dev@graphene-lab.org"
 	const devName = "Dev User"
 	const devFirstName = "Dev"
 	const devLastName = "User"
-	const devPw = "devpassword"
+	devPw := os.Getenv("DEV_USER_PASSWORD")
+	if devPw == "" {
+		devPw = "devpassword"
+	}
 
 	hash, err := HashPassword(devPw)
 	if err != nil {

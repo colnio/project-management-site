@@ -77,6 +77,16 @@ func (f *fakeUsers) GetUserByID(_ context.Context, id uuid.UUID) (*auth.User, er
 	return u, nil
 }
 
+func (f *fakeUsers) GetUsersByIDs(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]*auth.User, error) {
+	out := make(map[uuid.UUID]*auth.User, len(ids))
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out[id] = u
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeUsers) CreateUser(_ context.Context, _, _ string) (*auth.User, error) {
 	return nil, platform.BadRequest("not_supported", "not supported in tests")
 }
@@ -390,6 +400,9 @@ func TestSubscription_LazyCreate(t *testing.T) {
 	}
 	if sub.Scope != "all_visible_projects" {
 		t.Errorf("expected scope all_visible_projects, got %s", sub.Scope)
+	}
+	if !env.rec.hasAction("calendar.subscription.create") {
+		t.Fatal("expected audit entry for lazy subscription create")
 	}
 
 	// Second call should return the same token.

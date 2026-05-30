@@ -30,6 +30,18 @@ type ServerDeps struct {
 	Verifier    TokenVerifier
 	Idempotency IdempotencyStore
 
-	// PerMinute is the default per-token rate limit. Zero disables limiting.
+	// Production disables public /docs and /openapi (interactive spec).
+	Production bool
+
+	// RateLimiter and AuthIPRateLimiter are optional; nil uses in-memory backends.
+	RateLimiter     *RateLimiter
+	AuthIPRateLimiter *IPRateLimiter
+
+	// PerMinute is the default per-token rate limit when RateLimiter is nil.
+	// Zero disables limiting.
 	PerMinute int
+
+	// AuthIPPerMinute limits POST /v1/auth/login and /v1/auth/register per client IP
+	// when AuthIPRateLimiter is nil. Zero disables limiting.
+	AuthIPPerMinute int
 }

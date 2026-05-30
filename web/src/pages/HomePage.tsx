@@ -13,6 +13,7 @@ import { LoadingState, EmptyState } from '@/components/LoadingState';
 import { Link } from '@tanstack/react-router';
 import type { Project } from '@/api/types';
 import type { InboxItem } from '@/hooks/useWorkspaceQueries';
+import { safeAppPath } from '@/lib/safeAppPath';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -221,7 +222,9 @@ function RiskApprovalPanel({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {piFlags.map((item: InboxItem) => (
+      {piFlags.map((item: InboxItem) => {
+        const reviewPath = safeAppPath(item.link);
+        return (
         <div
           key={item.id}
           style={{
@@ -263,9 +266,9 @@ function RiskApprovalPanel({ workspaceId }: { workspaceId: string }) {
             )}
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            {item.link && (
+            {reviewPath && (
               <Link
-                to={item.link as '/'}
+                to={reviewPath}
                 style={{ textDecoration: 'none' }}
               >
                 <button className="top-btn primary" style={{ fontSize: 11, padding: '3px 10px' }}>
@@ -278,7 +281,8 @@ function RiskApprovalPanel({ workspaceId }: { workspaceId: string }) {
             </span>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

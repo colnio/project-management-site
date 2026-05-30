@@ -727,3 +727,34 @@ func TestRunWorkflow_SynthesisError_Returns502(t *testing.T) {
 		t.Errorf("expected status 502, got %d", pe.GetStatus())
 	}
 }
+
+func TestGetWorkflowRun_NilProjectIDNotFound(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	testsupport.Truncate(t, pool, "ai_workflow_runs")
+
+	stub := NewStubClient(nil)
+	svc, sd := newTestService(t, pool, stub)
+	ctx := platform.WithPrincipal(context.Background(), sd.Principal)
+
+	runID := uuid.New()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO ai_workflow_runs (id, workflow_key, project_id, started_by, status)
+		 VALUES ($1, 'orphan', NULL, $2, 'completed')`,
+		runID, sd.UserID,
+	)
+	if err != nil {
+		t.Fatalf("insert run: %v", err)
+	}
+
+	_, err = svc.GetWorkflowRunForTest(ctx, runID.String())
+	if err == nil {
+		t.Fatal("expected not found for run without project_id")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if em.GetStatus() != 404 {
+		t.Errorf("expected 404, got %d", em.GetStatus())
+	}
+}

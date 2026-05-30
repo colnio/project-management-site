@@ -13,6 +13,7 @@ import {
   useRemoveCollaborator,
 } from '@/hooks/useQueries';
 import type { Collaborator } from '@/hooks/useQueries';
+import { useResolvedProjectRole } from '@/hooks/useProjectAccess';
 
 // ─── Modal primitives (mirrors NewIterationWizard) ────────────────────────────
 
@@ -92,9 +93,11 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 function CollaboratorRow({
   collab,
   projectId,
+  canManage,
 }: {
   collab: Collaborator;
   projectId: string;
+  canManage: boolean;
 }) {
   const remove = useRemoveCollaborator(projectId);
   const [confirm, setConfirm] = useState(false);
@@ -147,35 +150,37 @@ function CollaboratorRow({
         {collab.role}
       </span>
 
-      {/* Remove */}
-      {confirm ? (
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+      {/* Remove — owners only (matches POST/DELETE /collaborators) */}
+      {canManage && (
+        confirm ? (
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button
+              className="top-btn"
+              style={{ fontSize: 10.5, color: 'var(--bad)', padding: '2px 8px' }}
+              onClick={() => { remove.mutate(collab.user_id); setConfirm(false); }}
+              disabled={remove.isPending}
+            >
+              {remove.isPending ? 'Removing…' : 'Confirm'}
+            </button>
+            <button
+              className="top-btn"
+              style={{ fontSize: 10.5, padding: '2px 8px' }}
+              onClick={() => setConfirm(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
           <button
-            className="top-btn"
-            style={{ fontSize: 10.5, color: 'var(--bad)', padding: '2px 8px' }}
-            onClick={() => { remove.mutate(collab.user_id); setConfirm(false); }}
+            className="icon-btn"
+            style={{ fontSize: 10, color: 'var(--muted-2)', padding: '2px 4px', flexShrink: 0 }}
+            onClick={() => setConfirm(true)}
+            title="Remove collaborator"
             disabled={remove.isPending}
           >
-            {remove.isPending ? 'Removing…' : 'Confirm'}
+            ✕
           </button>
-          <button
-            className="top-btn"
-            style={{ fontSize: 10.5, padding: '2px 8px' }}
-            onClick={() => setConfirm(false)}
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <button
-          className="icon-btn"
-          style={{ fontSize: 10, color: 'var(--muted-2)', padding: '2px 4px', flexShrink: 0 }}
-          onClick={() => setConfirm(true)}
-          title="Remove collaborator"
-          disabled={remove.isPending}
-        >
-          ✕
-        </button>
+        )
       )}
 
       {/* Inline remove error */}
@@ -205,6 +210,7 @@ interface ShareDialogProps {
 
 export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
   const { data: collaborators = [], isLoading, isError } = useProjectCollaborators(projectId);
+  const { canManageCollaborators } = useResolvedProjectRole(projectId);
   const add = useAddCollaborator(projectId);
 
   const [email, setEmail] = useState('');
@@ -289,11 +295,17 @@ export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
             </div>
           )}
           {collaborators.map(c => (
-            <CollaboratorRow key={c.id} collab={c} projectId={projectId} />
+            <CollaboratorRow
+              key={c.id}
+              collab={c}
+              projectId={projectId}
+              canManage={canManageCollaborators}
+            />
           ))}
         </div>
 
-        {/* Add collaborator */}
+        {/* Add collaborator — owners only */}
+        {canManageCollaborators && (
         <div>
           <FieldLabel>Add collaborator</FieldLabel>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -351,6 +363,7 @@ export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
             </div>
           )}
         </div>
+        )}
 
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>

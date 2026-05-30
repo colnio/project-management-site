@@ -31,6 +31,7 @@ import (
 type Users interface {
 	GetUserByEmail(ctx context.Context, email string) (*auth.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*auth.User, error)
+	GetUsersByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*auth.User, error)
 	CreateUser(ctx context.Context, email, displayName string) (*auth.User, error)
 	SetPassword(ctx context.Context, userID uuid.UUID, password string) error
 }
@@ -240,9 +241,14 @@ func (s *Service) AddMember(ctx context.Context, workspaceID, userID uuid.UUID, 
 
 // RemoveMember removes a workspace membership. Returns an error if removing would leave no owners.
 func (s *Service) RemoveMember(ctx context.Context, workspaceID, targetUserID uuid.UUID, actorID uuid.UUID) error {
-	// Check if the target is an owner and if they'd be the last.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("org: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
 	var targetRole string
-	err := s.pool.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`SELECT role FROM workspace_memberships WHERE workspace_id=$1 AND user_id=$2`,
 		workspaceID, targetUserID,
 	).Scan(&targetRole)
@@ -255,7 +261,7 @@ func (s *Service) RemoveMember(ctx context.Context, workspaceID, targetUserID uu
 
 	if targetRole == "owner" {
 		var ownerCount int
-		err = s.pool.QueryRow(ctx,
+		err = tx.QueryRow(ctx,
 			`SELECT COUNT(*) FROM workspace_memberships WHERE workspace_id=$1 AND role='owner'`,
 			workspaceID,
 		).Scan(&ownerCount)
@@ -267,12 +273,19 @@ func (s *Service) RemoveMember(ctx context.Context, workspaceID, targetUserID uu
 		}
 	}
 
-	_, err = s.pool.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`DELETE FROM workspace_memberships WHERE workspace_id=$1 AND user_id=$2`,
 		workspaceID, targetUserID,
 	)
 	if err != nil {
 		return fmt.Errorf("org: remove member: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return platform.NotFound("membership.not_found", "membership not found")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("org: commit remove member: %w", err)
 	}
 
 	_ = s.rec.Record(ctx, audit.Entry{
@@ -319,16 +332,12 @@ type MemberView struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// ListMembersEnriched returns workspace memberships joined with user profile
-// data (email, display_name). It uses users.display_name directly; that column
-// exists in the users table as confirmed by auth/user.go.
+// ListMembersEnriched returns workspace memberships enriched with user profile
+// fields via the auth module (no cross-module SQL on users).
 func (s *Service) ListMembersEnriched(ctx context.Context, workspaceID uuid.UUID) ([]MemberView, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT m.id, m.workspace_id, m.user_id, m.role,
-		        u.email, u.display_name, u.created_at AS user_created_at,
-		        m.created_at
+		`SELECT m.id, m.workspace_id, m.user_id, m.role, m.created_at
 		 FROM workspace_memberships m
-		 JOIN users u ON u.id = m.user_id
 		 WHERE m.workspace_id = $1
 		 ORDER BY m.created_at`,
 		workspaceID,
@@ -338,19 +347,37 @@ func (s *Service) ListMembersEnriched(ctx context.Context, workspaceID uuid.UUID
 	}
 	defer rows.Close()
 
-	var result []MemberView
+	var base []MemberView
+	var userIDs []uuid.UUID
 	for rows.Next() {
 		var mv MemberView
 		if err := rows.Scan(
-			&mv.ID, &mv.WorkspaceID, &mv.UserID, &mv.Role,
-			&mv.Email, &mv.DisplayName, &mv.UserCreatedAt,
-			&mv.CreatedAt,
+			&mv.ID, &mv.WorkspaceID, &mv.UserID, &mv.Role, &mv.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("org: scan member view: %w", err)
 		}
+		base = append(base, mv)
+		userIDs = append(userIDs, mv.UserID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("org: list members enriched rows: %w", err)
+	}
+
+	usersByID, err := s.users.GetUsersByIDs(ctx, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("org: list members enriched users: %w", err)
+	}
+
+	result := make([]MemberView, 0, len(base))
+	for _, mv := range base {
+		if u, ok := usersByID[mv.UserID]; ok {
+			mv.Email = u.Email
+			mv.DisplayName = u.DisplayName
+			mv.UserCreatedAt = u.CreatedAt
+		}
 		result = append(result, mv)
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // ─── Project collaborator Go API ─────────────────────────────────────────────
@@ -416,14 +443,12 @@ type CollaboratorView struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// ListCollaboratorsEnriched returns project collaborators joined with user
-// profile data (email, display_name), mirroring ListMembersEnriched.
+// ListCollaboratorsEnriched returns project collaborators enriched with user
+// profile fields via the auth module (no cross-module SQL on users).
 func (s *Service) ListCollaboratorsEnriched(ctx context.Context, projectID uuid.UUID) ([]CollaboratorView, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT c.id, c.project_id, c.user_id, c.role,
-		        u.email, u.display_name, c.created_at
+		`SELECT c.id, c.project_id, c.user_id, c.role, c.created_at
 		 FROM project_collaborations c
-		 JOIN users u ON u.id = c.user_id
 		 WHERE c.project_id = $1
 		 ORDER BY c.created_at`,
 		projectID,
@@ -433,18 +458,36 @@ func (s *Service) ListCollaboratorsEnriched(ctx context.Context, projectID uuid.
 	}
 	defer rows.Close()
 
-	var result []CollaboratorView
+	var base []CollaboratorView
+	var userIDs []uuid.UUID
 	for rows.Next() {
 		var cv CollaboratorView
 		if err := rows.Scan(
-			&cv.ID, &cv.ProjectID, &cv.UserID, &cv.Role,
-			&cv.Email, &cv.DisplayName, &cv.CreatedAt,
+			&cv.ID, &cv.ProjectID, &cv.UserID, &cv.Role, &cv.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("org: scan collaborator view: %w", err)
 		}
+		base = append(base, cv)
+		userIDs = append(userIDs, cv.UserID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("org: list collaborators enriched rows: %w", err)
+	}
+
+	usersByID, err := s.users.GetUsersByIDs(ctx, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("org: list collaborators enriched users: %w", err)
+	}
+
+	result := make([]CollaboratorView, 0, len(base))
+	for _, cv := range base {
+		if u, ok := usersByID[cv.UserID]; ok {
+			cv.Email = u.Email
+			cv.DisplayName = u.DisplayName
+		}
 		result = append(result, cv)
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // CollaboratorRole returns the role and a found boolean for a specific collaborator.
@@ -554,8 +597,13 @@ func (s *Service) AcceptInvite(ctx context.Context, rawToken, password, displayN
 		}
 	}
 
-	// Add workspace membership (upsert).
-	_, err = s.pool.Exec(ctx,
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, fmt.Errorf("org: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	_, err = tx.Exec(ctx,
 		`INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ($1, $2, $3)
 		 ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
 		inv.workspaceID, u.ID, inv.role,
@@ -564,13 +612,16 @@ func (s *Service) AcceptInvite(ctx context.Context, rawToken, password, displayN
 		return uuid.Nil, uuid.Nil, fmt.Errorf("org: add membership on accept: %w", err)
 	}
 
-	// Mark invite accepted.
-	_, err = s.pool.Exec(ctx,
-		`UPDATE invites SET accepted_at=now(), accepted_as_user=$1 WHERE id=$2`,
+	_, err = tx.Exec(ctx,
+		`UPDATE invites SET accepted_at=now(), accepted_as_user=$1 WHERE id=$2 AND accepted_at IS NULL`,
 		u.ID, inv.id,
 	)
 	if err != nil {
 		return uuid.Nil, uuid.Nil, fmt.Errorf("org: mark invite accepted: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return uuid.Nil, uuid.Nil, fmt.Errorf("org: commit accept invite: %w", err)
 	}
 
 	_ = s.rec.Record(ctx, audit.Entry{

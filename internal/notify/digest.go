@@ -180,7 +180,7 @@ func (s *Service) setDigestWatermark(ctx context.Context, userID uuid.UUID, at t
 
 // UnsubscribeDigest disables digest emails for the user in the token.
 func (s *Service) UnsubscribeDigest(ctx context.Context, token string) error {
-	userID, err := verifyDigestToken(s.cfg.InviteSignKey, token)
+	userID, err := verifyDigestToken(s.cfg.DigestSignKey, token)
 	if err != nil {
 		return err
 	}

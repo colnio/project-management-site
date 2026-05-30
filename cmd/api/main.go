@@ -86,11 +86,13 @@ func run() error {
 	}
 
 	srv := platform.New(&platform.ServerDeps{
-		Logger:      logger,
-		WebOrigin:   cfg.WebOrigin,
-		Verifier:    authSvc,
-		Idempotency: platform.NewIdempotencyStore(pool),
-		PerMinute:   600,
+		Logger:            logger,
+		WebOrigin:         cfg.WebOrigin,
+		Verifier:          authSvc,
+		Idempotency:       platform.NewIdempotencyStore(pool),
+		Production:        cfg.IsProduction(),
+		RateLimiter:       platform.NewRateLimiterFromPool(pool, 600),
+		AuthIPRateLimiter: platform.NewIPRateLimiterFromPool(pool, 20),
 	})
 
 	// Domain module routes. More are registered here as tracks land, e.g.:
@@ -152,6 +154,7 @@ func run() error {
 	notifySvc.SetEnqueuer(notify.NewRiverEnqueuer(riverClient))
 
 	riskSvc := risk.NewService(pool, projectSvc, iterationSvc, auditRec, logger)
+	iterationSvc.SetBlockingRiskChecker(riskSvc)
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
 	meetingSvc := meeting.NewService(pool, orgSvc, projectSvc, auditRec, logger)
 	approvalSvc := approval.NewService(pool, projectSvc, orgSvc, auditRec, cfg, logger)
@@ -224,6 +227,9 @@ func run() error {
 		Addr:              ":" + cfg.Port,
 		Handler:           srv.Router,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		// WriteTimeout is intentionally unset so SSE streams are not cut off.
 	}
 
 	go func() {

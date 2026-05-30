@@ -10,6 +10,9 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
+// MaxPasswordBytes caps password length to mitigate DoS via expensive argon2 hashing.
+const MaxPasswordBytes = 1024
+
 // argon2id parameters. OWASP minimum for argon2id is memory=64MiB, time=1, parallelism=1.
 const (
 	argonMemory  uint32 = 64 * 1024 // 64 MiB
@@ -22,6 +25,9 @@ const (
 // HashPassword hashes pw using argon2id and returns a PHC-format string:
 // $argon2id$v=19$m=<mem>,t=<time>,p=<threads>$<b64salt>$<b64hash>
 func HashPassword(pw string) (string, error) {
+	if len(pw) > MaxPasswordBytes {
+		return "", fmt.Errorf("argon2id: password exceeds maximum length of %d bytes", MaxPasswordBytes)
+	}
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("argon2id: salt generation: %w", err)
@@ -39,6 +45,9 @@ func HashPassword(pw string) (string, error) {
 // VerifyPassword checks pw against an encoded PHC argon2id string.
 // It uses constant-time comparison to prevent timing attacks.
 func VerifyPassword(encoded, pw string) (bool, error) {
+	if len(pw) > MaxPasswordBytes {
+		return false, nil
+	}
 	parts := strings.Split(encoded, "$")
 	// parts[0]="" parts[1]="argon2id" parts[2]="v=19" parts[3]="m=...,t=...,p=..." parts[4]=salt parts[5]=hash
 	if len(parts) != 6 || parts[1] != "argon2id" {

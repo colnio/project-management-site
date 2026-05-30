@@ -570,11 +570,7 @@ export function PageEditorCore({
           size_bytes:   file.size,
           type:         artType,
         });
-        try {
-          await uploadToPresignedUrl(res.upload_url, file, res.headers ?? {});
-        } catch (uploadErr) {
-          console.warn('Presigned PUT error (possible MinIO CORS caveat):', uploadErr);
-        }
+        await uploadToPresignedUrl(res.upload_url, file, res.headers ?? {});
         await completeArtifact.mutateAsync(res.artifact.id);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {

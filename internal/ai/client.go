@@ -91,11 +91,14 @@ type Client interface {
 
 // ─── HTTP client implementation ──────────────────────────────────────────────
 
+const outboundHTTPTimeout = 30 * time.Second
+
 type httpClient struct {
-	model   string
-	token   string
-	apiBase string
-	http    *http.Client
+	model      string
+	token      string
+	apiBase    string
+	http       *http.Client
+	streamHTTP *http.Client
 }
 
 // NewHTTPClient constructs the real HTTP-backed Client from a Provider.
@@ -104,7 +107,13 @@ func NewHTTPClient(p *Provider) Client {
 		model:   p.Model,
 		token:   p.Token,
 		apiBase: strings.TrimSuffix(p.APIBase, "/"),
-		http:    &http.Client{Timeout: 120 * time.Second},
+		http:    &http.Client{Timeout: outboundHTTPTimeout},
+		streamHTTP: &http.Client{
+			Timeout: 0,
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: outboundHTTPTimeout,
+			},
+		},
 	}
 }
 
@@ -202,9 +211,7 @@ func (c *httpClient) ChatStream(ctx context.Context, req ChatRequest) (<-chan St
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 	httpReq.Header.Set("Accept", "text/event-stream")
 
-	// Use a client without timeout for streaming (ctx handles cancellation).
-	streamHTTP := &http.Client{}
-	resp, err := streamHTTP.Do(httpReq)
+	resp, err := c.streamHTTP.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("ai: stream http: %w", err)
 	}
@@ -224,6 +231,10 @@ func (c *httpClient) ChatStream(ctx context.Context, req ChatRequest) (<-chan St
 
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
+			if err := ctx.Err(); err != nil {
+				ch <- StreamChunk{Err: err}
+				return
+			}
 			line := scanner.Text()
 			if !strings.HasPrefix(line, "data: ") {
 				continue

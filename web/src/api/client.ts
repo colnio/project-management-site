@@ -50,9 +50,39 @@ async function doFetch(url: string, init: RequestInit = {}): Promise<Response> {
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  headers.set('Content-Type', 'application/json');
+  if (init.body !== undefined && init.body !== null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   return fetch(url, { ...init, headers });
+}
+
+/** Like apiFetch but returns the raw Response (for ETag headers, SSE streams, etc.). */
+export async function apiFetchRaw(
+  url: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  let response = await doFetch(url, init);
+
+  if (response.status === 401 && !url.includes('/v1/auth/refresh')) {
+    if (!refreshingPromise) {
+      refreshingPromise = authCallbacks.onRefresh().finally(() => {
+        refreshingPromise = null;
+      });
+    }
+    const newToken = await refreshingPromise;
+
+    if (newToken) {
+      response = await doFetch(url, init);
+    }
+
+    if (response.status === 401) {
+      authCallbacks.onUnauthorized();
+      throw new ApiError(401, 'Unauthorized');
+    }
+  }
+
+  return response;
 }
 
 export async function apiFetch<T>(

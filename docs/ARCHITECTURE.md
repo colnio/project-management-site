@@ -15,7 +15,7 @@ processing (River) and the AI orchestrator (`internal/ai`) are both in-process.
                                                  ├─ huma operations (OpenAPI 3.1)
                                                  ├─ domain modules (bounded contexts)
                                                  └─ pgx pool ──▶ [ Postgres :5432 ]
-        MinIO :9000 (S3)  Mailpit :1025/8025 (SMTP)  mock-oidc :9100  nbconvert :8090
+        MinIO :9000 (S3)  Mailpit :1025/8025 (SMTP)  nbconvert :8090  searxng :8888
 ```
 
 All external dependencies are reached through endpoint overrides in
@@ -33,9 +33,10 @@ RateLimiter → Idempotency → huma operation`.
   *missing* token is allowed (public routes); a *present but invalid* token is
   401. The `TokenVerifier` interface (satisfied by `auth.Service`) keeps
   `platform` free of an import cycle.
-- **RateLimiter**: in-memory sliding window. Now covers all three caller kinds:
-  PATs and internal-AI tokens are keyed by token value; first-party JWT browser
-  sessions are keyed by user ID (`internal/platform/ratelimit.go`).
+- **RateLimiter**: Postgres-backed sliding window (`rate_limit_hits`, migration
+  00133) with in-memory fallback in tests. Covers PATs, internal-AI tokens, and
+  JWT sessions (keyed by user ID). A separate **IP limiter** (20/min default)
+  protects `POST /v1/auth/login` and `/v1/auth/register`.
 - **Idempotency**: for write methods carrying `Idempotency-Key`, captures the
   response and replays it on retry (Postgres-backed, 24h TTL).
 - **Errors**: every error is the envelope `{code, message, details}` via a custom
@@ -81,17 +82,16 @@ keeps one HTTP code path for all three.
   `read:experiments`, `write:experiments`, `read:iterations`, `write:iterations`,
   `read:risks`, `write:risks`, `read:artifacts`, `write:artifacts`, `read:pages`,
   `write:pages`, `read:meetings`, `write:meetings`, `read:calendar`,
-  `write:calendar`, `read:ai`, `write:ai`, `read:inbox`, `read:approvals`,
-  `write:approvals`, `read:audit`, `read:admin`, `write:admin`,
-  `admin:org`. The helper `platform.RequireScope(p, scope)` is called immediately
-  after `platform.PrincipalFrom` in every authenticated huma handler. Enforcement
-  rule: a token whose scope list is **non-empty** is fully restricted to those
-  scopes; a token with an **empty/nil** scope list is treated as
-  legacy-unrestricted (backward compatibility for tokens minted before scope
-  enforcement). The internal-AI orchestrator token is minted with exactly the
-  scopes its registered tools require: `read:projects`, `read:samples`,
-  `read:experiments`, `read:pages`, `read:artifacts`, `write:pages`,
-  `write:iterations`, `write:calendar`.
+  `write:calendar`, `read:ai`, `write:ai`, `read:inbox`, `read:notify`,
+  `write:notify`, `read:approvals`, `write:approvals`, `read:audit`,
+  `read:admin`, `write:admin`, `admin:org`, `manage:tokens`, `write:profile`.
+  The helper `platform.RequireScope(p, scope)` is called immediately after
+  `platform.PrincipalFrom` in every authenticated huma handler **and** on custom
+  chi routes (e.g. AI SSE streaming). Enforcement rule: token callers with a
+  **non-empty** scope list are restricted to those scopes; empty scopes were
+  backfilled (migration 00132). Browser JWT sessions are unrestricted. PAT
+  management endpoints are session-only. The internal-AI orchestrator token is
+  minted with exactly the scopes its registered tools require.
 
 ## Domain modules (Track B)
 
@@ -110,7 +110,9 @@ keeps one HTTP code path for all three.
 | approval | `approval_requests` | Risk-assessment sign-off: stakeholder recipients snapshotted as jsonb (workspace members ∪ project collaborators); create emails recipients + audits; decide (approve/reject) by a recipient or project editor; pending requests surface in the inbox; workspace-scoped queries go through `project.ListIDsForWorkspace` |
 
 Cross-entity references between sibling domains are stored as bare uuids (no
-cross-module FK), so modules stay independently testable and buildable.
+cross-module FK). **Cross-module reads** go through owning-package APIs (e.g.
+`auth.GetUsersByIDs`, `project.GetProjectNames`, `risk.HasBlockingHighRisk`) —
+direct SQL joins across sibling tables are not used.
 
 ## Agent surface (Track F)
 
@@ -161,8 +163,9 @@ The agentic-chat backend (`internal/ai`, Tracks G1/G2/G5) is implemented:
   principal via `ViaAIConversationID`. No service back door.
 - **System prompt context.** When a message is submitted, `internal/ai/sse.go`
   injects a system message carrying the current `project_id`, project name,
-  `workspace_id`, and date so the assistant answers project-scoped questions
-  without asking the user to specify a project.
+  `workspace_id`, and date (wrapped in XML tags as untrusted data) so the
+  assistant answers project-scoped questions without asking the user to specify
+  a project. The SSE route requires `write:ai` scope like other AI write endpoints.
 - **Skills.** A conversation may carry a `skill` (column on `ai_conversations`).
   Skill markdown lives in the embeddable `skills/` package (`skills/embed.go`,
   `LoadSkill`, same pattern as `workflows/`); when a conversation has a skill,
@@ -216,9 +219,10 @@ Templates UI can render a step accordion and the schema. Endpoints:
   impact headline + description, mitigation, Plan B, status, a PI-review flag, and
   a per-project human `seq`. Risks are either authored by a human or upserted by a
   risk workflow (`source='ai'`, linked by `workflow_run_id`). Activating an
-  iteration is **blocked** (`409 iteration.blocked_by_risk`, enforced in
-  `iteration.UpdateIteration`) while it has a HIGH risk flagged for PI review and
-  still `open` — the PI sign-off gate.
+  iteration is **blocked** (`409 iteration.blocked_by_risk`, enforced via
+  `risk.HasBlockingHighRisk` wired through `iteration.SetBlockingRiskChecker`)
+  while it has a HIGH risk flagged for PI review and still `open` — the PI
+  sign-off gate.
 - **Meetings (`internal/meeting`).** Workspace- and project-scoped meetings with
   jsonb attendees/decisions/action-items, guarded by workspace membership.
 - **Inbox (`internal/inbox`).** A read-only aggregation (owns no tables) that
@@ -306,8 +310,9 @@ build.
 
 ## Production transition (config swaps only)
 
-Per the spec, going to AWS is endpoint/config changes, not a rewrite: OIDC issuer
-→ Entra, S3 endpoint dropped for real S3, SMTP → SES, AI client → OpenRouter
-(a one-file swap inside `internal/ai/`), Terraform + Caddy added. Because every
-local dependency speaks the same protocol as its production counterpart, the
-transition is low-risk.
+Per the spec, going to AWS is endpoint/config changes, not a rewrite: S3 endpoint
+dropped for real S3, SMTP → SES, AI client → OpenRouter (a one-file swap inside
+`internal/ai/`), Terraform + Caddy added. **`config.Load()` fails closed in
+production** if signing keys, `COOKIE_SECURE`, or dev-default S3 credentials are
+still in use. Set `DIGEST_SIGN_KEY` separately from `INVITE_SIGN_KEY`. OpenAPI
+interactive docs are disabled when `APP_ENV=production`.

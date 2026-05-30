@@ -37,6 +37,9 @@ export type SSEWarnEvent = { type: 'warn'; message: string };
 export type SSEDoneEvent = { type: 'done'; conversation_id: string };
 export type SSEErrorEvent = { type: 'error'; code: string; message: string };
 
+/** Maximum bytes retained while parsing an SSE stream without a frame terminator. */
+export const maxSSEBufferBytes = 5 * 1024 * 1024;
+
 export type SSEEvent =
   | SSETokenEvent
   | SSEToolCallEvent
@@ -147,6 +150,9 @@ export async function readSSEStream(
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
+      if (buffer.length > maxSSEBufferBytes) {
+        throw new Error('SSE buffer exceeded maximum size');
+      }
 
       // Process complete frames (ending with \n\n)
       // Keep the trailing partial frame in the buffer

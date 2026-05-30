@@ -314,6 +314,14 @@ func (s *Service) handleAddRelation(ctx context.Context, in *addRelationInput) (
 		return nil, err
 	}
 
+	child, err := s.GetSample(ctx, in.Body.ChildSampleID)
+	if err != nil {
+		return nil, err
+	}
+	if _, _, err := s.projects.Authorize(ctx, p, child.ProjectID, org.RoleEditor); err != nil {
+		return nil, err
+	}
+
 	rel, err := s.addRelation(ctx, parentID, in.Body.ChildSampleID, in.Body.RelationType, in.Body.Notes)
 	if err != nil {
 		return nil, err

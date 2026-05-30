@@ -2,6 +2,7 @@ package org
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 
@@ -83,7 +84,7 @@ func (s *Service) ResolveAccess(ctx context.Context, userID, workspaceID uuid.UU
 			case "admin":
 				effective = maxRole(effective, RoleEditor)
 			case "member":
-				effective = maxRole(effective, RoleEditor)
+				effective = maxRole(effective, RoleViewer)
 			}
 		}
 		// For workspace-level questions (no projectID), also contribute workspace role.
@@ -119,6 +120,112 @@ func (s *Service) ResolveAccess(ctx context.Context, userID, workspaceID uuid.UU
 	}
 
 	return effective, nil
+}
+
+// ProjectAccessInput identifies a project when resolving access in batch.
+type ProjectAccessInput struct {
+	ProjectID  uuid.UUID
+	Visibility string
+}
+
+// ResolveAccessForProjects returns the effective role per project for a principal
+// in a workspace using a fixed number of queries (not one resolve call per row).
+func (s *Service) ResolveAccessForProjects(
+	ctx context.Context,
+	p *platform.Principal,
+	workspaceID uuid.UUID,
+	inputs []ProjectAccessInput,
+) (map[uuid.UUID]Role, error) {
+	if len(inputs) == 0 {
+		return map[uuid.UUID]Role{}, nil
+	}
+
+	var overrideExists bool
+	if err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM admin_overrides WHERE workspace_id=$1 AND user_id=$2)`,
+		workspaceID, p.UserID,
+	).Scan(&overrideExists); err != nil {
+		return nil, err
+	}
+
+	var wsRole string
+	wsRoleErr := s.pool.QueryRow(ctx,
+		`SELECT role FROM workspace_memberships WHERE workspace_id=$1 AND user_id=$2`,
+		workspaceID, p.UserID,
+	).Scan(&wsRole)
+	hasWS := wsRoleErr == nil
+
+	projectIDs := make([]uuid.UUID, len(inputs))
+	for i, in := range inputs {
+		projectIDs[i] = in.ProjectID
+	}
+
+	collabByProject := make(map[uuid.UUID]string)
+	rows, err := s.pool.Query(ctx,
+		`SELECT project_id, role FROM project_collaborations
+		 WHERE user_id = $1 AND project_id = ANY($2)`,
+		p.UserID, projectIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("org: batch collaborator roles: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var pid uuid.UUID
+		var role string
+		if err := rows.Scan(&pid, &role); err != nil {
+			return nil, fmt.Errorf("org: scan collaborator role: %w", err)
+		}
+		collabByProject[pid] = role
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make(map[uuid.UUID]Role, len(inputs))
+	for _, in := range inputs {
+		role := resolveAccessFromParts(overrideExists, hasWS, wsRole, in.Visibility, collabByProject[in.ProjectID])
+		if p.IsPrivileged() && !role.CanRead() {
+			_ = s.rec.Record(ctx, audit.Entry{
+				Actor:        p.UserID,
+				ViaTokenID:   p.ViaTokenID,
+				Action:       "admin.override_access",
+				ResourceType: "workspace",
+				ResourceID:   workspaceID.String(),
+			})
+			role = RoleViewer
+		}
+		out[in.ProjectID] = role
+	}
+	return out, nil
+}
+
+func resolveAccessFromParts(overrideExists, hasWS bool, wsRole, visibility, collabRole string) Role {
+	effective := RoleNone
+	if overrideExists {
+		effective = maxRole(effective, RoleViewer)
+	}
+	if hasWS && visibility == "workspace" {
+		switch wsRole {
+		case "owner":
+			effective = maxRole(effective, RoleOwner)
+		case "admin":
+			effective = maxRole(effective, RoleEditor)
+		case "member":
+			effective = maxRole(effective, RoleViewer)
+		}
+	}
+	if collabRole != "" {
+		switch collabRole {
+		case "owner":
+			effective = maxRole(effective, RoleOwner)
+		case "editor":
+			effective = maxRole(effective, RoleEditor)
+		case "viewer":
+			effective = maxRole(effective, RoleViewer)
+		}
+	}
+	return effective
 }
 
 // ResolveAccessForPrincipal is a convenience wrapper that also handles

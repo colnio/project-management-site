@@ -34,6 +34,10 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"code":"unauthorized","message":"authentication required"}`, http.StatusUnauthorized)
 		return
 	}
+	if err := platform.RequireScope(p, platform.ScopeWriteAI); err != nil {
+		writeSSEError(w, "ai.forbidden", "missing write:ai scope")
+		return
+	}
 
 	// Extract conversation ID from path.
 	convIDStr := chi.URLParam(r, "id")
@@ -138,19 +142,13 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 	// Compose a system message with project context (not persisted to DB).
 
 	// contextPreamble is always included as the foundation of the system prompt.
-	contextPreamble := fmt.Sprintf(
-		"Current context:\n"+
-			"  project_id: %s\n"+
-			"  project_name: %s\n"+
-			"  workspace_id: %s\n"+
-			"  today: %s\n\n"+
-			"You are running inside a web application; there is no local filesystem. "+
-			"Use the available tools to read project data and produce the final report as a chat message and/or via the draft_page tool.",
-		proj.ID.String(),
-		proj.Name,
-		proj.WorkspaceID.String(),
-		time.Now().Format("2006-01-02"),
-	)
+	contextPreamble := untrustedDataNotice +
+		xmlData("project_id", proj.ID.String()) + "\n" +
+		xmlData("project_name", proj.Name) + "\n" +
+		xmlData("workspace_id", proj.WorkspaceID.String()) + "\n" +
+		xmlData("today", time.Now().Format("2006-01-02")) + "\n\n" +
+		"You are running inside a web application; there is no local filesystem. " +
+		"Use the available tools to read project data and produce the final report as a chat message and/or via the draft_page tool."
 
 	var systemContent string
 	if conv.Skill != nil && *conv.Skill != "" {

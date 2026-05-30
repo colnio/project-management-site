@@ -557,6 +557,119 @@ func TestReviewRisks_ReturnsContent(t *testing.T) {
 	}
 }
 
+func TestApproveToolCall_RejectsForeignConversation(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	stub := NewStubClient(nil)
+	svc, sd := newTestService(t, pool, stub)
+	ctx := context.Background()
+
+	convA, err := svc.CreateConversation(ctx, sd.Principal, sd.ProjectID, "conv A", nil)
+	if err != nil {
+		t.Fatalf("create conv A: %v", err)
+	}
+
+	projB := uuid.New()
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		projB, sd.WorkspaceID, "Proj B", "", "workspace", sd.UserID,
+	); err != nil {
+		t.Fatalf("insert project B: %v", err)
+	}
+	convB, err := svc.CreateConversation(ctx, sd.Principal, projB, "conv B", nil)
+	if err != nil {
+		t.Fatalf("create conv B: %v", err)
+	}
+
+	tc, err := recordToolCall(ctx, pool, &convB.ID, "list_samples", json.RawMessage(`{}`), "proposed")
+	if err != nil {
+		t.Fatalf("record tool call: %v", err)
+	}
+
+	_, err = svc.ApproveToolCall(ctx, sd.Principal, convA.ID, tc.ID)
+	if err == nil {
+		t.Fatal("expected error approving tool call from another conversation")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if em.GetStatus() != 403 {
+		t.Errorf("expected 403, got %d", em.GetStatus())
+	}
+}
+
+func TestRejectToolCall_RejectsForeignConversation(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	stub := NewStubClient(nil)
+	svc, sd := newTestService(t, pool, stub)
+	ctx := context.Background()
+
+	convA, err := svc.CreateConversation(ctx, sd.Principal, sd.ProjectID, "conv A", nil)
+	if err != nil {
+		t.Fatalf("create conv A: %v", err)
+	}
+
+	projB := uuid.New()
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		projB, sd.WorkspaceID, "Proj B", "", "workspace", sd.UserID,
+	); err != nil {
+		t.Fatalf("insert project B: %v", err)
+	}
+	convB, err := svc.CreateConversation(ctx, sd.Principal, projB, "conv B", nil)
+	if err != nil {
+		t.Fatalf("create conv B: %v", err)
+	}
+
+	tc, err := recordToolCall(ctx, pool, &convB.ID, "list_samples", json.RawMessage(`{}`), "proposed")
+	if err != nil {
+		t.Fatalf("record tool call: %v", err)
+	}
+
+	_, err = svc.RejectToolCall(ctx, sd.Principal, convA.ID, tc.ID)
+	if err == nil {
+		t.Fatal("expected error rejecting tool call from another conversation")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if em.GetStatus() != 403 {
+		t.Errorf("expected 403, got %d", em.GetStatus())
+	}
+}
+
+func TestHandleMessageStream_RequiresWriteAIScope(t *testing.T) {
+	pool := testsupport.NewPool(t)
+	stub := NewStubClient(nil)
+	svc, sd := newTestService(t, pool, stub)
+	ctx := context.Background()
+
+	conv, err := svc.CreateConversation(ctx, sd.Principal, sd.ProjectID, "scope test", nil)
+	if err != nil {
+		t.Fatalf("create conv: %v", err)
+	}
+
+	readOnly := &platform.Principal{
+		UserID: sd.UserID,
+		Email:  sd.Principal.Email,
+		Scopes: []string{platform.ScopeReadAI},
+	}
+
+	reqBody, _ := json.Marshal(map[string]string{"content": "hello"})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/v1/ai/conversations/"+conv.ID.String()+"/messages", bytes.NewReader(reqBody))
+	req = req.WithContext(platform.WithPrincipal(req.Context(), readOnly))
+	req.URL.Path = "/v1/ai/conversations/" + conv.ID.String() + "/messages"
+
+	svc.HandleMessageStream(w, req)
+
+	body, _ := io.ReadAll(w.Body)
+	if !strings.Contains(string(body), "ai.forbidden") {
+		t.Errorf("expected ai.forbidden SSE error, got:\n%s", string(body))
+	}
+}
+
 func TestReviewRisks_NilRisks(t *testing.T) {
 	pool := testsupport.NewPool(t)
 	stub := NewStubClient(nil)

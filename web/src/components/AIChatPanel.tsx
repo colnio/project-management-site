@@ -18,7 +18,7 @@ import {
 import type { AIMessage, AIToolCall, AIConversation } from '@/hooks/useAIQueries';
 import { readSSEStream } from '@/api/sseParser';
 import type { SSEEvent } from '@/api/sseParser';
-import { ApiError, getAccessToken } from '@/api/client';
+import { ApiError, apiFetchRaw } from '@/api/client';
 
 const PANEL_WIDTH = 380;
 
@@ -412,15 +412,11 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     setStreaming(streamMsg);
 
     try {
-      const token = getAccessToken();
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const response = await fetch(`/v1/ai/conversations/${selectedConvId}/messages`, {
-        method: 'POST', headers, body: JSON.stringify({ content }), signal: controller.signal,
+      const response = await apiFetchRaw(`/v1/ai/conversations/${selectedConvId}/messages`, {
+        method: 'POST',
+        headers: { Accept: 'text/event-stream' },
+        body: JSON.stringify({ content }),
+        signal: controller.signal,
       });
 
       if (response.status === 503) {
@@ -461,9 +457,6 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
       else setSendError((err as Error).message ?? 'Failed to send message');
       setStreaming(null); setSending(false);
     }
-
-    void qc.invalidateQueries({ queryKey: aiKeys.conversationMessages(selectedConvId) });
-    setSending(false);
   }, [draft, selectedConvId, sending, qc]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

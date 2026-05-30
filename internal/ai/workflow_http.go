@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
+	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
 )
 
@@ -117,11 +118,11 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 			return nil, platform.NotFound("ai.run_not_found", "workflow run not found")
 		}
 
-		// Authorize via the run's project.
-		if run.ProjectID != nil {
-			if _, _, err := svc.projects.Authorize(ctx, p, *run.ProjectID, "viewer"); err != nil {
-				return nil, err
-			}
+		if run.ProjectID == nil {
+			return nil, platform.NotFound("ai.run_not_found", "workflow run not found")
+		}
+		if _, _, err := svc.projects.Authorize(ctx, p, *run.ProjectID, org.RoleViewer); err != nil {
+			return nil, err
 		}
 
 		return &workflowRunOutput{Body: run}, nil

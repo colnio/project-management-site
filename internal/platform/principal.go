@@ -45,13 +45,8 @@ func (p *Principal) IsPrivileged() bool { return p.IsAdmin() || p.IsPI() }
 // Rules:
 //   - A first-party browser session (both Via* fields nil) is unrestricted and
 //     always returns true.
-//   - A token caller (ViaTokenID != nil or ViaAIConversationID != nil) whose
-//     Scopes slice is nil or empty is treated as a legacy unrestricted token and
-//     always returns true. This preserves backward-compatibility for PATs that
-//     were created before scoped enforcement was introduced.
-//   - A token caller with a NON-EMPTY Scopes list is enforced normally: only
-//     scopes present in the list are granted. A PAT scoped to ["read:audit"]
-//     will be denied all other endpoints.
+//   - Token callers (PAT or internal AI) are enforced against their Scopes list;
+//     an empty list grants nothing.
 func (p *Principal) HasScope(scope string) bool {
 	if p == nil {
 		return false
@@ -59,16 +54,18 @@ func (p *Principal) HasScope(scope string) bool {
 	if p.ViaTokenID == nil && p.ViaAIConversationID == nil {
 		return true // interactive human session is not scope-limited
 	}
-	// Token caller: empty Scopes means legacy unrestricted token.
-	if len(p.Scopes) == 0 {
-		return true
-	}
 	for _, s := range p.Scopes {
 		if s == scope {
 			return true
 		}
 	}
 	return false
+}
+
+// IsSessionOnly reports whether the principal is a first-party browser session
+// (JWT), not a PAT or internal-AI token.
+func (p *Principal) IsSessionOnly() bool {
+	return p != nil && p.ViaTokenID == nil && p.ViaAIConversationID == nil
 }
 
 type principalCtxKey struct{}

@@ -13,8 +13,10 @@ so application code is written once and only configuration changes at deploy.
 See [`docs/techSpec.md`](docs/techSpec.md) for the production design,
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for the local build guide,
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the as-built system, and
-[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for usage. The latest review summary
-is in [`docs/securityReview.md`](docs/securityReview.md). Contributor/agent
+[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for usage. Security findings from the
+2026-05-29 review (all remediated) are in
+[`docs/SECURITY_FINDINGS_2026-05-29.md`](docs/SECURITY_FINDINGS_2026-05-29.md)
+(earlier reviews: [`docs/securityReview.md`](docs/securityReview.md)). Contributor/agent
 conventions live in [`AGENTS.md`](AGENTS.md).
 
 ---
@@ -111,7 +113,7 @@ Node 20+ with pnpm, Docker (Colima or Docker Desktop). `go env -w GOTOOLCHAIN=au
 is required so the newer toolchain is fetched automatically.
 
 ```bash
-# 1. Local services (postgres, minio, mailpit, mock-oidc, nbconvert, searxng)
+# 1. Local services (postgres, minio, mailpit, nbconvert, searxng)
 make up                 # docker-compose up -d
 
 # 2. Seed the dev login user (also runs migrations)

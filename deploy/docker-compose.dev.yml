@@ -1,14 +1,23 @@
+# Local development stack. Host ports bind to 127.0.0.1 only — do not publish
+# 0.0.0.0 on shared/CI hosts. Default credentials below are for local dev only;
+# use strong secrets in any shared environment.
 name: lab-pm
+
+networks:
+  lab_internal:
+    driver: bridge
 
 services:
   postgres:
     image: postgres:16
+    networks: [lab_internal]
     environment:
+      # Dev-only defaults — change before exposing beyond localhost.
       POSTGRES_USER: lab
       POSTGRES_PASSWORD: lab
       POSTGRES_DB: lab
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,13 +28,15 @@ services:
 
   minio:
     image: minio/minio:latest
+    networks: [lab_internal]
     command: server /data --console-address ":9001"
     environment:
+      # Dev-only defaults — not for production.
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - miniodata:/data
     healthcheck:
@@ -37,6 +48,7 @@ services:
   # Creates the artifact buckets once MinIO is up.
   minio-init:
     image: minio/mc:latest
+    networks: [lab_internal]
     depends_on:
       minio:
         condition: service_started
@@ -51,35 +63,25 @@ services:
 
   mailpit:
     image: axllent/mailpit:latest
+    networks: [lab_internal]
     ports:
-      - "1025:1025"  # SMTP
-      - "8025:8025"  # web UI
+      - "127.0.0.1:1025:1025"  # SMTP
+      - "127.0.0.1:8025:8025"  # web UI
     environment:
       MP_MAX_MESSAGES: "5000"
-
-  mock-oidc:
-    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
-    ports:
-      - "9100:9100"
-    environment:
-      SERVER_PORT: "9100"
-      JSON_CONFIG: >
-        {
-          "interactiveLogin": true,
-          "httpServer": "NettyWrapper",
-          "tokenCallbacks": []
-        }
 
   nbconvert:
     build:
       context: ./nbconvert
+    networks: [lab_internal]
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
 
   searxng:
     image: searxng/searxng:latest
+    networks: [lab_internal]
     ports:
-      - "8888:8080"
+      - "127.0.0.1:8888:8080"
     volumes:
       - ./searxng:/etc/searxng:rw
     environment:

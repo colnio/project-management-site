@@ -75,10 +75,13 @@ type Service struct {
 	experiments *experiment.Service
 	cfg         *config.Config
 	rec         audit.Recorder
-	presign     *s3.PresignClient
-	bucket      string
-	log         *slog.Logger
-	enqueuer    Enqueuer // optional; nil means skip enqueueing (keeps old tests green)
+	presign         *s3.PresignClient
+	headChecker     objectHeadChecker
+	objectDeleter   objectDeleter
+	bucket          string
+	bucketRendered  string
+	log             *slog.Logger
+	enqueuer        Enqueuer // optional; nil means skip enqueueing (keeps old tests green)
 }
 
 // SetEnqueuer wires a background-job enqueuer into the service after construction.
@@ -120,17 +123,21 @@ func NewService(
 	})
 
 	presign := s3.NewPresignClient(s3Client)
+	objOps := &s3ObjectOps{client: s3Client}
 
 	return &Service{
-		pool:        pool,
-		projects:    projects,
-		samples:     samples,
-		experiments: experiments,
-		cfg:         cfg,
-		rec:         rec,
-		presign:     presign,
-		bucket:      cfg.BucketOriginals,
-		log:         log,
+		pool:           pool,
+		projects:       projects,
+		samples:        samples,
+		experiments:    experiments,
+		cfg:            cfg,
+		rec:            rec,
+		presign:        presign,
+		headChecker:    objOps,
+		objectDeleter:  objOps,
+		bucket:         cfg.BucketOriginals,
+		bucketRendered: cfg.BucketRendered,
+		log:            log,
 	}, nil
 }
 
@@ -173,6 +180,21 @@ func (s *Service) CreateArtifact(ctx context.Context, projectID uuid.UUID, filen
 		return nil, "", err
 	}
 
+	safeName, err := sanitizeFilename(filename)
+	if err != nil {
+		return nil, "", err
+	}
+	filename = safeName
+	if err := validateContentType(contentType); err != nil {
+		return nil, "", err
+	}
+	if sizeBytes <= 0 {
+		return nil, "", platform.BadRequest("artifact.invalid_size", "size_bytes must be positive")
+	}
+	if sizeBytes > MaxArtifactBytes {
+		return nil, "", platform.BadRequest("artifact.size_too_large", fmt.Sprintf("size_bytes exceeds maximum of %d", MaxArtifactBytes))
+	}
+
 	if artType == "" {
 		artType = inferType(contentType, filename)
 	}
@@ -181,7 +203,7 @@ func (s *Service) CreateArtifact(ctx context.Context, projectID uuid.UUID, filen
 	storageKey := fmt.Sprintf("projects/%s/artifacts/%s/%s", projectID, artID, filename)
 
 	var art Artifact
-	err := s.pool.QueryRow(ctx, `
+	err = s.pool.QueryRow(ctx, `
 		INSERT INTO artifacts
 		    (id, project_id, type, filename, content_type, size_bytes, storage_key, uploaded_by)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -198,10 +220,13 @@ func (s *Service) CreateArtifact(ctx context.Context, projectID uuid.UUID, filen
 		return nil, "", fmt.Errorf("artifact: insert: %w", err)
 	}
 
+	// Enforce declared size via presigned Content-Length (S3 rejects mismatched PUT bodies).
+	cl := sizeBytes
 	req, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:      &s.bucket,
-		Key:         &storageKey,
-		ContentType: &contentType,
+		Bucket:        &s.bucket,
+		Key:           &storageKey,
+		ContentType:   &contentType,
+		ContentLength: &cl,
 	}, s3.WithPresignExpires(15*time.Minute))
 	if err != nil {
 		return nil, "", fmt.Errorf("artifact: presign put: %w", err)
@@ -232,6 +257,18 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (*Artifact, 
 
 	if _, _, err := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleEditor); err != nil {
 		return nil, err
+	}
+
+	if art.UploadedBy != p.UserID {
+		if _, _, ownerErr := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleOwner); ownerErr != nil {
+			return nil, platform.Forbidden("only the uploader or project owner may complete this upload")
+		}
+	}
+
+	if s.headChecker != nil {
+		if err := s.headChecker.ObjectExists(ctx, s.bucket, art.StorageKey); err != nil {
+			return nil, platform.BadRequest("artifact.upload_missing", "uploaded object not found in storage")
+		}
 	}
 
 	originalURL := fmt.Sprintf("%s/%s/%s", s.cfg.S3PublicURLBase, s.bucket, art.StorageKey)
@@ -294,7 +331,14 @@ func (s *Service) DeleteArtifact(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("artifact: delete: %w", err)
 	}
 
-	// S3 object cleanup is best-effort/optional — skip for now.
+	s.bestEffortDeleteObject(ctx, s.bucket, art.StorageKey)
+	if art.RenderedURL != "" {
+		s.bestEffortDeleteObject(ctx, s.bucketRendered, art.StorageKey+".html")
+	}
+	if art.ThumbnailURL != "" {
+		s.bestEffortDeleteObject(ctx, s.bucketRendered, art.StorageKey+"_thumb_sm.jpg")
+		s.bestEffortDeleteObject(ctx, s.bucketRendered, art.StorageKey+"_thumb_md.jpg")
+	}
 
 	_ = s.rec.Record(ctx, audit.Entry{
 		Actor:        p.UserID,
@@ -537,8 +581,17 @@ func inferType(contentType, filename string) string {
 	// Also infer image from extension.
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".tiff", ".bmp":
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".tiff", ".bmp":
 		return "image"
 	}
 	return "other"
+}
+
+func (s *Service) bestEffortDeleteObject(ctx context.Context, bucket, key string) {
+	if s.objectDeleter == nil || key == "" {
+		return
+	}
+	if err := s.objectDeleter.DeleteObject(ctx, bucket, key); err != nil {
+		s.log.Warn("artifact: best-effort s3 delete failed", "bucket", bucket, "key", key, "err", err)
+	}
 }

@@ -144,8 +144,14 @@ func (s *Service) CreateProject(
 		visibility = "workspace"
 	}
 
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("project: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
 	var proj Project
-	err := s.pool.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`INSERT INTO projects (workspace_id, name, description, visibility, created_by)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, workspace_id, name, description, visibility,
@@ -159,11 +165,19 @@ func (s *Service) CreateProject(
 		return nil, fmt.Errorf("project: create project: %w", err)
 	}
 
-	// Private projects require an explicit collaborator entry for the creator.
 	if visibility == "private" {
-		if err := s.org.AddCollaborator(ctx, proj.ID, creatorID, org.RoleOwner); err != nil {
+		_, err = tx.Exec(ctx,
+			`INSERT INTO project_collaborations (project_id, user_id, role) VALUES ($1, $2, $3)
+			 ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+			proj.ID, creatorID, string(org.RoleOwner),
+		)
+		if err != nil {
 			return nil, fmt.Errorf("project: add owner collaborator: %w", err)
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("project: commit create project: %w", err)
 	}
 
 	_ = s.rec.Record(ctx, audit.Entry{
@@ -203,7 +217,8 @@ func (s *Service) ListProjectsForWorkspace(
 	}
 	defer rows.Close()
 
-	var result []*Project
+	var all []*Project
+	var accessInputs []org.ProjectAccessInput
 	for rows.Next() {
 		var proj Project
 		if err := rows.Scan(
@@ -212,17 +227,26 @@ func (s *Service) ListProjectsForWorkspace(
 		); err != nil {
 			return nil, fmt.Errorf("project: scan project: %w", err)
 		}
-
-		role, err := s.org.ResolveAccessForPrincipal(ctx, p, workspaceID, proj.Visibility, &proj.ID)
-		if err != nil {
-			return nil, fmt.Errorf("project: resolve access: %w", err)
-		}
-		if role.CanRead() {
-			result = append(result, &proj)
-		}
+		all = append(all, &proj)
+		accessInputs = append(accessInputs, org.ProjectAccessInput{
+			ProjectID:  proj.ID,
+			Visibility: proj.Visibility,
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("project: rows error: %w", err)
+	}
+
+	roles, err := s.org.ResolveAccessForProjects(ctx, p, workspaceID, accessInputs)
+	if err != nil {
+		return nil, fmt.Errorf("project: resolve access: %w", err)
+	}
+
+	var result []*Project
+	for _, proj := range all {
+		if roles[proj.ID].CanRead() {
+			result = append(result, proj)
+		}
 	}
 	return result, nil
 }
@@ -264,6 +288,36 @@ func (s *Service) UpdateProject(
 	})
 
 	return &proj, nil
+}
+
+// GetProjectNames returns id→name for the given project IDs. Missing IDs are
+// omitted. An empty ids slice returns an empty map.
+func (s *Service) GetProjectNames(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]string, error) {
+	if len(ids) == 0 {
+		return map[uuid.UUID]string{}, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, name FROM projects WHERE id = ANY($1)`,
+		ids,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("project: get project names: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[uuid.UUID]string, len(ids))
+	for rows.Next() {
+		var id uuid.UUID
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, fmt.Errorf("project: scan project name: %w", err)
+		}
+		out[id] = name
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("project: get project names rows: %w", err)
+	}
+	return out, nil
 }
 
 // ListIDsForWorkspace returns the UUIDs of non-archived projects in the workspace.

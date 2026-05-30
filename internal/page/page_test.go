@@ -275,6 +275,31 @@ func TestUpdatePage_IfMatchRoundtrip(t *testing.T) {
 	}
 }
 
+func TestUpdatePage_StaleIfMatchAfterPriorWrite_Returns412(t *testing.T) {
+	env := newTestEnv(t)
+	userID, projectID := setupProject(t, env)
+
+	blocks1 := json.RawMessage(`[{"type":"p","text":"v1"}]`)
+	pg, rev1 := createPageHelper(t, env, projectID, userID, blocks1)
+
+	etag1 := platform.FormatETag(rev1.ID.String())
+	blocks2 := json.RawMessage(`[{"type":"p","text":"v2"}]`)
+	if _, _, err := page.ExportUpdatePage(env.pageSvc, env.ctx, pg, blocks2, "human", false, userID, etag1); err != nil {
+		t.Fatalf("first update: %v", err)
+	}
+
+	// Reuse the original ETag after the page advanced — must 412 inside the write tx.
+	blocks3 := json.RawMessage(`[{"type":"p","text":"v3"}]`)
+	_, _, err := page.ExportUpdatePage(env.pageSvc, env.ctx, pg, blocks3, "human", false, userID, etag1)
+	if err == nil {
+		t.Fatal("expected 412 error for stale If-Match after concurrent advance")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok || em.GetStatus() != 412 {
+		t.Errorf("expected 412, got %v", err)
+	}
+}
+
 func TestUpdatePage_StalIfMatch_Returns412(t *testing.T) {
 	env := newTestEnv(t)
 	userID, projectID := setupProject(t, env)

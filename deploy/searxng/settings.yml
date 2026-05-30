@@ -1,10 +1,14 @@
 # Minimal SearXNG config for the agent web_search tool (Track G, not yet wired).
 # JSON output is enabled so the Go client can parse results.
+#
+# Generate a production secret_key before deploy, e.g.:
+#   python3 -c "import secrets; print(secrets.token_hex(32))"
+# Set it via SEARXNG_SECRET or replace server.secret_key below.
 use_default_settings: true
 
 server:
   secret_key: "dev-insecure-searxng-key-change-me"
-  limiter: false
+  limiter: true
   image_proxy: false
 
 search:

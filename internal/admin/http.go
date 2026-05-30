@@ -176,6 +176,14 @@ func (s *Service) handleUpdateUser(ctx context.Context, in *updateUserInput) (*u
 		if err := s.auth.SetUserStatus(ctx, in.ID, *in.Body.Status); err != nil {
 			return nil, err
 		}
+		if *in.Body.Status == "suspended" {
+			if err := s.auth.RevokeAllUserPATs(ctx, in.ID); err != nil {
+				return nil, err
+			}
+			if err := s.auth.RevokeAllUserRefreshSessions(ctx, in.ID); err != nil {
+				return nil, err
+			}
+		}
 		if s.notify != nil && prev.Status != *in.Body.Status {
 			switch *in.Body.Status {
 			case "approved":

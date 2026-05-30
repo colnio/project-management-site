@@ -2,7 +2,7 @@
  * Queries and mutations for pages, revisions, and presence.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiFetch, getAccessToken } from '@/api/client';
+import { apiFetch, apiFetchRaw } from '@/api/client';
 import type { components } from '@/api/schema.d.ts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -59,9 +59,7 @@ export const pageKeys = {
 // ─── Raw fetch helpers that expose ETag ──────────────────────────────────────
 
 async function fetchPage(pageId: string): Promise<GetPageResponse> {
-  const resp = await fetch(`/v1/pages/${pageId}`, {
-    headers: buildAuthHeaders(),
-  });
+  const resp = await apiFetchRaw(`/v1/pages/${pageId}`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch page: ${resp.status}`);
   }
@@ -75,13 +73,9 @@ async function putPage(
   etag: string,
   body: { blocks: unknown; source: 'human' | 'auto_save' }
 ): Promise<{ data: UpdatePageResponse; etag: string; status: number }> {
-  const resp = await fetch(`/v1/pages/${pageId}`, {
+  const resp = await apiFetchRaw(`/v1/pages/${pageId}`, {
     method: 'PUT',
-    headers: {
-      ...buildAuthHeaders(),
-      'Content-Type': 'application/json',
-      'If-Match': etag,
-    },
+    headers: { 'If-Match': etag },
     body: JSON.stringify(body),
   });
   const newEtag = resp.headers.get('ETag') ?? etag;
@@ -98,12 +92,8 @@ async function postPage(
   projectId: string,
   body: { parent_type: string; parent_id: string; slot: string; blocks: unknown }
 ): Promise<CreatePageResponse> {
-  const resp = await fetch(`/v1/projects/${projectId}/pages`, {
+  const resp = await apiFetchRaw(`/v1/projects/${projectId}/pages`, {
     method: 'POST',
-    headers: {
-      ...buildAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
@@ -112,13 +102,6 @@ async function postPage(
   const data = (await resp.json()) as CreatePageResponse;
   data._etag = resp.headers.get('ETag') ?? undefined;
   return data;
-}
-
-function buildAuthHeaders(): Record<string, string> {
-  const token = getAccessToken();
-  const headers: Record<string, string> = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  return headers;
 }
 
 // ─── Query hooks ─────────────────────────────────────────────────────────────

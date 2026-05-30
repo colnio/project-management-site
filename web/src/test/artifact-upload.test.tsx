@@ -6,6 +6,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ArtifactUpload } from '../components/ArtifactUpload';
+import { uploadToPresignedUrl } from '../hooks/useArtifactQueries';
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,22 @@ describe('ArtifactUpload', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Upload another/i })).toBeInTheDocument();
+    }, { timeout: 5000 });
+  });
+
+  it('shows error and does not complete when presigned PUT fails', async () => {
+    vi.mocked(uploadToPresignedUrl).mockRejectedValueOnce(new Error('Upload failed with status 403'));
+
+    renderWithQuery(<ArtifactUpload projectId="proj_nmc" />);
+    const file = new File(['data'], 'fail.pdf', { type: 'application/pdf' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Upload failed with status 403/i)).toBeInTheDocument();
     }, { timeout: 5000 });
   });
 

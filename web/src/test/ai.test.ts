@@ -4,7 +4,7 @@
  * 2. Autonomy mode logic — mode permissiveness ordering
  */
 import { describe, it, expect } from 'vitest';
-import { parseSSEChunk } from '../api/sseParser';
+import { parseSSEChunk, readSSEStream, maxSSEBufferBytes } from '../api/sseParser';
 import type { SSEEvent } from '../api/sseParser';
 
 // ─── SSE Parser Tests ─────────────────────────────────────────────────────────
@@ -114,6 +114,21 @@ describe('parseSSEChunk', () => {
   it('handles empty input', () => {
     expect(parseSSEChunk('')).toHaveLength(0);
     expect(parseSSEChunk('\n\n')).toHaveLength(0);
+  });
+
+  it('readSSEStream rejects when buffer exceeds maxSSEBufferBytes', async () => {
+    const chunk = 'x'.repeat(maxSSEBufferBytes + 1);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(chunk));
+        controller.close();
+      },
+    });
+    const response = new Response(stream);
+    await expect(
+      readSSEStream(response, () => {})
+    ).rejects.toThrow(/SSE buffer exceeded/);
+    expect(maxSSEBufferBytes).toBeGreaterThan(0);
   });
 
   // ─── Finding 11 regression: tool_call_id is the real backend field ────────

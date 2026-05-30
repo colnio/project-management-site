@@ -74,10 +74,8 @@ func (svc *Service) HandleListAudit(ctx context.Context, in *GetAuditInput) (*Ge
 	if !principal.IsPrivileged() {
 		return nil, platform.Forbidden("audit log requires privileged role (admin or PI)")
 	}
-	// Token-scoped callers must carry read:audit.
-	if (principal.ViaTokenID != nil || principal.ViaAIConversationID != nil) &&
-		!principal.HasScope("read:audit") {
-		return nil, platform.Forbidden("token missing scope read:audit")
+	if err := platform.RequireScope(principal, platform.ScopeReadAudit); err != nil {
+		return nil, err
 	}
 
 	f := ListFilter{

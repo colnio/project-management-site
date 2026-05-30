@@ -396,7 +396,12 @@ func (s *Service) updatePage(
 	source string,
 	candidate bool,
 	authorID uuid.UUID,
+	ifMatch string,
 ) (*Revision, json.RawMessage, error) {
+	expectedRev, err := revisionIDFromIfMatch(ifMatch)
+	if err != nil {
+		return nil, nil, err
+	}
 	hash, canon, err := canonicalHash(blocks)
 	if err != nil {
 		return nil, nil, platform.BadRequest("page.invalid_blocks", err.Error())
@@ -448,7 +453,6 @@ func (s *Service) updatePage(
 	}
 
 	if !candidate {
-		// Supersede the old current revision.
 		if oldRevID != nil {
 			_, err = tx.Exec(ctx,
 				`UPDATE page_revisions SET status = 'superseded' WHERE id = $1`,
@@ -459,13 +463,28 @@ func (s *Service) updatePage(
 			}
 		}
 
-		// Advance the page pointer.
-		_, err = tx.Exec(ctx,
-			`UPDATE pages SET current_revision_id = $1, updated_at = now() WHERE id = $2`,
-			rev.ID, pg.ID,
+		tag, err := tx.Exec(ctx,
+			`UPDATE pages SET current_revision_id = $1, updated_at = now()
+			 WHERE id = $2 AND current_revision_id IS NOT DISTINCT FROM $3`,
+			rev.ID, pg.ID, expectedRev,
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("page: update current_revision_id: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return nil, nil, s.pagePreconditionFailed(ctx, pg.ID)
+		}
+	} else {
+		tag, err := tx.Exec(ctx,
+			`UPDATE pages SET updated_at = now()
+			 WHERE id = $1 AND current_revision_id IS NOT DISTINCT FROM $2`,
+			pg.ID, expectedRev,
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("page: etag guard: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return nil, nil, s.pagePreconditionFailed(ctx, pg.ID)
 		}
 	}
 
@@ -677,6 +696,43 @@ func (s *Service) getRevision(ctx context.Context, id uuid.UUID) (*Revision, err
 		return nil, fmt.Errorf("page: get revision: %w", err)
 	}
 	return &rev, nil
+}
+
+// revisionIDFromIfMatch parses the revision UUID from an If-Match header value.
+func revisionIDFromIfMatch(ifMatch string) (*uuid.UUID, error) {
+	ifMatch = strings.TrimSpace(ifMatch)
+	if ifMatch == "" {
+		return nil, platform.PreconditionFailed(map[string]any{"current_revision_id": ""})
+	}
+	if ifMatch == "*" {
+		return nil, platform.BadRequest("page.invalid_if_match", "wildcard If-Match is not supported")
+	}
+	for _, part := range strings.Split(ifMatch, ",") {
+		p := strings.TrimSpace(part)
+		p = strings.TrimPrefix(p, "W/")
+		p = strings.Trim(p, `"`)
+		if p == "" {
+			continue
+		}
+		id, err := uuid.Parse(p)
+		if err != nil {
+			return nil, platform.BadRequest("page.invalid_if_match", "invalid If-Match revision id")
+		}
+		return &id, nil
+	}
+	return nil, platform.PreconditionFailed(map[string]any{"current_revision_id": ""})
+}
+
+func (s *Service) pagePreconditionFailed(ctx context.Context, pageID uuid.UUID) error {
+	var cur *uuid.UUID
+	err := s.pool.QueryRow(ctx,
+		`SELECT current_revision_id FROM pages WHERE id = $1`, pageID,
+	).Scan(&cur)
+	currentRevStr := ""
+	if err == nil && cur != nil {
+		currentRevStr = cur.String()
+	}
+	return platform.PreconditionFailed(map[string]any{"current_revision_id": currentRevStr})
 }
 
 // getBlob loads the canonical blocks JSON for a blob hash.

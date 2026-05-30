@@ -9,6 +9,7 @@ import { useInbox } from '@/hooks/useWorkspaceQueries';
 import { useCurrentWorkspace } from '@/hooks/useQueries';
 import type { InboxItem } from '@/hooks/useWorkspaceQueries';
 import { useDecideApprovalRequest } from '@/hooks/useApprovalQueries';
+import { safeAppPath } from '@/lib/safeAppPath';
 
 // ─── Kind config ──────────────────────────────────────────────────────────────
 
@@ -162,8 +163,9 @@ function InboxRow({ item }: { item: InboxItem }) {
     </div>
   );
 
-  if (item.link && !isApproval) {
-    return <a href={item.link}>{inner}</a>;
+  const safeLink = !isApproval ? safeAppPath(item.link) : null;
+  if (safeLink) {
+    return <a href={safeLink}>{inner}</a>;
   }
   return inner;
 }

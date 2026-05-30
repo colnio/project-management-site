@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -29,10 +30,11 @@ func bearerFromCtx(ctx context.Context) string {
 
 // Server is the MCP server that wraps the platform REST API.
 type Server struct {
-	restBase string      // e.g. "http://127.0.0.1:8080"
-	log      *slog.Logger
-	mcp      *mcpserver.MCPServer
-	sse      *mcpserver.SSEServer
+	restBase   string // e.g. "http://127.0.0.1:8080"
+	log        *slog.Logger
+	mcp        *mcpserver.MCPServer
+	sse        *mcpserver.SSEServer
+	httpClient *http.Client
 }
 
 // NewServer constructs the MCP server. restBaseURL must be the full base URL
@@ -41,8 +43,9 @@ type Server struct {
 // and stores the bearer token in the context so tool handlers can forward it.
 func NewServer(restBaseURL string, log *slog.Logger) *Server {
 	s := &Server{
-		restBase: strings.TrimSuffix(restBaseURL, "/"),
-		log:      log,
+		restBase:   strings.TrimSuffix(restBaseURL, "/"),
+		log:        log,
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 
 	s.mcp = mcpserver.NewMCPServer(
@@ -96,7 +99,7 @@ func (s *Server) get(ctx context.Context, path string) ([]byte, error) {
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("mcp: http: %w", err)
 	}

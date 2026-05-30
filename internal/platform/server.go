@@ -38,13 +38,24 @@ func New(deps *ServerDeps) *Server {
 	r.Use(RequestLogger(logger))
 	r.Use(middleware.Recoverer)
 	r.Use(CORS(deps.WebOrigin))
+	ipRL := deps.AuthIPRateLimiter
+	if ipRL == nil {
+		ipRL = NewIPRateLimiter(deps.AuthIPPerMinute)
+	}
+	r.Use(ipRL.LoginRegisterMiddleware())
 	r.Use(AuthResolver(deps.Verifier))
-	r.Use(NewRateLimiter(deps.PerMinute).Middleware())
+	rl := deps.RateLimiter
+	if rl == nil {
+		rl = NewRateLimiter(deps.PerMinute)
+	}
+	r.Use(rl.Middleware())
 	r.Use(Idempotency(deps.Idempotency))
 
 	config := huma.DefaultConfig("Lab Project Management API", "1.0.0")
-	config.DocsPath = "/docs"
-	config.OpenAPIPath = "/openapi"
+	if !deps.Production {
+		config.DocsPath = "/docs"
+		config.OpenAPIPath = "/openapi"
+	}
 	config.Info.Description = "REST API for the lab project-management platform. " +
 		"Every action available in the UI is available here; the in-app AI assistant " +
 		"uses the same surface. See /llms.txt for an agent-oriented summary.\n\n" +

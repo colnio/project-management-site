@@ -91,3 +91,21 @@ func (s *Service) AddRelationForTest(
 func (s *Service) GetLineageForTest(ctx context.Context, sampleID uuid.UUID) (*LineageGraph, error) {
 	return s.getLineage(ctx, sampleID)
 }
+
+// HandleAddRelationForTest exposes handleAddRelation for HTTP-layer auth tests.
+func (s *Service) HandleAddRelationForTest(
+	ctx context.Context,
+	parentID uuid.UUID,
+	childID uuid.UUID,
+	relationType, notes string,
+) (*SampleRelation, error) {
+	in := &addRelationInput{ID: parentID.String()}
+	in.Body.ChildSampleID = childID
+	in.Body.RelationType = relationType
+	in.Body.Notes = notes
+	out, err := s.handleAddRelation(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out.Body, nil
+}

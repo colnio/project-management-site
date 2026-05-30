@@ -97,6 +97,17 @@ func (f *fakeUsers) GetUserByID(_ context.Context, id uuid.UUID) (*auth.User, er
 	}
 	return u, nil
 }
+
+func (f *fakeUsers) GetUsersByIDs(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]*auth.User, error) {
+	out := make(map[uuid.UUID]*auth.User, len(ids))
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out[id] = u
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeUsers) CreateUser(_ context.Context, _, _ string) (*auth.User, error) {
 	return nil, platform.BadRequest("not_supported", "not supported in tests")
 }
@@ -402,8 +413,48 @@ func TestDecide_AlreadyDecidedFails(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
 	}
+	if em.GetStatus() != 409 {
+		t.Errorf("expected 409, got %d", em.GetStatus())
+	}
 	if em.Code != "approval.already_decided" {
 		t.Errorf("expected code approval.already_decided, got %q", em.Code)
+	}
+}
+
+// TestHandleList_ForbiddenWithoutProjectAccess verifies list requires project viewer access.
+func TestHandleList_ForbiddenWithoutProjectAccess(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner-list@approval.test", "Owner List")
+	outsider := env.users.seed(t, "outsider-list@approval.test", "Outsider List")
+	ws := setupWorkspace(t, env, owner)
+	proj := setupProject(t, env, ws.ID, owner.ID)
+
+	if _, err := env.approvalSvc.Create(ctx, principal(owner), proj.ID, nil, "Secret", "", nil); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	ctxOwner := platform.WithPrincipal(ctx, principal(owner))
+	out, err := env.approvalSvc.HandleListForTest(ctxOwner, proj.ID.String())
+	if err != nil {
+		t.Fatalf("owner list: %v", err)
+	}
+	if len(out.Body.Items) != 1 {
+		t.Fatalf("expected 1 item for owner, got %d", len(out.Body.Items))
+	}
+
+	ctxOut := platform.WithPrincipal(ctx, principal(outsider))
+	_, err = env.approvalSvc.HandleListForTest(ctxOut, proj.ID.String())
+	if err == nil {
+		t.Fatal("expected forbidden for outsider")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if em.GetStatus() != 403 {
+		t.Errorf("expected 403, got %d", em.GetStatus())
 	}
 }
 

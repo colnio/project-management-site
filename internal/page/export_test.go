@@ -48,16 +48,7 @@ func ExportUpdatePage(
 	authorID uuid.UUID,
 	ifMatch string,
 ) (*Revision, json.RawMessage, error) {
-	// If-Match check.
-	currentRevStr := ""
-	if pg.CurrentRevisionID != nil {
-		currentRevStr = pg.CurrentRevisionID.String()
-	}
-	if !platform.ETagMatches(ifMatch, currentRevStr) {
-		currentState := map[string]any{"current_revision_id": currentRevStr}
-		return nil, nil, platform.PreconditionFailed(currentState)
-	}
-	return s.updatePage(ctx, pg, blocks, source, candidate, authorID)
+	return s.updatePage(ctx, pg, blocks, source, candidate, authorID, ifMatch)
 }
 
 // ExportUpdatePageWithPrincipal performs auth + If-Match check + updatePage.
@@ -71,19 +62,10 @@ func ExportUpdatePageWithPrincipal(
 	p *platform.Principal,
 	ifMatch string,
 ) (*Revision, json.RawMessage, error) {
-	// Auth check.
 	if _, _, err := s.projects.Authorize(ctx, p, pg.ProjectID, org.RoleEditor); err != nil {
 		return nil, nil, err
 	}
-	currentRevStr := ""
-	if pg.CurrentRevisionID != nil {
-		currentRevStr = pg.CurrentRevisionID.String()
-	}
-	if !platform.ETagMatches(ifMatch, currentRevStr) {
-		currentState := map[string]any{"current_revision_id": currentRevStr}
-		return nil, nil, platform.PreconditionFailed(currentState)
-	}
-	return s.updatePage(ctx, pg, blocks, source, candidate, p.UserID)
+	return s.updatePage(ctx, pg, blocks, source, candidate, p.UserID, ifMatch)
 }
 
 // ExportListRevisions returns all revisions for a page (no pagination).

@@ -39,8 +39,9 @@ type Config struct {
 	LabTimezone   string
 
 	// Auth signing + cookies.
-	JWTSigningKey  string
-	InviteSignKey  string
+	JWTSigningKey   string
+	InviteSignKey   string
+	DigestSignKey   string
 	AccessTokenTTL time.Duration
 	RefreshTokenTTL time.Duration
 	CookieDomain   string
@@ -82,8 +83,9 @@ func Load() (*Config, error) {
 		SMTPPassword:    getenv("SMTP_PASSWORD", ""),
 		DigestHour:      getint("DIGEST_HOUR", 7),
 		LabTimezone:     getenv("LAB_TIMEZONE", "Asia/Singapore"),
-		JWTSigningKey:   getenv("JWT_SIGNING_KEY", "dev-insecure-jwt-key-change-me"),
-		InviteSignKey:   getenv("INVITE_SIGN_KEY", "dev-insecure-invite-key-change-me"),
+		JWTSigningKey:   getenv("JWT_SIGNING_KEY", defaultJWTSigningKey),
+		InviteSignKey:   getenv("INVITE_SIGN_KEY", defaultInviteSignKey),
+		DigestSignKey:   getenv("DIGEST_SIGN_KEY", defaultDigestSignKey),
 		AccessTokenTTL:  getdur("ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTokenTTL: getdur("REFRESH_TOKEN_TTL", 720*time.Hour),
 		CookieDomain:    getenv("COOKIE_DOMAIN", "localhost"),
@@ -97,7 +99,39 @@ func Load() (*Config, error) {
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
+	if err := c.validateProduction(); err != nil {
+		return nil, err
+	}
 	return c, nil
+}
+
+const (
+	defaultJWTSigningKey   = "dev-insecure-jwt-key-change-me"
+	defaultInviteSignKey   = "dev-insecure-invite-key-change-me"
+	defaultDigestSignKey   = "dev-insecure-digest-key-change-me"
+	minSigningKeyBytes   = 32
+)
+
+func (c *Config) validateProduction() error {
+	if !c.IsProduction() {
+		return nil
+	}
+	if len(c.JWTSigningKey) < minSigningKeyBytes || c.JWTSigningKey == defaultJWTSigningKey {
+		return fmt.Errorf("production requires JWT_SIGNING_KEY of at least %d bytes (not the dev default)", minSigningKeyBytes)
+	}
+	if len(c.InviteSignKey) < minSigningKeyBytes || c.InviteSignKey == defaultInviteSignKey {
+		return fmt.Errorf("production requires INVITE_SIGN_KEY of at least %d bytes (not the dev default)", minSigningKeyBytes)
+	}
+	if len(c.DigestSignKey) < minSigningKeyBytes || c.DigestSignKey == defaultDigestSignKey {
+		return fmt.Errorf("production requires DIGEST_SIGN_KEY of at least %d bytes (not the dev default)", minSigningKeyBytes)
+	}
+	if !c.CookieSecure {
+		return fmt.Errorf("production requires COOKIE_SECURE=true")
+	}
+	if c.S3AccessKey == "minioadmin" || c.S3SecretKey == "minioadmin" {
+		return fmt.Errorf("production must not use default MinIO credentials for S3")
+	}
+	return nil
 }
 
 func (c *Config) IsProduction() bool { return c.Env == "production" }

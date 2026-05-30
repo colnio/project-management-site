@@ -113,13 +113,25 @@ const riskCols = `id, project_id, iteration_id, seq, title, likelihood,
 	status, flagged_for_pi_review, source, workflow_run_id,
 	created_by, created_at, updated_at`
 
-// riskColsR is riskCols with every column qualified by the `r` alias, for
-// queries that JOIN another table (e.g. projects) where id/project_id would
-// otherwise be ambiguous. Column order matches riskCols so collectRisks scans it.
-const riskColsR = `r.id, r.project_id, r.iteration_id, r.seq, r.title, r.likelihood,
-	r.impact_headline, r.impact_description, r.mitigation, r.plan_b,
-	r.status, r.flagged_for_pi_review, r.source, r.workflow_run_id,
-	r.created_by, r.created_at, r.updated_at`
+// HasBlockingHighRisk reports whether the iteration has an open HIGH-likelihood
+// risk flagged for PI review (blocks activation to "active").
+func (s *Service) HasBlockingHighRisk(ctx context.Context, iterationID uuid.UUID) (bool, error) {
+	var blocked bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM risks
+			WHERE iteration_id = $1
+			  AND likelihood = 'high'
+			  AND flagged_for_pi_review = true
+			  AND status = 'open'
+		)`,
+		iterationID,
+	).Scan(&blocked)
+	if err != nil {
+		return false, fmt.Errorf("risk: has blocking high risk: %w", err)
+	}
+	return blocked, nil
+}
 
 // ─── GetRisk ─────────────────────────────────────────────────────────────────
 
@@ -303,15 +315,21 @@ func (s *Service) ListForReview(ctx context.Context, projectID uuid.UUID, iterat
 // ListFlaggedForPIReviewByWorkspace returns risks with flagged_for_pi_review=true
 // across all projects in the workspace, ordered created_at DESC, limited to limit rows.
 func (s *Service) ListFlaggedForPIReviewByWorkspace(ctx context.Context, workspaceID uuid.UUID, limit int) ([]*Risk, error) {
+	projectIDs, err := s.projects.ListIDsForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("risk: list flagged for pi review project ids: %w", err)
+	}
+	if len(projectIDs) == 0 {
+		return nil, nil
+	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT `+riskColsR+`
-		 FROM risks r
-		 JOIN projects p ON p.id = r.project_id
-		 WHERE p.workspace_id = $1
-		   AND r.flagged_for_pi_review = true
-		 ORDER BY r.created_at DESC
+		`SELECT `+riskCols+`
+		 FROM risks
+		 WHERE project_id = ANY($1)
+		   AND flagged_for_pi_review = true
+		 ORDER BY created_at DESC
 		 LIMIT $2`,
-		workspaceID, limit,
+		projectIDs, limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("risk: list flagged for pi review by workspace: %w", err)
@@ -367,8 +385,13 @@ func (s *Service) UpsertFromWorkflow(
 	}
 	mitigationStr := strings.Join(mitigationParts, "; ")
 
-	// Delete prior AI risks for this project (any workflow run).
-	_, err := s.pool.Exec(ctx,
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("risk: upsert workflow: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	_, err = tx.Exec(ctx,
 		`DELETE FROM risks WHERE project_id = $1 AND source = 'ai' AND workflow_run_id IS NOT NULL`,
 		projectID,
 	)
@@ -420,25 +443,27 @@ func (s *Service) UpsertFromWorkflow(
 		})
 	}
 
-	// Insert each row.
 	for _, row := range rows {
-		_, err := s.pool.Exec(ctx,
+		_, err := tx.Exec(ctx,
 			`INSERT INTO risks
 			   (project_id, iteration_id, seq, title, likelihood,
 			    impact_headline, impact_description, mitigation,
 			    flagged_for_pi_review, source, workflow_run_id, created_by)
 			 VALUES ($1, $2,
 			         COALESCE((SELECT MAX(seq) FROM risks WHERE project_id = $1), 0) + 1,
-			         $3, $4, $5, $6, $7, $8, 'ai', $9, $10)`,
+			         $3, $4, $5, $6, $7, $8, $9, 'ai', $10, $11)`,
 			projectID, iterationID, row.title, row.likelihood,
 			row.impactHead, row.impactDesc, row.mitigation,
 			row.flagged, runID, createdBy,
 		)
 		if err != nil {
-			s.log.Warn("risk: upsert workflow: insert row failed", "title", row.title, "err", err)
+			return fmt.Errorf("risk: upsert workflow: insert row %q: %w", row.title, err)
 		}
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("risk: upsert workflow: commit: %w", err)
+	}
 	return nil
 }
 

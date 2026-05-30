@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -14,8 +15,18 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/colnio/project-management-site/internal/platform"
+)
+
+type dbExec interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+const (
+	jwtIssuer   = "lab-pm-api"
+	jwtAudience = "lab-pm-clients"
 )
 
 // ─── Access JWT ─────────────────────────────────────────────────────────────
@@ -33,6 +44,8 @@ func (s *Service) issueAccessToken(u *User) (string, error) {
 		Email: u.Email,
 		Role:  u.GlobalRole,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    jwtIssuer,
+			Audience:  jwt.ClaimStrings{jwtAudience},
 			Subject:   u.ID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.AccessTokenTTL)),
@@ -50,7 +63,7 @@ func (s *Service) VerifyAccessToken(_ context.Context, raw string) (*platform.Pr
 			return nil, fmt.Errorf("auth: unexpected signing method %v", t.Header["alg"])
 		}
 		return []byte(s.cfg.JWTSigningKey), nil
-	})
+	}, jwt.WithIssuer(jwtIssuer), jwt.WithAudience(jwtAudience))
 	if err != nil {
 		return nil, platform.Unauthorized("invalid or expired access token")
 	}
@@ -84,15 +97,23 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(h[:])
 }
 
+func hashMatches(stored, computed string) bool {
+	return subtle.ConstantTimeCompare([]byte(stored), []byte(computed)) == 1
+}
+
 // issueRefresh creates a refresh session in the DB and returns the opaque token.
 func (s *Service) issueRefresh(ctx context.Context, userID uuid.UUID) (string, error) {
+	return s.issueRefreshExec(ctx, s.pool, userID)
+}
+
+func (s *Service) issueRefreshExec(ctx context.Context, db dbExec, userID uuid.UUID) (string, error) {
 	raw, err := randomBase64url(32)
 	if err != nil {
 		return "", err
 	}
 	hash := sha256Hex(raw)
 	expiresAt := time.Now().Add(s.cfg.RefreshTokenTTL)
-	_, err = s.pool.Exec(ctx,
+	_, err = db.Exec(ctx,
 		`INSERT INTO refresh_sessions (user_id, token_hash, expires_at) VALUES ($1,$2,$3)`,
 		userID, hash, expiresAt,
 	)
@@ -102,15 +123,21 @@ func (s *Service) issueRefresh(ctx context.Context, userID uuid.UUID) (string, e
 	return raw, nil
 }
 
-// rotateRefresh validates the old token, revokes it, issues a new one.
+// rotateRefresh validates the old token, revokes it atomically, and issues a new one.
 func (s *Service) rotateRefresh(ctx context.Context, raw string) (string, *User, error) {
 	hash := sha256Hex(raw)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("auth: begin refresh rotation tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
 	var sessionID uuid.UUID
 	var userID uuid.UUID
 	var expiresAt time.Time
 	var revokedAt *time.Time
-	err := s.pool.QueryRow(ctx,
-		`SELECT id, user_id, expires_at, revoked_at FROM refresh_sessions WHERE token_hash=$1`,
+	err = tx.QueryRow(ctx,
+		`SELECT id, user_id, expires_at, revoked_at FROM refresh_sessions WHERE token_hash=$1 FOR UPDATE`,
 		hash,
 	).Scan(&sessionID, &userID, &expiresAt, &revokedAt)
 	if err == pgx.ErrNoRows {
@@ -125,28 +152,34 @@ func (s *Service) rotateRefresh(ctx context.Context, raw string) (string, *User,
 	if time.Now().After(expiresAt) {
 		return "", nil, platform.Unauthorized("refresh token expired")
 	}
-	// Revoke old session.
-	_, err = s.pool.Exec(ctx,
-		`UPDATE refresh_sessions SET revoked_at=now() WHERE id=$1`,
+	tag, err := tx.Exec(ctx,
+		`UPDATE refresh_sessions SET revoked_at=now() WHERE id=$1 AND revoked_at IS NULL`,
 		sessionID,
 	)
 	if err != nil {
 		return "", nil, fmt.Errorf("auth: revoke old refresh: %w", err)
 	}
-	u, err := s.GetUserByID(ctx, userID)
+	if tag.RowsAffected() != 1 {
+		return "", nil, platform.Unauthorized("refresh token revoked")
+	}
+
+	u, err := s.getUserByIDTx(ctx, tx, userID)
 	if err != nil {
 		return "", nil, err
 	}
-	// Approval gate: do not issue new tokens for non-approved users.
 	switch u.Status {
 	case "pending":
 		return "", nil, platform.Errorf(http.StatusForbidden, "auth.pending_approval", "your account is awaiting approval")
 	case "suspended":
 		return "", nil, platform.Errorf(http.StatusForbidden, "auth.suspended", "your account has been suspended")
 	}
-	newRaw, err := s.issueRefresh(ctx, userID)
+
+	newRaw, err := s.issueRefreshExec(ctx, tx, userID)
 	if err != nil {
 		return "", nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", nil, fmt.Errorf("auth: commit refresh rotation: %w", err)
 	}
 	return newRaw, u, nil
 }
@@ -167,6 +200,9 @@ const patPrefix = "pat_"
 
 // createPAT mints a new personal access token and stores it.
 func (s *Service) createPAT(ctx context.Context, userID uuid.UUID, name string, scopes []string, expiresAt *time.Time) (id uuid.UUID, rawToken string, err error) {
+	if err := platform.ValidatePATScopes(scopes); err != nil {
+		return uuid.Nil, "", err
+	}
 	raw, e := randomBase64url(32)
 	if e != nil {
 		return uuid.Nil, "", e
@@ -220,7 +256,7 @@ func (s *Service) VerifyPAT(ctx context.Context, raw string) (*platform.Principa
 	if err != nil {
 		return nil, fmt.Errorf("auth: PAT lookup: %w", err)
 	}
-	if r.storedHash != hash {
+	if !hashMatches(r.storedHash, hash) {
 		return nil, platform.Unauthorized("invalid token")
 	}
 	if r.revokedAt != nil {
@@ -235,6 +271,9 @@ func (s *Service) VerifyPAT(ctx context.Context, raw string) (*platform.Principa
 
 	u, err := s.GetUserByID(ctx, r.userID)
 	if err != nil {
+		return nil, err
+	}
+	if err := rejectInactiveUser(u); err != nil {
 		return nil, err
 	}
 	tokenID := r.id
@@ -357,7 +396,7 @@ func (s *Service) VerifyInternalAIToken(ctx context.Context, raw string) (*platf
 	if err != nil {
 		return nil, fmt.Errorf("auth: internal AI token lookup: %w", err)
 	}
-	if storedHash != hash {
+	if !hashMatches(storedHash, hash) {
 		return nil, platform.Unauthorized("invalid token")
 	}
 	if revokedAt != nil {
@@ -371,6 +410,9 @@ func (s *Service) VerifyInternalAIToken(ctx context.Context, raw string) (*platf
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectInactiveUser(u); err != nil {
+		return nil, err
+	}
 	convID := convOrRunID
 	return &platform.Principal{
 		UserID:              u.ID,
@@ -379,6 +421,40 @@ func (s *Service) VerifyInternalAIToken(ctx context.Context, raw string) (*platf
 		ViaAIConversationID: &convID,
 		Scopes:              scopes,
 	}, nil
+}
+
+func rejectInactiveUser(u *User) error {
+	switch u.Status {
+	case "pending":
+		return platform.Errorf(http.StatusForbidden, "auth.pending_approval", "your account is awaiting approval")
+	case "suspended":
+		return platform.Errorf(http.StatusForbidden, "auth.suspended", "your account has been suspended")
+	}
+	return nil
+}
+
+// RevokeAllUserPATs revokes every active personal access token for a user.
+func (s *Service) RevokeAllUserPATs(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE personal_access_tokens SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("auth: revoke all PATs: %w", err)
+	}
+	return nil
+}
+
+// RevokeAllUserRefreshSessions revokes every active refresh session for a user.
+func (s *Service) RevokeAllUserRefreshSessions(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE refresh_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("auth: revoke all refresh sessions: %w", err)
+	}
+	return nil
 }
 
 // RevokeInternalAITokens revokes all non-expired tokens for a conversation/run.

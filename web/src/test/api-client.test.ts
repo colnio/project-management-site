@@ -6,7 +6,9 @@ import { http, HttpResponse } from 'msw';
 import { server } from './setup';
 import {
   configureClient,
+  api,
   apiFetch,
+  apiFetchRaw,
   setAccessToken,
   getAccessToken,
   ApiError,
@@ -85,6 +87,39 @@ describe('apiFetch — 401 refresh logic', () => {
     expect(reload).not.toHaveBeenCalled();
 
     vi.unstubAllGlobals();
+  });
+
+  it('apiFetchRaw retries after 401 when refresh succeeds', async () => {
+    let callCount = 0;
+    onRefresh.mockResolvedValue('new-token');
+
+    server.use(
+      http.get('/v1/raw-protected', () => {
+        callCount++;
+        if (callCount === 1) {
+          return new HttpResponse(null, { status: 401 });
+        }
+        return new HttpResponse('ok', { status: 200, headers: { 'Content-Type': 'text/plain' } });
+      })
+    );
+
+    const resp = await apiFetchRaw('/v1/raw-protected');
+    expect(resp.status).toBe(200);
+    expect(await resp.text()).toBe('ok');
+    expect(callCount).toBe(2);
+  });
+
+  it('DELETE requests do not send Content-Type without a body', async () => {
+    let seenContentType: string | null = 'unset';
+    server.use(
+      http.delete('/v1/items/1', ({ request }) => {
+        seenContentType = request.headers.get('Content-Type');
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+
+    await api.delete('/v1/items/1');
+    expect(seenContentType).toBeNull();
   });
 
   it('throws ApiError with the status code on non-401 error', async () => {

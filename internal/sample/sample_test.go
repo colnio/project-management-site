@@ -74,6 +74,16 @@ func (f *fakeUsers) GetUserByID(_ context.Context, id uuid.UUID) (*auth.User, er
 	return u, nil
 }
 
+func (f *fakeUsers) GetUsersByIDs(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]*auth.User, error) {
+	out := make(map[uuid.UUID]*auth.User, len(ids))
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out[id] = u
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeUsers) CreateUser(_ context.Context, email, displayName string) (*auth.User, error) {
 	return nil, platform.BadRequest("not_supported", "not supported in tests")
 }
@@ -376,6 +386,37 @@ func TestAddRelation_Success(t *testing.T) {
 	}
 	if !env.rec.hasAction("sample.relation_add") {
 		t.Error("expected sample.relation_add audit entry")
+	}
+}
+
+func TestHandleAddRelation_ForbiddenOnChildProject(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner-child@example.com", "Owner Child")
+	editor := env.users.seed(t, "editor-child@example.com", "Editor Child")
+	ws, _ := env.orgSvc.CreateWorkspace(ctx, "WS Child", owner.ID)
+	proj1, _ := env.projSvc.CreateProject(ctx, ws.ID, "P-Child-1", "", "private", owner.ID)
+	proj2, _ := env.projSvc.CreateProject(ctx, ws.ID, "P-Child-2", "", "private", owner.ID)
+
+	if err := env.orgSvc.AddCollaborator(ctx, proj1.ID, editor.ID, org.RoleEditor); err != nil {
+		t.Fatalf("add collaborator: %v", err)
+	}
+
+	parent := insertSample(t, env, proj1.ID, "S-P-CH", owner.ID)
+	child := insertSample(t, env, proj2.ID, "S-C-CH", owner.ID)
+
+	ctxEditor := platform.WithPrincipal(ctx, principal(editor))
+	_, err := env.sampleSvc.HandleAddRelationForTest(ctxEditor, parent.ID, child.ID, "derived_from", "")
+	if err == nil {
+		t.Fatal("expected forbidden when caller lacks child project access")
+	}
+	em, ok := err.(*platform.ErrorModel)
+	if !ok {
+		t.Fatalf("expected *platform.ErrorModel, got %T: %v", err, err)
+	}
+	if em.GetStatus() != 403 {
+		t.Errorf("expected 403, got %d", em.GetStatus())
 	}
 }
 

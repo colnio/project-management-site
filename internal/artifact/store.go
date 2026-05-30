@@ -61,9 +61,13 @@ func (s *s3Store) Get(ctx context.Context, bucket, key string) ([]byte, error) {
 	}
 	defer out.Body.Close()
 
-	data, err := io.ReadAll(out.Body)
+	limited := io.LimitReader(out.Body, MaxArtifactBytes+1)
+	data, err := io.ReadAll(limited)
 	if err != nil {
 		return nil, fmt.Errorf("artifact store: read body %s/%s: %w", bucket, key, err)
+	}
+	if int64(len(data)) > MaxArtifactBytes {
+		return nil, fmt.Errorf("artifact store: object %s/%s exceeds max size %d", bucket, key, MaxArtifactBytes)
 	}
 	return data, nil
 }

@@ -306,6 +306,14 @@ func (s *Service) GetOrCreateSubscription(ctx context.Context, userID uuid.UUID)
 	if newSub.ProjectIDs == nil {
 		newSub.ProjectIDs = []uuid.UUID{}
 	}
+
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        userID,
+		Action:       "calendar.subscription.create",
+		ResourceType: "calendar_subscription",
+		ResourceID:   newSub.ID.String(),
+	})
+
 	return &newSub, nil
 }
 
@@ -370,6 +378,14 @@ func (s *Service) UpdateSubscription(ctx context.Context, userID uuid.UUID, scop
 	if sub.ProjectIDs == nil {
 		sub.ProjectIDs = []uuid.UUID{}
 	}
+
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        userID,
+		Action:       "calendar.subscription.update",
+		ResourceType: "calendar_subscription",
+		ResourceID:   sub.ID.String(),
+	})
+
 	return &sub, nil
 }
 

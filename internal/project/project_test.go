@@ -73,6 +73,16 @@ func (f *fakeUsers) GetUserByID(_ context.Context, id uuid.UUID) (*auth.User, er
 	return u, nil
 }
 
+func (f *fakeUsers) GetUsersByIDs(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]*auth.User, error) {
+	out := make(map[uuid.UUID]*auth.User, len(ids))
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out[id] = u
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeUsers) CreateUser(_ context.Context, email, displayName string) (*auth.User, error) {
 	return nil, platform.BadRequest("not_supported", "not supported in tests")
 }
@@ -198,6 +208,42 @@ func TestCreateProject_NonMemberForbidden(t *testing.T) {
 	}
 }
 
+func TestListProjectsForWorkspace_BatchAccess(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "list-owner@example.com", "List Owner")
+	member := env.users.seed(t, "list-member@example.com", "List Member")
+
+	ws, err := env.orgSvc.CreateWorkspace(ctx, "List WS", owner.ID)
+	if err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	if err := env.orgSvc.AddMember(ctx, ws.ID, member.ID, "member", owner.ID); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	if _, err := env.projSvc.CreateProject(ctx, ws.ID, "Workspace Visible", "", "workspace", owner.ID); err != nil {
+		t.Fatalf("create workspace project: %v", err)
+	}
+	priv, err := env.projSvc.CreateProject(ctx, ws.ID, "Private Only", "", "private", owner.ID)
+	if err != nil {
+		t.Fatalf("create private project: %v", err)
+	}
+
+	p := &platform.Principal{UserID: member.ID, Email: member.Email}
+	list, err := env.projSvc.ListProjectsForWorkspace(ctx, p, ws.ID, false)
+	if err != nil {
+		t.Fatalf("list projects: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("member should see only workspace-visible project, got %d", len(list))
+	}
+	if list[0].ID == priv.ID {
+		t.Fatal("member should not see owner's private project without collaborator row")
+	}
+}
+
 func TestCreateProject_Private_AddsOwnerCollaborator(t *testing.T) {
 	env := newTestEnv(t)
 	ctx := context.Background()
@@ -226,6 +272,36 @@ func TestCreateProject_Private_AddsOwnerCollaborator(t *testing.T) {
 }
 
 // ─── GetProject tests ─────────────────────────────────────────────────────────
+
+func TestGetProjectNames(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "names-owner@example.com", "Owner")
+	ws, err := env.orgSvc.CreateWorkspace(ctx, "Names WS", owner.ID)
+	if err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	p1, err := env.projSvc.CreateProject(ctx, ws.ID, "Alpha", "", "workspace", owner.ID)
+	if err != nil {
+		t.Fatalf("create p1: %v", err)
+	}
+	p2, err := env.projSvc.CreateProject(ctx, ws.ID, "Beta", "", "workspace", owner.ID)
+	if err != nil {
+		t.Fatalf("create p2: %v", err)
+	}
+
+	names, err := env.projSvc.GetProjectNames(ctx, []uuid.UUID{p1.ID, p2.ID, uuid.New()})
+	if err != nil {
+		t.Fatalf("GetProjectNames: %v", err)
+	}
+	if len(names) != 2 {
+		t.Fatalf("expected 2 names, got %d", len(names))
+	}
+	if names[p1.ID] != "Alpha" || names[p2.ID] != "Beta" {
+		t.Errorf("unexpected names: %v", names)
+	}
+}
 
 func TestGetProject_NotFound(t *testing.T) {
 	env := newTestEnv(t)

@@ -21,7 +21,7 @@ func testLogger() *slog.Logger {
 
 func TestMandatoryCategoryCannotDisable(t *testing.T) {
 	pool := testsupport.NewPool(t)
-	cfg := &config.Config{WebOrigin: "http://localhost:5173", InviteSignKey: "test-key"}
+	cfg := &config.Config{WebOrigin: "http://localhost:5173", InviteSignKey: "test-key", DigestSignKey: "digest-test-key"}
 	svc := notify.NewService(pool, cfg, audit.Nop{}, testLogger())
 
 	userID := seedUser(t, pool, "mandatory-"+uuid.NewString()+"@graphene-lab.org")
@@ -34,7 +34,7 @@ func TestMandatoryCategoryCannotDisable(t *testing.T) {
 
 func TestShouldSendRespectsPreference(t *testing.T) {
 	pool := testsupport.NewPool(t)
-	cfg := &config.Config{WebOrigin: "http://localhost:5173", InviteSignKey: "test-key"}
+	cfg := &config.Config{WebOrigin: "http://localhost:5173", InviteSignKey: "test-key", DigestSignKey: "digest-test-key"}
 	svc := notify.NewService(pool, cfg, audit.Nop{}, testLogger())
 
 	userID := seedUser(t, pool, "prefs-"+uuid.NewString()+"@graphene-lab.org")
@@ -58,6 +58,7 @@ func TestRenderWorkspaceInviteTemplate(t *testing.T) {
 	cfg := &config.Config{
 		WebOrigin:     "http://localhost:5173",
 		InviteSignKey: "test-key",
+		DigestSignKey: "digest-test-key",
 		SMTPHost:      "localhost",
 		SMTPPort:      "1025",
 		SMTPFrom:      "test@example.com",
@@ -89,6 +90,15 @@ func TestDigestTokenRoundTrip(t *testing.T) {
 	}
 	if parsed != id {
 		t.Fatalf("got %v want %v", parsed, id)
+	}
+}
+
+func TestDigestTokenRejectsTamperedToken(t *testing.T) {
+	id := uuid.New()
+	token := notify.ExportSignDigestToken("secret", id)
+	bad := token[:len(token)-1] + "x"
+	if _, err := notify.ExportVerifyDigestToken("secret", bad); err == nil {
+		t.Fatal("expected verify error for tampered token")
 	}
 }
 
