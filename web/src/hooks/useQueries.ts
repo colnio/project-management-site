@@ -533,7 +533,7 @@ const LS_KEY = 'currentWorkspaceId';
  * Falls back to the first workspace from the API if no selection is stored.
  */
 export function useCurrentWorkspace() {
-  const { data: workspaces = [] } = useWorkspaces();
+  const { data: workspaces = [], isLoading, isError } = useWorkspaces();
 
   const [workspaceId, setWorkspaceIdState] = useState<string | undefined>(() => {
     return localStorage.getItem(LS_KEY) ?? undefined;
@@ -557,5 +557,5 @@ export function useCurrentWorkspace() {
     setWorkspaceIdState(id);
   };
 
-  return { workspaceId, workspaces, setWorkspaceId };
+  return { workspaceId, workspaces, setWorkspaceId, isLoading, isError };
 }

@@ -23,8 +23,6 @@ import { PeoplePage } from './pages/PeoplePage';
 import { MeetingsPage } from './pages/MeetingsPage';
 import { MeetingDetailPage } from './pages/MeetingDetailPage';
 import { AdminPage } from './pages/AdminPage';
-import { TemplatesPage } from './pages/TemplatesPage';
-import { TemplateDetailPage } from './pages/TemplateDetailPage';
 
 // Token accessor injected at auth setup — used by guards
 let isAuthenticated: () => boolean = () => false;
@@ -233,18 +231,6 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
-const templatesRoute = createRoute({
-  getParentRoute: () => authGuardRoute,
-  path: '/templates',
-  component: TemplatesPage,
-});
-
-const templateDetailRoute = createRoute({
-  getParentRoute: () => authGuardRoute,
-  path: '/templates/$workflowKey',
-  component: TemplateDetailPage,
-});
-
 // Profile setup route — inside auth guard but bypasses the profile-complete redirect
 // (the guard allows /profile/setup through explicitly).
 const profileSetupRoute = createRoute({
@@ -274,8 +260,6 @@ const routeTree = rootRoute.addChildren([
     meetingsRoute,
     meetingDetailRoute,
     adminRoute,
-    templatesRoute,
-    templateDetailRoute,
     profileSetupRoute,
   ]),
 ]);

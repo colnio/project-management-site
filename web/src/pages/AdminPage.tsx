@@ -51,12 +51,12 @@ function SectionCard({ title, children }: { title: string; children: React.React
 // ─── Workspace info ───────────────────────────────────────────────────────────
 
 function WorkspaceInfoSection({ workspaceId }: { workspaceId: string | undefined }) {
-  const { workspaces } = useCurrentWorkspace();
-  const isLoading = workspaces.length === 0;
+  const { workspaces, isLoading, isError } = useCurrentWorkspace();
   const ws = workspaces.find(w => w.id === workspaceId) ?? workspaces[0];
 
   if (isLoading) return <LoadingState message="Loading workspace…" />;
-  if (!ws) return <ErrorState message="No workspace found." />;
+  if (isError) return <ErrorState message="Failed to load workspace." />;
+  if (!ws) return <EmptyState message="No workspace found." />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

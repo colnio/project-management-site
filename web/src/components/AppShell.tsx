@@ -140,17 +140,6 @@ function AdminIcon({ size = 13 }: { size?: number }) {
   );
 }
 
-function TemplatesIcon({ size = 13 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-      <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
 function NotesIcon({ size = 13 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
@@ -235,6 +224,12 @@ function Sidebar({
   );
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [wsSwitcherOpen, setWsSwitcherOpen] = useState(false);
+
+  useEffect(() => {
+    if (activeProjectId) {
+      setExpandedProjects(prev => prev.has(activeProjectId) ? prev : new Set(prev).add(activeProjectId));
+    }
+  }, [activeProjectId]);
 
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
 
@@ -430,32 +425,6 @@ function Sidebar({
           </Link>
         )}
       </nav>
-
-      {/* Templates section */}
-      <div className="side-sect">
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <TemplatesIcon size={11} />
-          Templates
-        </span>
-      </div>
-      <div style={{ padding: '0 6px', display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {[
-          { key: 'battery_safety_risk_v1', label: 'Battery Safety Risk' },
-          { key: 'experimental_risk_v1', label: 'Experimental Risk' },
-          { key: 'project_risk_v1', label: 'Project Risk' },
-        ].map(tpl => (
-          <Link
-            key={tpl.key}
-            to="/templates/$workflowKey"
-            params={{ workflowKey: tpl.key }}
-            className="side-item"
-            activeProps={{ className: 'side-item active' }}
-          >
-            <span className="ic" style={{ color: 'var(--muted-2)' }}>·</span>
-            {tpl.label}
-          </Link>
-        ))}
-      </div>
 
       {/* Projects section */}
       <div className="side-sect">
