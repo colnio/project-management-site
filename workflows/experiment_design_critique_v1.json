@@ -1,0 +1,65 @@
+{
+  "key": "experiment_design_critique_v1",
+  "title": "Experiment Design Critique",
+  "description": "Critiques experimental design for controls, confounds, sample size, statistical power, and reproducibility of method and parameters.",
+  "scope": "system",
+  "steps": [
+    {
+      "id": "gather",
+      "type": "gather_context",
+      "sources": [
+        "recent_experiments",
+        "related_artifacts"
+      ]
+    },
+    {
+      "id": "controls_blanks",
+      "type": "ai_question",
+      "prompt": "Review the experimental context and evaluate whether adequate controls and blanks are present. Look for: (1) positive controls that confirm the assay works, (2) negative controls / blanks that establish baseline, (3) solvent or substrate controls, (4) whether each experimental variable is isolated by a matched control run. Use this rubric — 1: all controls present and documented; 2: minor gaps, low impact; 3: one key control missing, interpretation ambiguous; 4: multiple controls absent, conclusions unreliable; 5: no controls, results uninterpretable. Cite specific experiments or parameter sets from the context. List 3-5 concrete, actionable mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "confounds_and_variables",
+      "type": "ai_question",
+      "prompt": "Identify confounding variables and uncontrolled factors in the experimental design. Consider: temperature drift, batch effects across samples, electrode aging between runs, electrolyte evaporation, rest-time inconsistencies, and operator variability. Use this rubric — 1: no significant confounds; 2: minor confounds, well-acknowledged; 3: one uncontrolled factor could skew a key result; 4: multiple confounds, results are confounded; 5: design cannot isolate the independent variable. Cite specific parameters or run conditions from the context. Provide 3-5 targeted mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "sample_size_power",
+      "type": "ai_question",
+      "prompt": "Assess whether the number of replicates is sufficient for statistical conclusions. Consider n per condition, variance observed across runs, whether error bars / standard deviations are reported, and whether any statistical test is appropriate. Use this rubric — 1: n >= 5 per condition, variance reported, powered; 2: n = 3-4, adequate for screening; 3: n = 2, borderline, major trends only; 4: n = 1 (singleton), no reproducibility evidence; 5: no replicate information available at all. Cite specific experiment counts from the context. Suggest 3-5 concrete steps to improve statistical validity.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "reproducibility",
+      "type": "ai_question",
+      "prompt": "Evaluate whether the experimental method and parameter set are sufficiently documented for an independent researcher to reproduce the result. Consider: whether all critical parameters (current density, temperature, electrolyte concentration, rest times, cell geometry) are recorded; whether protocol deviations are noted; whether instrument settings and calibration state are logged. Use this rubric — 1: fully documented, reproducible; 2: minor gaps, reproducible with brief communication; 3: significant parameters missing, reproduction would require guesswork; 4: method sketch only, reproduction not feasible; 5: no method documentation. Cite specific gaps found in the artifact or experiment records. List 3-5 mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "synthesis",
+      "type": "ai_synthesis",
+      "output_format": "markdown"
+    }
+  ],
+  "outputSchema": {
+    "overall_rating": "int",
+    "category_ratings": "object",
+    "mitigations": "list[string]",
+    "flagged_for_PI_review": "boolean",
+    "summary": "string",
+    "open_questions": "list[string]"
+  }
+}

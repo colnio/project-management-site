@@ -382,15 +382,13 @@ func (s *Service) runAISynthesis(ctx context.Context, step WorkflowStep, schema 
 	// Build a summary of step results for the synthesis.
 	resultsJSON, _ := json.MarshalIndent(stepResults, "", "  ")
 
-	systemMsg := "You are a scientific risk assessment assistant. Produce a comprehensive synthesis."
-	userMsg := fmt.Sprintf(`Based on the following risk assessment step results and context, produce:
+	systemMsg := "You are a scientific risk assessment assistant. Produce a comprehensive synthesis. " +
+		"Ground every claim in the provided step results and context; do not invent findings."
+	userMsg := fmt.Sprintf(`Based on the following assessment step results and project context, produce:
 
-1. A markdown summary of the overall risk assessment.
-2. A JSON object (on its own line after the markdown, enclosed in <json>...</json> tags) conforming to this schema:
-   - overall_rating: integer 1-5
-   - category_ratings: object mapping category name to integer rating
-   - mitigations: array of strings (top mitigations across all categories)
-   - flagged_for_PI_review: boolean (true if overall_rating >= 4 or any category is >= 4)
+1. A concise markdown summary of the overall assessment (use the actual evidence from the step results).
+2. A JSON object (on its own line after the markdown, enclosed in <json>...</json> tags) conforming EXACTLY to this schema — include every field, no extras:
+%s
 
 Step Results:
 %s
@@ -398,7 +396,8 @@ Step Results:
 Context Summary:
 %s
 
-Respond with the markdown summary first, then a line containing only <json>{"overall_rating":...}</json>.`,
+Respond with the markdown summary first, then a line containing only <json>{...}</json> with all schema fields.`,
+		describeSchema(schema),
 		string(resultsJSON),
 		truncate(contextBlob, synthesisContextChars),
 	)
@@ -679,6 +678,51 @@ func validateFieldType(field string, v any, typ string) error {
 		return fmt.Errorf("ai: field %q expected list, got %T", field, v)
 	}
 	return nil
+}
+
+// describeSchema renders a workflow's declared output schema as a bullet list
+// for the synthesis prompt, attaching calibrated guidance to well-known fields
+// so a small local model fills them consistently. Unknown fields fall back to
+// their declared type. Fields are emitted in a stable order (known fields first)
+// so the prompt is deterministic across runs.
+func describeSchema(schema map[string]string) string {
+	hints := map[string]string{
+		"overall_rating":        "integer 1-5 — the single overall rating (1 negligible, 2 low, 3 moderate, 4 high, 5 critical/blocking)",
+		"category_ratings":      "object mapping each assessed category name to its integer rating 1-5",
+		"mitigations":           "array of strings — the top concrete, actionable mitigations across all categories",
+		"flagged_for_PI_review": "boolean — true if overall_rating >= 4 or any category rating >= 4",
+		"summary":               "string — a 2-3 sentence executive summary of the assessment, citing the most important evidence",
+		"completeness_score":    "integer 0-100 — overall completeness/coverage percentage",
+		"go_no_go":              "boolean — true only if it is safe/ready to proceed",
+		"proposed_goals":        "array of strings — concrete proposed goals for the next iteration",
+		"open_questions":        "array of strings — unresolved questions that need a human decision",
+	}
+	order := []string{
+		"overall_rating", "category_ratings", "mitigations", "flagged_for_PI_review",
+		"summary", "completeness_score", "go_no_go", "proposed_goals", "open_questions",
+	}
+	var sb strings.Builder
+	seen := make(map[string]bool)
+	emit := func(field string) {
+		typ := schema[field]
+		desc, ok := hints[field]
+		if !ok {
+			desc = fmt.Sprintf("%s value", typ)
+		}
+		sb.WriteString(fmt.Sprintf("   - %s: %s\n", field, desc))
+	}
+	for _, field := range order {
+		if _, ok := schema[field]; ok {
+			emit(field)
+			seen[field] = true
+		}
+	}
+	for field := range schema {
+		if !seen[field] {
+			emit(field)
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 func buildFallbackOutput(stepResults map[string]any) map[string]any {
