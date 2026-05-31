@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,9 +18,28 @@ import (
 	"github.com/colnio/project-management-site/internal/platform"
 )
 
-// workflowRunTimeout bounds a single synchronous workflow run so a stuck model
-// provider returns a clean 504 rather than hanging for minutes.
-const workflowRunTimeout = 150 * time.Second
+// defaultWorkflowRunTimeout bounds a single synchronous workflow run so a stuck
+// model provider returns a clean 504 rather than hanging for minutes. Override
+// via AI_WORKFLOW_TIMEOUT_SECONDS for slow local models, where a multi-step run
+// (parallel questions + synthesis) on a 14B can exceed 150s.
+const defaultWorkflowRunTimeout = 150 * time.Second
+
+// Context-truncation budgets (characters). Sized for a model with a large
+// context window (e.g. qwen2.5 at 32k tokens); a small-context model would need
+// these lowered.
+const (
+	questionContextChars  = 8000
+	synthesisContextChars = 6000
+)
+
+func workflowRunTimeoutDur() time.Duration {
+	if v := os.Getenv("AI_WORKFLOW_TIMEOUT_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return defaultWorkflowRunTimeout
+}
 
 // mapWorkflowError turns a raw workflow execution error into a typed platform
 // error so huma emits a meaningful status (502/504) instead of an opaque 500.
@@ -94,7 +115,7 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 
 	// Execute workflow under a bounded deadline (separate from ctx so the
 	// persistence/audit below still runs even if execution times out).
-	execCtx, cancel := context.WithTimeout(ctx, workflowRunTimeout)
+	execCtx, cancel := context.WithTimeout(ctx, workflowRunTimeoutDur())
 	defer cancel()
 	stepResults, output, resultPageID, runErr := s.executeWorkflow(execCtx, wf, target, proj.WorkspaceID, p, run.ID, restCall)
 
@@ -374,12 +395,12 @@ func (s *Service) runAISynthesis(ctx context.Context, step WorkflowStep, schema 
 Step Results:
 %s
 
-Context Summary (first 2000 chars):
+Context Summary:
 %s
 
 Respond with the markdown summary first, then a line containing only <json>{"overall_rating":...}</json>.`,
 		string(resultsJSON),
-		truncate(contextBlob, 2000),
+		truncate(contextBlob, synthesisContextChars),
 	)
 
 	req := ChatRequest{
@@ -531,7 +552,7 @@ func buildQuestionPrompt(step WorkflowStep, contextBlob string) string {
 	var sb strings.Builder
 	if contextBlob != "" {
 		sb.WriteString("Context:\n")
-		sb.WriteString(truncate(contextBlob, 3000))
+		sb.WriteString(truncate(contextBlob, questionContextChars))
 		sb.WriteString("\n\n")
 	}
 	sb.WriteString(step.Prompt)

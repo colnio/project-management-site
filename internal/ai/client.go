@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -91,7 +93,20 @@ type Client interface {
 
 // ─── HTTP client implementation ──────────────────────────────────────────────
 
-const outboundHTTPTimeout = 30 * time.Second
+const defaultOutboundHTTPTimeout = 30 * time.Second
+
+// outboundHTTPTimeout returns the per-call timeout for non-streaming provider
+// requests. It defaults to 30s (right for a fast hosted API) but can be raised
+// via AI_OUTBOUND_TIMEOUT_SECONDS for slow local models (e.g. a 14B running on
+// Ollama), where a single 2048-token synthesis call can exceed 30s.
+func outboundHTTPTimeout() time.Duration {
+	if v := os.Getenv("AI_OUTBOUND_TIMEOUT_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return defaultOutboundHTTPTimeout
+}
 
 type httpClient struct {
 	model      string
@@ -103,15 +118,16 @@ type httpClient struct {
 
 // NewHTTPClient constructs the real HTTP-backed Client from a Provider.
 func NewHTTPClient(p *Provider) Client {
+	timeout := outboundHTTPTimeout()
 	return &httpClient{
 		model:   p.Model,
 		token:   p.Token,
 		apiBase: strings.TrimSuffix(p.APIBase, "/"),
-		http:    &http.Client{Timeout: outboundHTTPTimeout},
+		http:    &http.Client{Timeout: timeout},
 		streamHTTP: &http.Client{
 			Timeout: 0,
 			Transport: &http.Transport{
-				ResponseHeaderTimeout: outboundHTTPTimeout,
+				ResponseHeaderTimeout: timeout,
 			},
 		},
 	}
