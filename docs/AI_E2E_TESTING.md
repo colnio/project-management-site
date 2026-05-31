@@ -157,13 +157,13 @@ hit them. Documented per the testing brief ("ok if not achievable with this arch
 
 Driven live via the Playwright MCP browser; screenshots in the repo root:
 
-- `e2e-01-workflow-runner.png` — all 8 workflows in the picker.
-- `e2e-02-workflow-result.png` — result panel: **Overall 4/5**, **PI Review Required**, summary,
+- `screenshots/e2e-01-workflow-runner.png` — all 8 workflows in the picker.
+- `screenshots/e2e-02-workflow-result.png` — result panel: **Overall 4/5**, **PI Review Required**, summary,
   colored category badges, mitigations (validates bug #2 fix).
-- `e2e-03-result-page.png` / `e2e-04-result-page-fixed.png` — report page **before/after** the
+- `screenshots/e2e-03-result-page.png` / `screenshots/e2e-04-result-page-fixed.png` — report page **before/after** the
   block-type fix (blank → renders heading + synthesis) (validates bug #3 fix).
-- `e2e-05-risk-register.png` — Risk Register "7 / 4 PI review": 3 human + **4 AI-tagged** risks.
-- `e2e-06-chat-panel.png` — chat panel + usage metering; shows the tool-call-leak limitation.
+- `screenshots/e2e-05-risk-register.png` — Risk Register "7 / 4 PI review": 3 human + **4 AI-tagged** risks.
+- `screenshots/e2e-06-chat-panel.png` — chat panel + usage metering; shows the tool-call-leak limitation.
 
 ---
 
