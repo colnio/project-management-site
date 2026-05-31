@@ -12,7 +12,8 @@ SSO, OpenRouter, web search) has a local stand-in that speaks the same protocol,
 so application code is written once and only configuration changes at deploy.
 See [`docs/techSpec.md`](docs/techSpec.md) for the production design,
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for the local build guide,
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the as-built system, and
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the as-built system,
+[`docs/DEPLOY_ARCHITECTURE.md`](docs/DEPLOY_ARCHITECTURE.md) for deployment topologies and the config reference, and
 [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for usage. Security findings from the
 2026-05-29 review (all remediated) are in
 [`docs/SECURITY_FINDINGS_2026-05-29.md`](docs/SECURITY_FINDINGS_2026-05-29.md)
