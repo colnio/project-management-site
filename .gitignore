@@ -49,3 +49,6 @@ go.work.sum
 
 # Local pnpm content-addressable store
 .pnpm-store/
+
+# Local Claude Code agent state
+.claude/

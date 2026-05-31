@@ -91,7 +91,10 @@ keeps one HTTP code path for all three.
   **non-empty** scope list are restricted to those scopes; empty scopes were
   backfilled (migration 00132). Browser JWT sessions are unrestricted. PAT
   management endpoints are session-only. The internal-AI orchestrator token is
-  minted with exactly the scopes its registered tools require.
+  minted with exactly the scopes its registered tools require. The Settings PAT
+  dialog now consumes a shared frontend scope list (`web/src/lib/tokenScopes.ts`)
+  that mirrors this backend taxonomy exactly; the browser refuses token creation
+  when no scopes are selected so the UI matches server-side enforcement.
 
 ## Domain modules (Track B)
 
@@ -127,7 +130,10 @@ direct SQL joins across sibling tables are not used.
   client's PAT (extracted from the connection's `Authorization` header), so the
   full middleware chain (auth, audit, rate-limit, permissions) applies uniformly —
   no service-call back door. Write tools are intentionally absent (gated by AI
-  autonomy config, Track G).
+  autonomy config, Track G). For local customer-zero smoke runs, the repo ships
+  `scripts/seed_api_mcp_integration.sh`, which seeds a realistic PAT-authenticated
+  project dataset through REST and then runs a live MCP readback check via
+  `client.NewSSEMCPClient(.../mcp/sse)` against the same IDs.
 
 ## Background jobs (Track D)
 

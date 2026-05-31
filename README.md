@@ -46,7 +46,7 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 | D1–D3 | Artifact workers: PDF page count, ipynb render, image thumbnails (River) | ✅ done |
 | E1–E2 | Calendar events + signed `.ics` feed | ✅ done |
 | E3–E4 | In-app calendar (FullCalendar) + custom Gantt timeline UI | ✅ done |
-| F1 | PAT settings UI + calendar subscription | ✅ done |
+| F1 | PAT settings UI + calendar subscription (full backend scope taxonomy mirrored in the token dialog; empty scope selections rejected) | ✅ done |
 | F2 | OpenAPI descriptions + examples | ✅ done |
 | F3 | MCP server (in-binary SSE at `/mcp`, PAT auth) | ✅ done |
 | F4 | `/llms.txt` generated from OpenAPI | ✅ done |
@@ -130,6 +130,22 @@ Open <http://localhost:5173> and log in with `dev@graphene-lab.org` / `devpasswo
 Mailpit UI: <http://localhost:8025>. MinIO console: <http://localhost:9001>.
 OpenAPI: <http://localhost:8080/openapi.json>, docs at `/docs`.
 
+### Local integration seed helper
+
+For PAT + MCP smoke runs against the local stack, use:
+
+```bash
+./scripts/seed_api_mcp_integration.sh
+```
+
+The script prompts for a `pat_...` token if `LAB_PM_PAT` is unset, creates or
+reuses the seeded customer-zero project in `Graphene Lab`, uploads notebook
+artifacts, waits for their rendered previews, wires slot pages, and by default runs a live MCP readback check
+against `http://127.0.0.1:8080/mcp/sse`. It writes a reusable summary JSON to
+`/private/tmp/api-mcp-integration-summary.json`. If your local stack uses a
+different workspace name, set `WORKSPACE_NAME="..."` or pass
+`--workspace-name ...` when invoking the script.
+
 ### Tests
 
 ```bash
@@ -171,6 +187,7 @@ internal/
 migrations/         goose *.sql (embedded; run on boot)
 web/                React SPA (Vite + TanStack Router/Query)
 deploy/             docker-compose.dev.yml, nbconvert sidecar, searxng config
+scripts/            local helpers (`dev-local.sh`, API/MCP seed smoke script)
 docs/               techSpec, DEVELOPMENT, ARCHITECTURE, USER_GUIDE
 ```
 

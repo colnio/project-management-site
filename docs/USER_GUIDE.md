@@ -205,7 +205,10 @@ The sidebar exposes workspace-level pages for the currently selected workspace:
   the sidebar) — create a named, scoped token (the secret, prefixed `pat_`, is
   shown once), see last-used, and revoke. Send it as `Authorization: Bearer pat_...`.
   Tokens are scoped (e.g. `read:projects`, `write:samples`) and never grant more
-  than you have.
+  than you have. The create-token dialog mirrors the full backend scope taxonomy
+  (projects, iterations, risks, artifacts, pages, meetings, calendar, AI, inbox,
+  notify, approvals, audit, admin, token/profile management) and requires at
+  least one scope before creation.
 - Writes accept an `Idempotency-Key` header (24h replay window). Resources that
   support optimistic concurrency emit an `ETag`; send it back in `If-Match`.
 - **Agent discovery**: `GET /llms.txt` lists every endpoint (generated from the
@@ -214,7 +217,11 @@ The sidebar exposes workspace-level pages for the currently selected workspace:
   MCP client at it with `Authorization: Bearer pat_...`; it exposes read-only
   tools (list/read projects, samples, lineage, experiments, pages, artifacts) that
   wrap the same REST API with the same auth, scopes, and audit. (Write tools are
-  reserved for the in-app AI assistant, gated by autonomy config.)
+  reserved for the in-app AI assistant, gated by autonomy config.) For a full
+  local smoke run that seeds project data and then validates the MCP readback
+  path, run `./scripts/seed_api_mcp_integration.sh`. The helper prefers the
+  seeded `Graphene Lab` workspace; override with `WORKSPACE_NAME="..."` or
+  `--workspace-name ...` if your local data uses a different workspace.
 
 ## AI assistant
 

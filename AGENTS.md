@@ -136,6 +136,9 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
   generated from the live spec via `pnpm openapi` (openapi-typescript →
   `src/api/schema.d.ts`). MSW for tests; the app runs against the live API in dev.
 - Work only under `web/`; never commit `node_modules`/`dist`.
+- PAT scope UI is shared from `web/src/lib/tokenScopes.ts` and must stay in sync
+  with `internal/platform/scopes.go`. If you add or remove a scope in the backend,
+  update the shared frontend list and its scope-selection tests in the same change.
 - **Editor architecture:** `PageEditorCore` (`web/src/components/editor/PageEditorCore.tsx`)
   owns save/ETag/presence/history and is shared by the `/pages/:pageId` route and
   the new `EntityPageEditor` (`web/src/components/editor/EntityPageEditor.tsx`).
