@@ -328,8 +328,8 @@ func (s *Service) gatherContext(ctx context.Context, sources []string, target Wo
 			// List pages for the project — use a best-effort call.
 			data, status, err := restCall("GET", "/v1/projects/"+target.ProjectID.String()+"/pages", nil)
 			if err != nil || status >= 300 {
-				// Pages endpoint may not exist yet — skip silently.
-				_ = fmt.Errorf("gather pages: status %d: %v", status, err)
+				// Pages endpoint is best-effort; record the soft error and skip.
+				lastErr = fmt.Errorf("gather pages: status %d: %v", status, err)
 				continue
 			}
 			parts = append(parts, "=== Recent Pages ===\n"+string(data))
@@ -742,9 +742,9 @@ func buildFallbackOutput(stepResults map[string]any) map[string]any {
 		overall = totalRating / count
 	}
 	return map[string]any{
-		"overall_rating":       overall,
-		"category_ratings":     map[string]any{},
-		"mitigations":          []any{},
+		"overall_rating":        overall,
+		"category_ratings":      map[string]any{},
+		"mitigations":           []any{},
 		"flagged_for_PI_review": overall >= 4,
 	}
 }
