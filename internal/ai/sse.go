@@ -148,7 +148,13 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		xmlData("workspace_id", proj.WorkspaceID.String()) + "\n" +
 		xmlData("today", time.Now().Format("2006-01-02")) + "\n\n" +
 		"You are running inside a web application; there is no local filesystem. " +
-		"Use the available tools to read project data and produce the final report as a chat message and/or via the draft_page tool."
+		"Use the available tools to read project data and produce the final report as a chat message and/or via the draft_page tool.\n" +
+		// The project_id above is wrapped in XML data tags for safety; a smaller
+		// model may otherwise copy the literal "<project_id>" tag as an argument.
+		// Restate it as a plain value and pin the response language so the model
+		// stays in English through multi-round tool use.
+		"When a tool needs project_id, pass exactly this value: " + proj.ID.String() + " — never pass a placeholder like \"<project_id>\" or the tag name itself.\n" +
+		"Always respond in English."
 
 	var systemContent string
 	if conv.Skill != nil && *conv.Skill != "" {
