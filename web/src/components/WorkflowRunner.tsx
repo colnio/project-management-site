@@ -20,8 +20,20 @@ const RATING_COLORS: Record<string, string> = {
   critical: 'var(--bad)',
 };
 
-function RatingBadge({ label, rating }: { label: string; rating: string }) {
-  const color = RATING_COLORS[rating.toLowerCase()] ?? 'var(--muted)';
+// Workflows emit numeric ratings (integer 1-5); older/string sources emit
+// low/medium/high. Resolve either form to a color + display string so the badge
+// renders correctly (and never calls a string method on a number).
+function resolveRating(rating: string | number): { color: string; display: string } {
+  if (typeof rating === 'number') {
+    const color = rating >= 4 ? 'var(--bad)' : rating === 3 ? 'var(--warn)' : 'var(--good)';
+    return { color, display: `${rating}/5` };
+  }
+  const color = RATING_COLORS[String(rating).toLowerCase()] ?? 'var(--muted)';
+  return { color, display: String(rating) };
+}
+
+function RatingBadge({ label, rating }: { label: string; rating: string | number }) {
+  const { color, display } = resolveRating(rating);
   return (
     <span
       style={{
@@ -41,7 +53,7 @@ function RatingBadge({ label, rating }: { label: string; rating: string }) {
       }}
     >
       {label && <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>{label}:</span>}
-      {rating}
+      {display}
     </span>
   );
 }
@@ -57,8 +69,8 @@ function RunResult({ run, onRerun }: RunResultProps) {
   const router = useRouter();
   const output: WorkflowOutput = run.output ?? {};
 
-  const overallRating = output.overall_rating as string | undefined;
-  const categoryRatings = output.category_ratings as Record<string, string> | undefined;
+  const overallRating = output.overall_rating as string | number | undefined;
+  const categoryRatings = output.category_ratings as Record<string, string | number> | undefined;
   const mitigations = output.mitigations as string[] | undefined;
   const flaggedForPI = output.flagged_for_PI_review as boolean | undefined;
   const summary = output.summary as string | undefined;
