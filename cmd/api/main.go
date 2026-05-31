@@ -125,6 +125,9 @@ func run() error {
 		PublicURLBase:  cfg.S3PublicURLBase,
 	})
 
+	if err := notify.LoadTemplates(); err != nil {
+		return fmt.Errorf("load notify templates: %w", err)
+	}
 	notifySvc := notify.NewService(pool, cfg, auditRec, logger)
 	notify.RegisterWorkers(riverWorkers, notify.WorkerDeps{Pool: pool, Svc: notifySvc})
 
@@ -255,4 +258,3 @@ func run() error {
 
 	return httpSrv.Shutdown(shutdownCtx)
 }
-

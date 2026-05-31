@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"strings"
+	"sync"
 	"text/template"
 )
 
@@ -16,37 +17,61 @@ type tplPair struct {
 	body    *template.Template
 }
 
-var parsedTemplates map[string]tplPair
+var (
+	templatesOnce   sync.Once
+	parsedTemplates map[string]tplPair
+	templatesErr    error
+)
 
-func init() {
-	parsedTemplates = make(map[string]tplPair)
-	entries, err := templateFS.ReadDir("templates")
-	if err != nil {
-		panic("notify: read templates dir: " + err.Error())
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".txt") {
-			continue
-		}
-		key := strings.TrimSuffix(e.Name(), ".txt")
-		raw, err := templateFS.ReadFile("templates/" + e.Name())
+// loadTemplates parses the embedded email templates exactly once and caches the
+// result (or the parse error). It never panics, so a malformed template surfaces
+// as a regular error instead of crashing the process at import time.
+func loadTemplates() (map[string]tplPair, error) {
+	templatesOnce.Do(func() {
+		parsed := make(map[string]tplPair)
+		entries, err := templateFS.ReadDir("templates")
 		if err != nil {
-			panic("notify: read template " + e.Name() + ": " + err.Error())
+			templatesErr = fmt.Errorf("notify: read templates dir: %w", err)
+			return
 		}
-		parts := strings.SplitN(string(raw), "---\n", 2)
-		if len(parts) != 2 {
-			panic("notify: template " + e.Name() + " must have subject---body format")
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".txt") {
+				continue
+			}
+			key := strings.TrimSuffix(e.Name(), ".txt")
+			raw, err := templateFS.ReadFile("templates/" + e.Name())
+			if err != nil {
+				templatesErr = fmt.Errorf("notify: read template %s: %w", e.Name(), err)
+				return
+			}
+			parts := strings.SplitN(string(raw), "---\n", 2)
+			if len(parts) != 2 {
+				templatesErr = fmt.Errorf("notify: template %s must have subject---body format", e.Name())
+				return
+			}
+			subjectT, err := template.New(key + "_subject").Parse(strings.TrimSpace(parts[0]))
+			if err != nil {
+				templatesErr = fmt.Errorf("notify: parse subject %s: %w", e.Name(), err)
+				return
+			}
+			bodyT, err := template.New(key + "_body").Parse(strings.TrimSpace(parts[1]))
+			if err != nil {
+				templatesErr = fmt.Errorf("notify: parse body %s: %w", e.Name(), err)
+				return
+			}
+			parsed[key] = tplPair{subject: subjectT, body: bodyT}
 		}
-		subjectT, err := template.New(key + "_subject").Parse(strings.TrimSpace(parts[0]))
-		if err != nil {
-			panic("notify: parse subject " + e.Name() + ": " + err.Error())
-		}
-		bodyT, err := template.New(key + "_body").Parse(strings.TrimSpace(parts[1]))
-		if err != nil {
-			panic("notify: parse body " + e.Name() + ": " + err.Error())
-		}
-		parsedTemplates[key] = tplPair{subject: subjectT, body: bodyT}
-	}
+		parsedTemplates = parsed
+	})
+	return parsedTemplates, templatesErr
+}
+
+// LoadTemplates eagerly parses the embedded email templates and returns any
+// parse error. Call it during startup to fail fast on a malformed template
+// rather than discovering the problem on the first send.
+func LoadTemplates() error {
+	_, err := loadTemplates()
+	return err
 }
 
 type renderedEmail struct {
@@ -55,7 +80,11 @@ type renderedEmail struct {
 }
 
 func renderTemplate(key string, data map[string]any) (renderedEmail, error) {
-	pair, ok := parsedTemplates[key]
+	templates, err := loadTemplates()
+	if err != nil {
+		return renderedEmail{}, err
+	}
+	pair, ok := templates[key]
 	if !ok {
 		return renderedEmail{}, fmt.Errorf("notify: unknown template %q", key)
 	}
