@@ -451,7 +451,7 @@ func (s *Service) UpsertFromWorkflow(
 			    flagged_for_pi_review, source, workflow_run_id, created_by)
 			 VALUES ($1, $2,
 			         COALESCE((SELECT MAX(seq) FROM risks WHERE project_id = $1), 0) + 1,
-			         $3, $4, $5, $6, $7, $8, $9, 'ai', $10, $11)`,
+			         $3, $4, $5, $6, $7, $8, 'ai', $9, $10)`,
 			projectID, iterationID, row.title, row.likelihood,
 			row.impactHead, row.impactDesc, row.mitigation,
 			row.flagged, runID, createdBy,
