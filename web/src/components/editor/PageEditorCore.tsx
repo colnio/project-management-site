@@ -76,18 +76,49 @@ function useClientId(): string {
 
 // ─── Block normalizer ─────────────────────────────────────────────────────────
 
+// Map legacy/server-side block types (snake_case, e.g. from AI workflow result
+// pages built by buildMarkdownBlocks) to BlockNote's schema types. BlockNote
+// silently drops blocks whose `type` isn't in its schema, which renders such
+// pages blank, so this normalization is required for them to display.
+const LEGACY_BLOCK_TYPE: Record<string, { type: string; props?: Record<string, unknown> }> = {
+  heading_1: { type: 'heading', props: { level: 1 } },
+  heading_2: { type: 'heading', props: { level: 2 } },
+  heading_3: { type: 'heading', props: { level: 3 } },
+  bulleted_list_item: { type: 'bulletListItem' },
+  numbered_list_item: { type: 'numberedListItem' },
+  bullet_list_item: { type: 'bulletListItem' },
+  numbered_list: { type: 'numberedListItem' },
+};
+
 function normalizeBlocks(blocks: unknown): unknown[] {
   if (!Array.isArray(blocks)) return [];
   return blocks.map(b => {
     if (b && typeof b === 'object') {
-      const blk = b as Record<string, unknown>;
+      let blk = b as Record<string, unknown>;
+
+      // Remap legacy block type names to BlockNote schema types, folding any
+      // implied props (e.g. heading level) into existing props.
+      if (typeof blk.type === 'string' && LEGACY_BLOCK_TYPE[blk.type]) {
+        const mapped = LEGACY_BLOCK_TYPE[blk.type];
+        blk = {
+          ...blk,
+          type: mapped.type,
+          props: { ...(mapped.props ?? {}), ...((blk.props as Record<string, unknown>) ?? {}) },
+        };
+      }
+
+      // Convert a plain `text` field (or string `content`) into BlockNote's
+      // inline content array. Empty text becomes an empty content array, which
+      // BlockNote accepts (a zero-length text node is invalid).
       if (typeof blk.text === 'string' && blk.content === undefined) {
         const { text, ...rest } = blk;
-        return { ...rest, content: [{ type: 'text', text, styles: {} }] };
+        return { ...rest, content: text === '' ? [] : [{ type: 'text', text, styles: {} }] };
       }
       if (typeof blk.content === 'string') {
-        return { ...blk, content: [{ type: 'text', text: blk.content, styles: {} }] };
+        const text = blk.content;
+        return { ...blk, content: text === '' ? [] : [{ type: 'text', text, styles: {} }] };
       }
+      return blk;
     }
     return b;
   });
