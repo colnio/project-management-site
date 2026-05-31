@@ -1,0 +1,56 @@
+{
+  "key": "next_iteration_plan_v1",
+  "title": "Next Iteration Planning",
+  "description": "From recent pages and experiments, assesses what is done versus blocked and proposes next-iteration goals and priorities, framing risk as risk-to-progress.",
+  "scope": "system",
+  "steps": [
+    {
+      "id": "gather",
+      "type": "gather_context",
+      "sources": [
+        "recent_iteration_pages",
+        "recent_experiments"
+      ]
+    },
+    {
+      "id": "progress_status",
+      "type": "ai_question",
+      "prompt": "Summarize what has been accomplished versus what remains blocked or incomplete based on the iteration pages and recent experiments. For each item, note whether it is: done, in-progress, blocked, or not-yet-started. Use this rubric to rate the risk-to-progress — 1: on track, no blockers; 2: minor delays, workarounds available; 3: one significant blocker requiring action this week; 4: multiple blockers, milestone at risk; 5: critical block, iteration cannot proceed without resolution. Cite specific page notes or experiment outcomes from the context. List 3-5 actions to unblock the highest-priority items.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "technical_blockers",
+      "type": "ai_question",
+      "prompt": "Identify technical risks or knowledge gaps that could derail the next iteration. Consider: experiments with anomalous or unexplained results, parameters that have not converged, equipment limitations encountered, missing baseline data, and unresolved scientific questions from prior iterations. Use this rubric — 1: no unresolved technical issues; 2: minor unknowns, answerable in current iteration; 3: one unexplained result that could change direction; 4: fundamental technical uncertainty, next steps unclear; 5: prior results invalidate the current approach. Cite specific experiment IDs or page references. Provide 3-5 mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "resource_and_sequencing",
+      "type": "ai_question",
+      "prompt": "Assess whether the proposed or implied next steps are sequenced correctly and are resource-feasible. Consider: whether experiments depend on samples or data not yet available, instrument availability, whether parallel work is possible, and whether the iteration scope is realistic. Use this rubric — 1: well-sequenced, all dependencies satisfied; 2: minor dependency risk, manageable; 3: one key dependency not yet satisfied; 4: multiple unresolved dependencies, scope must be cut; 5: next iteration cannot start without external inputs not in progress. Cite specific dependencies visible in the context. List 3-5 concrete sequencing or resourcing mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "synthesis",
+      "type": "ai_synthesis",
+      "output_format": "markdown"
+    }
+  ],
+  "outputSchema": {
+    "overall_rating": "int",
+    "category_ratings": "object",
+    "mitigations": "list[string]",
+    "flagged_for_PI_review": "boolean",
+    "summary": "string",
+    "proposed_goals": "list[string]"
+  }
+}

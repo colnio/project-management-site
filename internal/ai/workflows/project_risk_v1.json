@@ -1,0 +1,65 @@
+{
+  "key": "project_risk_v1",
+  "title": "Project-Level Risk Assessment",
+  "description": "Assesses project-level risks across timeline, safety, resource, and scientific dimensions.",
+  "scope": "system",
+  "steps": [
+    {
+      "id": "gather",
+      "type": "gather_context",
+      "sources": [
+        "recent_experiments",
+        "related_artifacts",
+        "recent_iteration_pages"
+      ]
+    },
+    {
+      "id": "timeline_risk",
+      "type": "ai_question",
+      "prompt": "Assess timeline and schedule risks for this project: missed milestones, iteration velocity, blocked dependencies, and deadline pressure. Rate from 1 to 5 using this scale: 1=negligible, 2=low, 3=moderate, 4=high, 5=critical/blocking. Cite specific evidence from the provided context (experiment parameters, sample data, or page notes). List 3-5 concrete mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "safety_risk",
+      "type": "ai_question",
+      "prompt": "Evaluate overall project safety risks: aggregate hazard exposure, unmitigated risks from experiments, and regulatory compliance gaps. Rate from 1 to 5 using this scale: 1=negligible, 2=low, 3=moderate, 4=high, 5=critical/blocking. Cite specific evidence from the provided context (experiment parameters, sample data, or page notes). List 3-5 concrete mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "resource_risk",
+      "type": "ai_question",
+      "prompt": "Assess resource risks: personnel availability, equipment bottlenecks, budget overrun risk, and supply chain concerns. Rate from 1 to 5 using this scale: 1=negligible, 2=low, 3=moderate, 4=high, 5=critical/blocking. Cite specific evidence from the provided context (experiment parameters, sample data, or page notes). List 3-5 concrete mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "scientific_risk",
+      "type": "ai_question",
+      "prompt": "Evaluate scientific and technical risks: hypothesis validity, reproducibility concerns, data quality issues, and divergence from prior literature. Rate from 1 to 5 using this scale: 1=negligible, 2=low, 3=moderate, 4=high, 5=critical/blocking. Cite specific evidence from the provided context (experiment parameters, sample data, or page notes). List 3-5 concrete mitigations.",
+      "expects": {
+        "rating": "int",
+        "mitigations": "list[string]"
+      }
+    },
+    {
+      "id": "synthesis",
+      "type": "ai_synthesis",
+      "output_format": "markdown"
+    }
+  ],
+  "outputSchema": {
+    "overall_rating": "int",
+    "category_ratings": "object",
+    "mitigations": "list[string]",
+    "flagged_for_PI_review": "boolean",
+    "summary": "string"
+  }
+}

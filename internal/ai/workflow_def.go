@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/colnio/project-management-site/workflows"
+	"github.com/colnio/project-management-site/internal/ai/workflows"
 )
 
 // WorkflowStep represents a single step in a workflow.

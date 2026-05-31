@@ -11,10 +11,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/colnio/project-management-site/internal/ai/skills"
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/platform"
-	"github.com/colnio/project-management-site/skills"
 )
 
 const maxToolRounds = 5

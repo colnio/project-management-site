@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/colnio/project-management-site/internal/ai/skills"
 	"github.com/colnio/project-management-site/internal/audit"
 	"github.com/colnio/project-management-site/internal/auth"
 	"github.com/colnio/project-management-site/internal/config"
@@ -27,7 +28,6 @@ import (
 	"github.com/colnio/project-management-site/internal/project"
 	"github.com/colnio/project-management-site/internal/risk"
 	"github.com/colnio/project-management-site/internal/testsupport"
-	"github.com/colnio/project-management-site/skills"
 )
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -44,7 +44,6 @@ func newTestService(t *testing.T, pool *pgxpool.Pool, client Client) (*Service, 
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		
 	}, audit.Nop{}, logger)
 	if err != nil {
 		t.Fatalf("auth service: %v", err)
@@ -202,7 +201,6 @@ func TestChatLoop_ReadToolThenText(t *testing.T) {
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		
 	}, audit.Nop{}, logger)
 
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
@@ -289,7 +287,6 @@ func TestChatLoop_SpendCapRefusal(t *testing.T) {
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
@@ -368,7 +365,6 @@ func TestInternalTokenMintedAndRevoked(t *testing.T) {
 		JWTSigningKey:   "test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		
 	}, audit.Nop{}, logger)
 
 	userID := uuid.New()
@@ -412,7 +408,7 @@ func TestInternalTokenMintedAndRevoked(t *testing.T) {
 // ─── Skills package tests ─────────────────────────────────────────────────────
 
 func TestSkillsLoadSkill_RiskAssessment(t *testing.T) {
-	body, err := skills.LoadSkill("risk_assesment_skill")
+	body, err := skills.LoadSkill("risk_assessment_skill")
 	if err != nil {
 		t.Fatalf("LoadSkill: %v", err)
 	}
@@ -442,7 +438,7 @@ func TestCreateConversation_SkillRoundTrip(t *testing.T) {
 	svc, sd := newTestService(t, pool, stub)
 
 	ctx := context.Background()
-	skill := "risk_assesment_skill"
+	skill := "risk_assessment_skill"
 	conv, err := svc.CreateConversation(ctx, sd.Principal, sd.ProjectID, "Skill Chat", &skill)
 	if err != nil {
 		t.Fatalf("CreateConversation: %v", err)
@@ -500,7 +496,6 @@ func TestReviewRisks_ReturnsContent(t *testing.T) {
 		JWTSigningKey:   "review-test-key",
 		AccessTokenTTL:  time.Minute,
 		RefreshTokenTTL: time.Hour,
-		
 	}, audit.Nop{}, logger)
 	orgSvc := org.NewService(pool, &config.Config{}, audit.Nop{}, authSvc, logger)
 	projectSvc := project.NewService(pool, orgSvc, authSvc, audit.Nop{}, logger)
