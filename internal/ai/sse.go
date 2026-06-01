@@ -157,7 +157,9 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		"Always respond in English.\n" +
 		"Before stating any factual, numerical, dated, or external claim, you MUST call the web_search tool to verify it and base your answer on the returned results. " +
 		"Do not rely on memory for facts, figures, dates, prices, names, or current events. " +
-		"If web_search is unconfigured or returns an error, say so explicitly and clearly mark the affected claim as unverified."
+		"If web_search is unconfigured or returns an error, say so explicitly and clearly mark the affected claim as unverified. " +
+		"web_search returns title/url/description snippets — these are sufficient to cite; you cannot open pages, so do not keep searching for \"the full page\". " +
+		"One well-formed search is usually enough; after at most two searches, give your final answer and cite the source URLs."
 
 	var systemContent string
 	if conv.Skill != nil && *conv.Skill != "" {
@@ -225,6 +227,10 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 
 	var finalAssistantContent string
 	seq := userSeq + 1
+
+	// pendingToolCalls stays true if the loop exits via the round cap while the
+	// model still wants to call tools (vs. a clean break when it has answered).
+	pendingToolCalls := false
 
 	for round := 0; round < maxToolRounds; round++ {
 		chatReq := ChatRequest{
@@ -297,8 +303,10 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 
 		// If no tool calls, we're done.
 		if len(toolCalls) == 0 {
+			pendingToolCalls = false
 			break
 		}
+		pendingToolCalls = true
 
 		// Execute tool calls.
 		for _, tc := range toolCalls {
@@ -398,6 +406,49 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 			}
 			seq++
 			history = append(history, toolResultMsg)
+		}
+	}
+
+	// If the round cap was hit while the model still wanted to call tools, make
+	// one final call WITHOUT tools so the user gets a synthesized answer from
+	// the data already gathered instead of a dangling tool call.
+	if pendingToolCalls {
+		if capCheck, _ = checkSpendCap(ctx, s.pool, proj.WorkspaceID); capCheck.Allowed {
+			history = append(history, ChatMessage{
+				Role:    "user",
+				Content: "You have reached the tool-call limit. Give your best final answer now using the information already gathered, and clearly mark any claim you could not fully verify.",
+			})
+			if stream, err := s.client.ChatStream(ctx, ChatRequest{Messages: history, MaxTokens: 1024}); err == nil {
+				var finalContent strings.Builder
+				var usage *Usage
+				for chunk := range stream {
+					if chunk.Err != nil || chunk.Done {
+						break
+					}
+					if chunk.ContentDelta != "" {
+						finalContent.WriteString(chunk.ContentDelta)
+						d, _ := json.Marshal(map[string]string{"delta": chunk.ContentDelta})
+						sendSSE("token", string(d))
+					}
+					if chunk.Usage != nil {
+						usage = chunk.Usage
+					}
+				}
+				if usage != nil {
+					model := ""
+					if p2, err2 := LoadProvider(); p2 != nil && err2 == nil {
+						model = p2.Model
+					}
+					_ = recordUsage(ctx, s.pool, proj.WorkspaceID, proj.ID, p.UserID, "chat", model, *usage)
+				}
+				if fc := finalContent.String(); fc != "" {
+					finalAssistantContent = fc
+					if _, err := appendMessage(ctx, s.pool, convID, seq, ChatMessage{Role: "assistant", Content: fc}); err != nil {
+						s.log.Warn("ai: persist final assistant message", "err", err)
+					}
+					seq++
+				}
+			}
 		}
 	}
 
