@@ -69,9 +69,74 @@ func (s *Service) gatherContext(ctx context.Context, sources []string, target Wo
 	return strings.Join(parts, "\n\n"), lastErr
 }
 
+// webSearchMandate is prepended to workflow AI-step system prompts so the model
+// verifies external facts via Brave Search rather than relying on memory. It
+// mirrors the chat path's mandate (see sse.go) so both Risk Assessment flows
+// behave consistently.
+const webSearchMandate = "Before stating any factual, numerical, dated, or external claim, you MUST call the web_search tool to verify it and base your answer on the returned results. " +
+	"Do not rely on memory for facts, figures, dates, prices, names, or current events. " +
+	"If web_search is unconfigured or returns an error, proceed but explicitly mark the affected claim as unverified. " +
+	"web_search returns title/url/description snippets — these are sufficient to cite; one or two well-formed searches per question is enough. "
+
+// workflowToolRounds caps how many web_search rounds a single workflow AI step
+// may take before it must answer. Kept small to bound latency and Brave usage,
+// since ai_question steps run concurrently.
+const workflowToolRounds = 3
+
+// chatWithWebSearch runs a non-streaming chat with only the web_search tool
+// enabled, executing each web_search call the model makes and looping until it
+// returns a tool-call-free answer (or the round cap is hit, after which one
+// final tool-free call forces a text answer). It returns the final assistant
+// content and the token usage summed across every round. The caller's req is
+// not mutated.
+func (s *Service) chatWithWebSearch(ctx context.Context, req ChatRequest) (string, Usage, error) {
+	// Work on our own copy of the message slice so the caller can reuse req
+	// (e.g. for a stricter-instruction retry).
+	req.Messages = append([]ChatMessage(nil), req.Messages...)
+	req.Tools = []Tool{webSearchTool().Tool}
+
+	total := Usage{}
+	for round := 0; round < workflowToolRounds; round++ {
+		resp, err := s.client.Chat(ctx, req)
+		if err != nil {
+			return "", total, err
+		}
+		total = addUsage(total, resp.Usage)
+		if len(resp.Message.ToolCalls) == 0 {
+			return resp.Message.Content, total, nil
+		}
+		// Record the assistant's tool-call turn, then execute each call. Only
+		// web_search is offered; restCall is unused by it, so we pass nil.
+		req.Messages = append(req.Messages, resp.Message)
+		for _, tc := range resp.Message.ToolCalls {
+			result, _, execErr := dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, "", "", nil)
+			if execErr != nil {
+				result = fmt.Sprintf(`{"error":%q}`, execErr.Error())
+			}
+			req.Messages = append(req.Messages, ChatMessage{
+				Role:       "tool",
+				Content:    result,
+				ToolCallID: tc.ID,
+				Name:       tc.Function.Name,
+			})
+		}
+	}
+
+	// Round cap hit while the model still wanted to search: force a final answer
+	// with no tools available.
+	req.Tools = nil
+	resp, err := s.client.Chat(ctx, req)
+	if err != nil {
+		return "", total, err
+	}
+	total = addUsage(total, resp.Usage)
+	return resp.Message.Content, total, nil
+}
+
 // runAIQuestion sends the context + prompt to the model and parses the expected JSON.
 func (s *Service) runAIQuestion(ctx context.Context, step WorkflowStep, contextBlob string) (map[string]any, Usage, error) {
-	systemMsg := "You are a scientific risk assessment assistant. Answer precisely. If instructed to respond as JSON, output only valid JSON with no prose."
+	systemMsg := "You are a scientific risk assessment assistant. " + webSearchMandate +
+		"Answer precisely. If instructed to respond as JSON, output only valid JSON with no prose."
 	userMsg := buildQuestionPrompt(step, contextBlob)
 
 	req := ChatRequest{
@@ -83,28 +148,27 @@ func (s *Service) runAIQuestion(ctx context.Context, step WorkflowStep, contextB
 		MaxTokens:   1024,
 	}
 
-	resp, err := s.client.Chat(ctx, req)
+	content, usage, err := s.chatWithWebSearch(ctx, req)
 	if err != nil {
 		return nil, Usage{}, err
 	}
 
-	result, parseErr := parseJSONResult(resp.Message.Content, step.Expects)
+	result, parseErr := parseJSONResult(content, step.Expects)
 	if parseErr != nil {
 		// Retry once with stricter instruction.
-		retryMsg := userMsg + "\n\nIMPORTANT: Respond with ONLY a valid JSON object. No explanations, no markdown fences, no extra text."
-		req.Messages[1].Content = retryMsg
-		resp2, err2 := s.client.Chat(ctx, req)
+		req.Messages[1].Content = userMsg + "\n\nIMPORTANT: Respond with ONLY a valid JSON object. No explanations, no markdown fences, no extra text."
+		content2, usage2, err2 := s.chatWithWebSearch(ctx, req)
 		if err2 != nil {
 			// Return raw on retry failure.
-			return map[string]any{"raw": resp.Message.Content}, addUsage(resp.Usage, Usage{}), nil
+			return map[string]any{"raw": content}, usage, nil
 		}
-		result2, parseErr2 := parseJSONResult(resp2.Message.Content, step.Expects)
+		result2, parseErr2 := parseJSONResult(content2, step.Expects)
 		if parseErr2 != nil {
-			return map[string]any{"raw": resp2.Message.Content}, addUsage(resp.Usage, resp2.Usage), nil
+			return map[string]any{"raw": content2}, addUsage(usage, usage2), nil
 		}
-		return result2, addUsage(resp.Usage, resp2.Usage), nil
+		return result2, addUsage(usage, usage2), nil
 	}
-	return result, resp.Usage, nil
+	return result, usage, nil
 }
 
 // runAISynthesis calls the model to produce a markdown summary + validated JSON output.
@@ -113,7 +177,8 @@ func (s *Service) runAISynthesis(ctx context.Context, step WorkflowStep, schema 
 	resultsJSON, _ := json.MarshalIndent(stepResults, "", "  ")
 
 	systemMsg := "You are a scientific risk assessment assistant. Produce a comprehensive synthesis. " +
-		"Ground every claim in the provided step results and context; do not invent findings."
+		"Ground every claim in the provided step results and context; do not invent findings. " +
+		webSearchMandate
 	userMsg := fmt.Sprintf(`Based on the following assessment step results and project context, produce:
 
 1. A concise markdown summary of the overall assessment (use the actual evidence from the step results).
@@ -141,27 +206,27 @@ Respond with the markdown summary first, then a line containing only <json>{...}
 		MaxTokens:   2048,
 	}
 
-	resp, err := s.client.Chat(ctx, req)
+	content, usage, err := s.chatWithWebSearch(ctx, req)
 	if err != nil {
 		return "", nil, Usage{}, err
 	}
 
-	md, outMap, parseErr := parseSynthesisResponse(resp.Message.Content, schema)
+	md, outMap, parseErr := parseSynthesisResponse(content, schema)
 	if parseErr != nil {
 		// Retry once.
 		req.Messages[1].Content = userMsg + "\n\nIMPORTANT: You MUST include the JSON in <json>...</json> tags."
-		resp2, err2 := s.client.Chat(ctx, req)
+		content2, usage2, err2 := s.chatWithWebSearch(ctx, req)
 		if err2 != nil {
-			return resp.Message.Content, buildFallbackOutput(stepResults), addUsage(resp.Usage, Usage{}), nil
+			return content, buildFallbackOutput(stepResults), usage, nil
 		}
-		md2, outMap2, _ := parseSynthesisResponse(resp2.Message.Content, schema)
+		md2, outMap2, _ := parseSynthesisResponse(content2, schema)
 		if outMap2 == nil {
 			outMap2 = buildFallbackOutput(stepResults)
 		}
-		return md2, outMap2, addUsage(resp.Usage, resp2.Usage), nil
+		return md2, outMap2, addUsage(usage, usage2), nil
 	}
 
-	return md, outMap, resp.Usage, nil
+	return md, outMap, usage, nil
 }
 
 // createResultPage POSTs a page with the synthesis markdown to the REST API.
