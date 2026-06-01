@@ -59,6 +59,10 @@ type Config struct {
 	// SearXNG (agent web search). Kept here so config stays in one place even
 	// though the LLM track is not yet built.
 	SearxNGURL string
+
+	// Brave Web Search API key — powers the agent's web_search tool. Empty
+	// disables web search (the tool returns an "unconfigured" message).
+	BraveSearchAPIKey string
 }
 
 // Load reads configuration from the environment. Missing required values for
@@ -92,7 +96,8 @@ func Load() (*Config, error) {
 		CookieSecure:    getbool("COOKIE_SECURE", false),
 		WebOrigin:       getenv("WEB_ORIGIN", "http://localhost:5173"),
 		NBConvertURL:    getenv("NBCONVERT_URL", "http://localhost:8090"),
-		SearxNGURL:      getenv("SEARXNG_URL", "http://localhost:8888"),
+		SearxNGURL:        getenv("SEARXNG_URL", "http://localhost:8888"),
+		BraveSearchAPIKey: getenv("BRAVE_SEARCH_API_KEY", ""),
 	}
 	c.AllowedEmailDomains = splitCSV(getenv("ALLOWED_EMAIL_DOMAINS", "nus.edu.sg,u.nus.edu"))
 
