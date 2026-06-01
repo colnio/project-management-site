@@ -131,6 +131,13 @@ func run() error {
 	notifySvc := notify.NewService(pool, cfg, auditRec, logger)
 	notify.RegisterWorkers(riverWorkers, notify.WorkerDeps{Pool: pool, Svc: notifySvc})
 
+	// AI idle-conversation reaper: hard-deletes chats not accessed within the TTL.
+	ai.RegisterCleanupWorker(riverWorkers, ai.CleanupWorkerDeps{
+		Pool:    pool,
+		IdleTTL: time.Duration(cfg.AIChatIdleTTLDays) * 24 * time.Hour,
+		Log:     logger,
+	})
+
 	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Workers: riverWorkers,
 		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 5}},
@@ -141,7 +148,10 @@ func run() error {
 				loc = time.UTC
 				logger.Warn("notify: invalid LAB_TIMEZONE, using UTC", "tz", cfg.LabTimezone, "err", locErr)
 			}
-			return []*river.PeriodicJob{notify.NewDailyDigestPeriodicJob(cfg.DigestHour, loc)}
+			return []*river.PeriodicJob{
+				notify.NewDailyDigestPeriodicJob(cfg.DigestHour, loc),
+				ai.NewPurgeIdleConversationsPeriodicJob(),
+			}
 		}(),
 	})
 	if err != nil {

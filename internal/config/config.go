@@ -18,14 +18,14 @@ type Config struct {
 	DatabaseURL string
 
 	// Object storage (MinIO locally, S3 in prod) — AWS SDK + endpoint override.
-	S3Endpoint        string
-	S3Region          string
-	S3AccessKey       string
-	S3SecretKey       string
-	S3UsePathStyle    bool
-	BucketOriginals   string
-	BucketRendered    string
-	S3PublicURLBase   string // base URL the browser uses to reach object storage
+	S3Endpoint      string
+	S3Region        string
+	S3AccessKey     string
+	S3SecretKey     string
+	S3UsePathStyle  bool
+	BucketOriginals string
+	BucketRendered  string
+	S3PublicURLBase string // base URL the browser uses to reach object storage
 
 	// Email (Mailpit locally, SES in prod) — standard SMTP.
 	SMTPHost     string
@@ -35,17 +35,21 @@ type Config struct {
 	SMTPPassword string
 
 	// Daily digest schedule (local wall-clock hour in LabTimezone).
-	DigestHour    int
-	LabTimezone   string
+	DigestHour  int
+	LabTimezone string
+
+	// AIChatIdleTTLDays is the number of days of no access (neither opened nor
+	// messaged) after which an AI chat conversation is hard-deleted.
+	AIChatIdleTTLDays int
 
 	// Auth signing + cookies.
 	JWTSigningKey   string
 	InviteSignKey   string
 	DigestSignKey   string
-	AccessTokenTTL time.Duration
+	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
-	CookieDomain   string
-	CookieSecure   bool
+	CookieDomain    string
+	CookieSecure    bool
 
 	// Allow-listed email domains for SSO sign-in (comma-separated in env).
 	AllowedEmailDomains []string
@@ -69,33 +73,34 @@ type Config struct {
 // the selected environment cause an error.
 func Load() (*Config, error) {
 	c := &Config{
-		Env:             getenv("APP_ENV", "development"),
-		Port:            getenv("PORT", "8080"),
-		DatabaseURL:     getenv("DATABASE_URL", "postgres://lab:lab@localhost:5432/lab?sslmode=disable"),
-		S3Endpoint:      getenv("S3_ENDPOINT", "http://localhost:9000"),
-		S3Region:        getenv("S3_REGION", "us-east-1"),
-		S3AccessKey:     getenv("S3_ACCESS_KEY", "minioadmin"),
-		S3SecretKey:     getenv("S3_SECRET_KEY", "minioadmin"),
-		S3UsePathStyle:  getbool("S3_USE_PATH_STYLE", true),
-		BucketOriginals: getenv("S3_BUCKET_ORIGINALS", "artifacts-originals"),
-		BucketRendered:  getenv("S3_BUCKET_RENDERED", "artifacts-rendered"),
-		S3PublicURLBase: getenv("S3_PUBLIC_URL_BASE", "http://localhost:9000"),
-		SMTPHost:        getenv("SMTP_HOST", "localhost"),
-		SMTPPort:        getenv("SMTP_PORT", "1025"),
-		SMTPFrom:        getenv("SMTP_FROM", "no-reply@graphene-lab.org"),
-		SMTPUser:        getenv("SMTP_USER", ""),
-		SMTPPassword:    getenv("SMTP_PASSWORD", ""),
-		DigestHour:      getint("DIGEST_HOUR", 7),
-		LabTimezone:     getenv("LAB_TIMEZONE", "Asia/Singapore"),
-		JWTSigningKey:   getenv("JWT_SIGNING_KEY", defaultJWTSigningKey),
-		InviteSignKey:   getenv("INVITE_SIGN_KEY", defaultInviteSignKey),
-		DigestSignKey:   getenv("DIGEST_SIGN_KEY", defaultDigestSignKey),
-		AccessTokenTTL:  getdur("ACCESS_TOKEN_TTL", 15*time.Minute),
-		RefreshTokenTTL: getdur("REFRESH_TOKEN_TTL", 720*time.Hour),
-		CookieDomain:    getenv("COOKIE_DOMAIN", "localhost"),
-		CookieSecure:    getbool("COOKIE_SECURE", false),
-		WebOrigin:       getenv("WEB_ORIGIN", "http://localhost:5173"),
-		NBConvertURL:    getenv("NBCONVERT_URL", "http://localhost:8090"),
+		Env:               getenv("APP_ENV", "development"),
+		Port:              getenv("PORT", "8080"),
+		DatabaseURL:       getenv("DATABASE_URL", "postgres://lab:lab@localhost:5432/lab?sslmode=disable"),
+		S3Endpoint:        getenv("S3_ENDPOINT", "http://localhost:9000"),
+		S3Region:          getenv("S3_REGION", "us-east-1"),
+		S3AccessKey:       getenv("S3_ACCESS_KEY", "minioadmin"),
+		S3SecretKey:       getenv("S3_SECRET_KEY", "minioadmin"),
+		S3UsePathStyle:    getbool("S3_USE_PATH_STYLE", true),
+		BucketOriginals:   getenv("S3_BUCKET_ORIGINALS", "artifacts-originals"),
+		BucketRendered:    getenv("S3_BUCKET_RENDERED", "artifacts-rendered"),
+		S3PublicURLBase:   getenv("S3_PUBLIC_URL_BASE", "http://localhost:9000"),
+		SMTPHost:          getenv("SMTP_HOST", "localhost"),
+		SMTPPort:          getenv("SMTP_PORT", "1025"),
+		SMTPFrom:          getenv("SMTP_FROM", "no-reply@graphene-lab.org"),
+		SMTPUser:          getenv("SMTP_USER", ""),
+		SMTPPassword:      getenv("SMTP_PASSWORD", ""),
+		DigestHour:        getint("DIGEST_HOUR", 7),
+		LabTimezone:       getenv("LAB_TIMEZONE", "Asia/Singapore"),
+		AIChatIdleTTLDays: getint("AI_CHAT_IDLE_TTL_DAYS", 30),
+		JWTSigningKey:     getenv("JWT_SIGNING_KEY", defaultJWTSigningKey),
+		InviteSignKey:     getenv("INVITE_SIGN_KEY", defaultInviteSignKey),
+		DigestSignKey:     getenv("DIGEST_SIGN_KEY", defaultDigestSignKey),
+		AccessTokenTTL:    getdur("ACCESS_TOKEN_TTL", 15*time.Minute),
+		RefreshTokenTTL:   getdur("REFRESH_TOKEN_TTL", 720*time.Hour),
+		CookieDomain:      getenv("COOKIE_DOMAIN", "localhost"),
+		CookieSecure:      getbool("COOKIE_SECURE", false),
+		WebOrigin:         getenv("WEB_ORIGIN", "http://localhost:5173"),
+		NBConvertURL:      getenv("NBCONVERT_URL", "http://localhost:8090"),
 		SearxNGURL:        getenv("SEARXNG_URL", "http://localhost:8888"),
 		BraveSearchAPIKey: getenv("BRAVE_SEARCH_API_KEY", ""),
 	}
@@ -111,9 +116,9 @@ func Load() (*Config, error) {
 }
 
 const (
-	defaultJWTSigningKey   = "dev-insecure-jwt-key-change-me"
-	defaultInviteSignKey   = "dev-insecure-invite-key-change-me"
-	defaultDigestSignKey   = "dev-insecure-digest-key-change-me"
+	defaultJWTSigningKey = "dev-insecure-jwt-key-change-me"
+	defaultInviteSignKey = "dev-insecure-invite-key-change-me"
+	defaultDigestSignKey = "dev-insecure-digest-key-change-me"
 	minSigningKeyBytes   = 32
 )
 
