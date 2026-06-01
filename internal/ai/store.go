@@ -15,12 +15,13 @@ import (
 
 // Conversation represents an LLM chat session.
 type Conversation struct {
-	ID        uuid.UUID `json:"id"`
-	ProjectID uuid.UUID `json:"project_id"`
-	StartedBy uuid.UUID `json:"started_by"`
-	Title     string    `json:"title"`
-	Skill     *string   `json:"skill,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID             uuid.UUID `json:"id"`
+	ProjectID      uuid.UUID `json:"project_id"`
+	StartedBy      uuid.UUID `json:"started_by"`
+	Title          string    `json:"title"`
+	Skill          *string   `json:"skill,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	LastAccessedAt time.Time `json:"last_accessed_at"`
 }
 
 func createConversation(ctx context.Context, pool *pgxpool.Pool, projectID, userID uuid.UUID, title string, skill *string) (*Conversation, error) {
@@ -28,9 +29,9 @@ func createConversation(ctx context.Context, pool *pgxpool.Pool, projectID, user
 	err := pool.QueryRow(ctx,
 		`INSERT INTO ai_conversations (project_id, started_by, title, skill)
 		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, project_id, started_by, title, skill, created_at`,
+		 RETURNING id, project_id, started_by, title, skill, created_at, last_accessed_at`,
 		projectID, userID, title, skill,
-	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt)
+	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt, &c.LastAccessedAt)
 	if err != nil {
 		return nil, fmt.Errorf("ai: create conversation: %w", err)
 	}
@@ -40,9 +41,9 @@ func createConversation(ctx context.Context, pool *pgxpool.Pool, projectID, user
 func getConversation(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Conversation, error) {
 	var c Conversation
 	err := pool.QueryRow(ctx,
-		`SELECT id, project_id, started_by, title, skill, created_at FROM ai_conversations WHERE id=$1`,
+		`SELECT id, project_id, started_by, title, skill, created_at, last_accessed_at FROM ai_conversations WHERE id=$1`,
 		id,
-	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt)
+	).Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt, &c.LastAccessedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -54,7 +55,7 @@ func getConversation(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Co
 
 func listConversations(ctx context.Context, pool *pgxpool.Pool, projectID uuid.UUID) ([]*Conversation, error) {
 	rows, err := pool.Query(ctx,
-		`SELECT id, project_id, started_by, title, skill, created_at
+		`SELECT id, project_id, started_by, title, skill, created_at, last_accessed_at
 		 FROM ai_conversations WHERE project_id=$1 ORDER BY created_at DESC`,
 		projectID,
 	)
@@ -65,12 +66,39 @@ func listConversations(ctx context.Context, pool *pgxpool.Pool, projectID uuid.U
 	var out []*Conversation
 	for rows.Next() {
 		var c Conversation
-		if err := rows.Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.ProjectID, &c.StartedBy, &c.Title, &c.Skill, &c.CreatedAt, &c.LastAccessedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, &c)
 	}
 	return out, rows.Err()
+}
+
+// touchConversation bumps last_accessed_at to now() for the given conversation,
+// resetting its idle-expiration window. Called whenever a chat is opened or
+// messaged into.
+func touchConversation(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) error {
+	_, err := pool.Exec(ctx,
+		`UPDATE ai_conversations SET last_accessed_at = now() WHERE id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("ai: touch conversation: %w", err)
+	}
+	return nil
+}
+
+// deleteIdleConversations hard-deletes conversations whose last_accessed_at is
+// older than the given duration. ai_messages and ai_tool_calls rows cascade.
+// Returns the number of conversations deleted.
+func deleteIdleConversations(ctx context.Context, pool *pgxpool.Pool, idleFor time.Duration) (int64, error) {
+	tag, err := pool.Exec(ctx,
+		`DELETE FROM ai_conversations
+		 WHERE last_accessed_at < now() - make_interval(secs => $1)`,
+		idleFor.Seconds(),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("ai: delete idle conversations: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
@@ -219,9 +247,9 @@ func getToolCall(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*ToolCa
 // ─── Usage records ────────────────────────────────────────────────────────────
 
 const (
-	defaultPricePer1k    = 0.0   // $ per 1k tokens (configurable; 0.0 default for dev)
-	defaultMonthlyCapUSD = 50.0  // generous cap per workspace per month
-	spendWarnThreshold   = 0.80  // warn at 80% of cap
+	defaultPricePer1k    = 0.0  // $ per 1k tokens (configurable; 0.0 default for dev)
+	defaultMonthlyCapUSD = 50.0 // generous cap per workspace per month
+	spendWarnThreshold   = 0.80 // warn at 80% of cap
 )
 
 func recordUsage(ctx context.Context, pool *pgxpool.Pool, workspaceID, projectID, userID uuid.UUID, feature, model string, usage Usage) error {
@@ -263,11 +291,11 @@ func checkSpendCap(ctx context.Context, pool *pgxpool.Pool, workspaceID uuid.UUI
 
 // UsageSummary holds the current usage statistics for a workspace.
 type UsageSummary struct {
-	SpentToday   float64 `json:"spent_today"`
-	SpentMonth   float64 `json:"spent_month"`
-	MonthlyCap   float64 `json:"monthly_cap"`
-	Pct          float64 `json:"pct"`
-	Model        string  `json:"model"`
+	SpentToday float64 `json:"spent_today"`
+	SpentMonth float64 `json:"spent_month"`
+	MonthlyCap float64 `json:"monthly_cap"`
+	Pct        float64 `json:"pct"`
+	Model      string  `json:"model"`
 }
 
 func getUsageSummary(ctx context.Context, pool *pgxpool.Pool, workspaceID uuid.UUID) (*UsageSummary, error) {
