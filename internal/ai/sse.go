@@ -154,7 +154,10 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		// Restate it as a plain value and pin the response language so the model
 		// stays in English through multi-round tool use.
 		"When a tool needs project_id, pass exactly this value: " + proj.ID.String() + " — never pass a placeholder like \"<project_id>\" or the tag name itself.\n" +
-		"Always respond in English."
+		"Always respond in English.\n" +
+		"Before stating any factual, numerical, dated, or external claim, you MUST call the web_search tool to verify it and base your answer on the returned results. " +
+		"Do not rely on memory for facts, figures, dates, prices, names, or current events. " +
+		"If web_search is unconfigured or returns an error, say so explicitly and clearly mark the affected claim as unverified."
 
 	var systemContent string
 	if conv.Skill != nil && *conv.Skill != "" {
