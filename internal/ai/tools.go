@@ -7,9 +7,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 )
+
+// braveSearchBaseURL is the Brave Web Search API endpoint. It is a package var
+// (not a const) so tests can point it at an httptest server.
+var braveSearchBaseURL = "https://api.search.brave.com/res/v1/web/search"
 
 // restCallFn is the signature for calling the REST API.
 type restCallFn func(method, path string, body any) ([]byte, int, error)
@@ -71,6 +77,7 @@ func allTools(projectID, workspaceID string) []toolDef {
 		readPageTool(),
 		listArtifactsTool(),
 		searchProjectContentTool(projectID),
+		webSearchTool(),
 		draftPageTool(projectID),
 		updateIterationStatusTool(),
 		createReminderTool(projectID),
@@ -443,6 +450,104 @@ func searchProjectContentTool(injectProjectID string) toolDef {
 
 			out, _ := json.Marshal(matches)
 			return string(out), nil
+		},
+	}
+}
+
+// webSearchTool queries the Brave Web Search API so the model can verify
+// factual and numerical claims against live web results. Read-only; it does
+// not use the REST callback. The API key comes from BRAVE_SEARCH_API_KEY.
+func webSearchTool() toolDef {
+	return toolDef{
+		IsWrite: false,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        "web_search",
+				Description: "Search the public web via Brave Search. Use this to verify any factual, numerical, dated, or external claim before stating it. Returns a JSON array of results, each with title, url, and description.",
+				Parameters:  json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"The search query"},"count":{"type":"integer","description":"Number of results to return (default 5, max 5)"}},"required":["query"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, _ restCallFn) (string, error) {
+			var p struct {
+				Query string `json:"query"`
+				Count int    `json:"count"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("web_search: parse args: %w", err)
+			}
+			if strings.TrimSpace(p.Query) == "" {
+				return "", fmt.Errorf("web_search: query required")
+			}
+			key := os.Getenv("BRAVE_SEARCH_API_KEY")
+			if key == "" {
+				return `{"error":"web search is not configured (BRAVE_SEARCH_API_KEY unset)"}`, nil
+			}
+			count := p.Count
+			if count <= 0 {
+				count = 5
+			}
+			if count > 5 {
+				count = 5 // cap low to stay within the free tier
+			}
+
+			q := url.Values{}
+			q.Set("q", p.Query)
+			q.Set("count", fmt.Sprintf("%d", count))
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, braveSearchBaseURL+"?"+q.Encode(), nil)
+			if err != nil {
+				return "", fmt.Errorf("web_search: build request: %w", err)
+			}
+			req.Header.Set("X-Subscription-Token", key)
+			req.Header.Set("Accept", "application/json")
+
+			client := &http.Client{Timeout: 30 * time.Second}
+			resp, err := client.Do(req)
+			if err != nil {
+				return "", fmt.Errorf("web_search: request: %w", err)
+			}
+			defer resp.Body.Close()
+			data, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return "", fmt.Errorf("web_search: read body: %w", err)
+			}
+			if resp.StatusCode == http.StatusTooManyRequests {
+				return `{"error":"web search rate-limited (429); try again shortly"}`, nil
+			}
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				return "", fmt.Errorf("web_search: brave status %d: %s", resp.StatusCode, string(data))
+			}
+
+			var br struct {
+				Web struct {
+					Results []struct {
+						Title       string `json:"title"`
+						URL         string `json:"url"`
+						Description string `json:"description"`
+					} `json:"results"`
+				} `json:"web"`
+			}
+			if err := json.Unmarshal(data, &br); err != nil {
+				return "", fmt.Errorf("web_search: parse brave json: %w", err)
+			}
+
+			type result struct {
+				Title       string `json:"title"`
+				URL         string `json:"url"`
+				Description string `json:"description"`
+			}
+			out := make([]result, 0, len(br.Web.Results))
+			for i, res := range br.Web.Results {
+				if i >= count {
+					break
+				}
+				out = append(out, result{Title: res.Title, URL: res.URL, Description: res.Description})
+			}
+			b, err := json.Marshal(out)
+			if err != nil {
+				return "", fmt.Errorf("web_search: marshal results: %w", err)
+			}
+			return string(b), nil
 		},
 	}
 }
