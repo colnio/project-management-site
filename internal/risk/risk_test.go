@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -307,7 +308,7 @@ func TestUpsertFromWorkflow_ReplacesPriorAI(t *testing.T) {
 		"overall_rating": 3,
 		"summary":        "first pass",
 	}
-	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run1, output1, owner.ID); err != nil {
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run1, output1, nil, owner.ID); err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
 
@@ -327,7 +328,13 @@ func TestUpsertFromWorkflow_ReplacesPriorAI(t *testing.T) {
 		"category_ratings": map[string]any{"supply": 4, "safety": 2},
 		"mitigations":      []any{"monitor"},
 	}
-	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run2, output2, owner.ID); err != nil {
+	// Per-category step results carry their own mitigations; each category row
+	// must use its step's list, not the shared global "monitor".
+	stepResults := map[string]any{
+		"supply_risk": map[string]any{"rating": 4, "mitigations": []any{"dual-source suppliers", "hold safety stock"}},
+		"safety_risk": map[string]any{"rating": 2, "mitigations": []any{"add PPE checklist"}},
+	}
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run2, output2, stepResults, owner.ID); err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
 	if err := env.pool.QueryRow(ctx,
@@ -338,6 +345,28 @@ func TestUpsertFromWorkflow_ReplacesPriorAI(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("after second upsert: want 2 category risks, got %d", count)
+	}
+
+	// Each category row must carry its own step's mitigations, not a shared one.
+	var supplyMit, safetyMit string
+	if err := env.pool.QueryRow(ctx,
+		`SELECT mitigation FROM risks WHERE project_id = $1 AND title = 'Supply'`, proj.ID,
+	).Scan(&supplyMit); err != nil {
+		t.Fatalf("supply mitigation: %v", err)
+	}
+	if err := env.pool.QueryRow(ctx,
+		`SELECT mitigation FROM risks WHERE project_id = $1 AND title = 'Safety'`, proj.ID,
+	).Scan(&safetyMit); err != nil {
+		t.Fatalf("safety mitigation: %v", err)
+	}
+	if supplyMit == safetyMit {
+		t.Fatalf("category mitigations must differ, both = %q", supplyMit)
+	}
+	if !strings.Contains(supplyMit, "dual-source suppliers") {
+		t.Errorf("supply mitigation = %q, want its own step's list", supplyMit)
+	}
+	if !strings.Contains(safetyMit, "add PPE checklist") {
+		t.Errorf("safety mitigation = %q, want its own step's list", safetyMit)
 	}
 }
 

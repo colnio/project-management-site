@@ -19,7 +19,7 @@ import (
 
 // defaultWorkflowRunTimeout bounds a single synchronous workflow run so a stuck
 // model provider returns a clean 504 rather than hanging for minutes. Override
-// via AI_WORKFLOW_TIMEOUT_SECONDS for slow local models, where a multi-step run
+// via AI_WORKFLOW_TIMEOUT_SECONDS for slow local models, where a multi-step LLM run
 // (parallel questions + synthesis) on a 14B can exceed 150s.
 const defaultWorkflowRunTimeout = 150 * time.Second
 
@@ -52,16 +52,16 @@ func mapWorkflowError(err error) error {
 		return err
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return platform.Errorf(504, "ai.upstream_timeout", "AI provider timed out: "+err.Error())
+		return platform.Errorf(504, "ai.upstream_timeout", "LLM provider timed out: "+err.Error())
 	}
-	return platform.Errorf(502, "ai.upstream_error", "AI provider error: "+err.Error())
+	return platform.Errorf(502, "ai.upstream_error", "LLM provider error: "+err.Error())
 }
 
 // ─── Workflow runner ──────────────────────────────────────────────────────────
 
 // RunWorkflow executes a workflow synchronously and returns the completed run.
 // It authorizes the caller, gathers context via internal-token REST calls,
-// runs each AI step, creates a result page, and flags for PI review if needed.
+// runs each LLM step, creates a result page, and flags for PI review if needed.
 func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key string, target WorkflowTarget) (*WorkflowRun, error) {
 	// Load workflow registry.
 	workflows, err := LoadWorkflows()
@@ -84,7 +84,7 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 	if err != nil {
 		s.log.Warn("ai: workflow: spend cap check failed", "err", err)
 	} else if !cap.Allowed {
-		return nil, platform.Errorf(402, "ai.spend_cap_exceeded", "workspace AI spend cap exceeded")
+		return nil, platform.Errorf(402, "ai.spend_cap_exceeded", "workspace LLM spend cap exceeded")
 	}
 
 	// Create a running row.
@@ -93,7 +93,7 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 		return nil, err
 	}
 
-	// Mint a run-scoped internal token with the full set of scopes needed by AI tools.
+	// Mint a run-scoped internal token with the full set of scopes needed by LLM tools.
 	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, run.ID, []string{
 		platform.ScopeReadProjects,
 		platform.ScopeReadSamples,
@@ -140,7 +140,7 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 
 		// Populate the risk register from workflow output.
 		if s.risks != nil {
-			if upsertErr := s.risks.UpsertFromWorkflow(ctx, target.ProjectID, nil, key, run.ID, output, p.UserID); upsertErr != nil {
+			if upsertErr := s.risks.UpsertFromWorkflow(ctx, target.ProjectID, nil, key, run.ID, output, stepResults, p.UserID); upsertErr != nil {
 				s.log.Warn("ai: workflow: risk upsert failed", "run_id", run.ID, "err", upsertErr)
 			}
 		}
@@ -201,7 +201,7 @@ func (s *Service) executeWorkflow(
 		}
 		// Single spend-cap check for the whole batch.
 		if cap, _ := checkSpendCap(ctx, s.pool, workspaceID); !cap.Allowed {
-			return platform.Errorf(402, "ai.spend_cap_exceeded", "workspace AI spend cap exceeded")
+			return platform.Errorf(402, "ai.spend_cap_exceeded", "workspace LLM spend cap exceeded")
 		}
 		var wg sync.WaitGroup
 		for _, step := range pendingQuestions {
@@ -251,7 +251,7 @@ func (s *Service) executeWorkflow(
 			// Check spend cap before model call.
 			cap, _ := checkSpendCap(ctx, s.pool, workspaceID)
 			if !cap.Allowed {
-				return stepResults, nil, nil, platform.Errorf(402, "ai.spend_cap_exceeded", "workspace AI spend cap exceeded")
+				return stepResults, nil, nil, platform.Errorf(402, "ai.spend_cap_exceeded", "workspace LLM spend cap exceeded")
 			}
 
 			md, outMap, usage, err := s.runAISynthesis(ctx, step, wf.OutputSchema, stepResults, contextBlob)
