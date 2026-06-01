@@ -23,6 +23,8 @@ import type { SSEEvent } from '@/api/sseParser';
 import { ApiError, apiFetchRaw } from '@/api/client';
 
 const PANEL_WIDTH = 380;
+const PANEL_MIN_WIDTH = 320;
+const PANEL_MAX_WIDTH = 720;
 
 // ─── Types for streaming state ────────────────────────────────────────────────
 
@@ -393,7 +395,17 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Stick-to-bottom: only auto-scroll while the user is already near the bottom,
+  // so scrolling up to read during streaming isn't yanked back down.
+  const stickToBottomRef = useRef(true);
+
+  // User-resizable panel width, persisted across sessions.
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('ai-panel-w'));
+    return saved >= PANEL_MIN_WIDTH && saved <= PANEL_MAX_WIDTH ? saved : PANEL_WIDTH;
+  });
 
   // Guard: auto-send the seed message exactly once after the seeded conversation
   // is selected. A ref prevents re-firing on re-renders.
@@ -401,11 +413,33 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
 
   // Set/clear --ai-w on <html> so the main content area shifts.
   useEffect(() => {
-    document.documentElement.style.setProperty('--ai-w', `${PANEL_WIDTH}px`);
+    document.documentElement.style.setProperty('--ai-w', `${panelWidth}px`);
     return () => {
       document.documentElement.style.setProperty('--ai-w', '0px');
     };
-  }, []);
+  }, [panelWidth]);
+
+  // Drag the panel's left edge to resize. Dragging left widens the panel.
+  const handlePanelResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panelWidth;
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, startW - (ev.clientX - startX)));
+      setPanelWidth(w);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setPanelWidth(w => { localStorage.setItem('ai-panel-w', String(w)); return w; });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [panelWidth]);
 
   useEffect(() => {
     if (convLoading) return;
@@ -436,9 +470,23 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     }
   }, [conversations, convLoading, createConv, seed]);
 
+  // Auto-scroll only when the user is already near the bottom. While streaming,
+  // if they scroll up to read, stickToBottomRef goes false and we leave them be.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (stickToBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    }
   }, [messages, streaming]);
+
+  // Track whether the message list is scrolled near the bottom.
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+
+  // A freshly selected conversation should start pinned to the bottom.
+  useEffect(() => { stickToBottomRef.current = true; }, [selectedConvId]);
 
   // Auto-send the seed kickoff message exactly once after the seeded conversation
   // is selected and the message list has loaded empty (freshly created conv).
@@ -467,6 +515,8 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     const content = (overrideContent ?? draft).trim();
     if (!content || !selectedConvId || sending) return;
 
+    // Sending a new message pins back to the bottom for this turn.
+    stickToBottomRef.current = true;
     if (!overrideContent) setDraft('');
     setSendError(null);
     setSending(true);
@@ -533,7 +583,9 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     <>
       <style>{`
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-        .ai-panel { position: fixed; top: 0; right: 0; bottom: 0; width: ${PANEL_WIDTH}px; max-width: 90vw; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; z-index: 100; box-shadow: -4px 0 24px rgba(20,18,14,0.10); }
+        .ai-panel { position: fixed; top: 0; right: 0; bottom: 0; max-width: 90vw; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; z-index: 100; box-shadow: -4px 0 24px rgba(20,18,14,0.10); }
+        .ai-resize { position: absolute; top: 0; left: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 110; touch-action: none; }
+        .ai-resize:hover, .ai-resize:active { background: var(--ember-soft); }
         .ai-panel-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; background: var(--paper); flex-shrink: 0; }
         .ai-orb { width: 10px; height: 10px; border-radius: 50%; background: var(--ember); flex-shrink: 0; }
         .ai-messages { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; }
@@ -557,7 +609,8 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
         .md hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
       `}</style>
 
-      <aside className="ai-panel">
+      <aside className="ai-panel" style={{ width: panelWidth }}>
+        <div className="ai-resize" onPointerDown={handlePanelResize} title="Drag to resize" />
         <div className="ai-panel-head">
           <div className="ai-orb" />
           <div style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>LLM Assistant</div>
@@ -582,7 +635,7 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
           creating={createConv.isPending}
         />
 
-        <div className="ai-messages">
+        <div className="ai-messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
           {msgsLoading && <div style={{ color: 'var(--muted)', fontSize: 12, textAlign: 'center', padding: 20 }}>Loading…</div>}
           {!msgsLoading && messages.length === 0 && !streaming && (
             <div style={{ color: 'var(--muted)', fontSize: 12.5, textAlign: 'center', padding: 32 }}>

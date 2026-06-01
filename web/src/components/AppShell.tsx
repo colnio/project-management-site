@@ -12,6 +12,8 @@ import { isPrivileged } from '@/api/types';
 import type { ReactNode } from 'react';
 
 const LS_WS_KEY = 'currentWorkspaceId';
+const SIDE_MIN_WIDTH = 180;
+const SIDE_MAX_WIDTH = 420;
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -233,6 +235,36 @@ function Sidebar({
 
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
 
+  // Restore the persisted sidebar width on mount.
+  useEffect(() => {
+    const saved = Number(localStorage.getItem('side-w'));
+    if (saved >= SIDE_MIN_WIDTH && saved <= SIDE_MAX_WIDTH) {
+      document.documentElement.style.setProperty('--side-w', `${saved}px`);
+    }
+  }, []);
+
+  // Drag the sidebar's right edge to resize. Updates --side-w (the grid column).
+  const handleSideResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w'), 10) || 224;
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(SIDE_MAX_WIDTH, Math.max(SIDE_MIN_WIDTH, startW + (ev.clientX - startX)));
+      document.documentElement.style.setProperty('--side-w', `${w}px`);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      localStorage.setItem('side-w', String(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w'), 10) || 224));
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
   const toggleProject = (id: string) => {
     setExpandedProjects(prev => {
       const next = new Set(prev);
@@ -255,6 +287,7 @@ function Sidebar({
 
   return (
     <aside className="side">
+      <div className="side-resize" onPointerDown={handleSideResize} title="Drag to resize" />
       {/* Workspace header */}
       <div className="side-head" style={{ position: 'relative' }}>
         <div
