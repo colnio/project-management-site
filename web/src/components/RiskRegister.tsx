@@ -312,7 +312,7 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
   const handleReviewWithAI = () => {
     const scope = iterationId ? 'iteration' : 'project';
     reviewWithAI(
-      'risk_assesment_skill',
+      'risk_assessment_skill',
       `Begin a structured risk assessment for this ${scope}. Start with Phase 1 (Context Mapping).`,
     );
   };

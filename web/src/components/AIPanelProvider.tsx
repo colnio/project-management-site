@@ -12,7 +12,7 @@
  *
  *   // Open for a skill-seeded conversation (new behaviour):
  *   const { reviewWithAI } = useAIPanel();
- *   <button onClick={() => reviewWithAI('risk_assesment_skill', 'Begin risk assessment…')}>
+ *   <button onClick={() => reviewWithAI('risk_assessment_skill', 'Begin risk assessment…')}>
  *     Review with AI
  *   </button>
  *
