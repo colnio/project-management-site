@@ -21,11 +21,11 @@ import (
 	"github.com/colnio/project-management-site/internal/risk"
 )
 
-// Service is the AI module's domain service.
+// Service is the LLM module's domain service.
 type Service struct {
 	pool     *pgxpool.Pool
 	cfg      *config.Config
-	client   Client   // nil means AI is disabled
+	client   Client   // nil means LLM is disabled
 	authSvc  *auth.Service
 	orgSvc   *org.Service
 	projects *project.Service
@@ -46,14 +46,14 @@ func (s *Service) SetPIFlagNotifier(n PIFlagNotifier) {
 	s.piNotify = n
 }
 
-// SetRiskService wires the risk service into the AI service so that completed
+// SetRiskService wires the risk service into the LLM service so that completed
 // risk-assessment workflow runs can populate the risk register. Call this in
 // main.go after both services are constructed.
 func (s *Service) SetRiskService(risks *risk.Service) {
 	s.risks = risks
 }
 
-// NewService constructs the AI service. If client is nil, all AI endpoints
+// NewService constructs the LLM service. If client is nil, all LLM endpoints
 // return 503 ai.unavailable.
 func NewService(
 	pool *pgxpool.Pool,
@@ -78,13 +78,13 @@ func NewService(
 	}
 }
 
-// available reports whether the AI client is configured.
+// available reports whether the LLM client is configured.
 func (s *Service) available() bool {
 	return s.client != nil
 }
 
 func (s *Service) unavailableErr() error {
-	return platform.Errorf(503, "ai.unavailable", "AI provider is not configured")
+	return platform.Errorf(503, "ai.unavailable", "LLM provider is not configured")
 }
 
 // ─── Conversation management ─────────────────────────────────────────────────
@@ -335,7 +335,7 @@ func (s *Service) checkWorkspaceMember(ctx context.Context, p *platform.Principa
 
 // ─── ListProposedToolCallsByWorkspace ─────────────────────────────────────────
 
-// ProposedToolCallItem is a lightweight view of a proposed AI tool call.
+// ProposedToolCallItem is a lightweight view of a proposed LLM tool call.
 type ProposedToolCallItem struct {
 	ID        uuid.UUID
 	Tool      string
@@ -343,7 +343,7 @@ type ProposedToolCallItem struct {
 	CreatedAt time.Time
 }
 
-// ListProposedToolCallsByWorkspace returns proposed AI tool calls for all projects
+// ListProposedToolCallsByWorkspace returns proposed LLM tool calls for all projects
 // in the given workspace, ordered by created_at DESC, limited to limit rows.
 func (s *Service) ListProposedToolCallsByWorkspace(ctx context.Context, workspaceID uuid.UUID, limit int) ([]ProposedToolCallItem, error) {
 	projectIDs, err := s.projects.ListIDsForWorkspace(ctx, workspaceID)
@@ -399,7 +399,7 @@ func (s *Service) SetProjectAutonomy(ctx context.Context, p *platform.Principal,
 
 // ─── Risk review ─────────────────────────────────────────────────────────────
 
-// ReviewRisks calls the AI to summarise the risk register for a project (or
+// ReviewRisks calls the LLM to summarise the risk register for a project (or
 // an iteration within it) and return a concise readiness recommendation.
 // The caller is authorised as Viewer; no write scopes are required.
 func (s *Service) ReviewRisks(ctx context.Context, p *platform.Principal, projectID uuid.UUID, iterationID *uuid.UUID) (string, error) {

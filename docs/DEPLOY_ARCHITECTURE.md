@@ -24,8 +24,8 @@ The web UI is a static React/Vite SPA. Everything else is an external service.
 | **S3 / MinIO** | 9000 (API), 9001 (console) | **Yes** | Yes | Artifact originals + rendered derivatives |
 | **SMTP / SES** | 1025 (Mailpit dev) / 587 (SES) | **Yes** | Yes | Transactional email + daily digests |
 | **nbconvert** sidecar | 8090 | Optional* | Yes | *Required to render Jupyter notebook artifacts to HTML |
-| **SearXNG** | 8888 | Optional* | Yes | *Required only if the AI agent's web-search tool is used |
-| **Ollama / OpenAI-compatible model** | 11434 (Ollama) | Optional* | Yes | *Required for AI chat + workflows; AI degrades gracefully (HTTP 503 `ai.unavailable`) if absent |
+| **SearXNG** | 8888 | Optional* | Yes | *Required only if the LLM agent's web-search tool is used |
+| **Ollama / OpenAI-compatible model** | 11434 (Ollama) | Optional* | Yes | *Required for LLM chat + workflows; LLM degrades gracefully (HTTP 503 `ai.unavailable`) if absent |
 
 `*` Optional components disable only their feature; the core app runs without them.
 
@@ -46,13 +46,13 @@ The web UI is a static React/Vite SPA. Everything else is an external service.
 - **PostgreSQL 16**
 - **S3-compatible object store** (AWS S3, MinIO, etc.) with two buckets (originals, rendered)
 - **SMTP relay** (or AWS SES)
-- **An OpenAI-compatible chat-completions endpoint** for AI features — local Ollama or a hosted provider (OpenRouter, etc.). Must support function/tool calling.
+- **An OpenAI-compatible chat-completions endpoint** for LLM features — local Ollama or a hosted provider (OpenRouter, etc.). Must support function/tool calling.
 - Optional sidecars: nbconvert (Python 3.12 image, built from `deploy/nbconvert/`), SearXNG.
 
 ### Resource sizing (guidance)
 - **API**: modest — 1 vCPU / 1–2 GB RAM per replica is ample for a lab-scale workload.
 - **Postgres**: 2 vCPU / 4 GB RAM + SSD for a small team; scale with data + job volume.
-- **Local model (if self-hosting Ollama)**: the heavy component. `qwen2.5:14b-instruct` (the calibrated default, see [AI_E2E_TESTING.md](AI_E2E_TESTING.md)) needs ~9 GB of weights plus headroom — a GPU with ≥12 GB VRAM is strongly recommended; CPU-only works but is slow (raise the AI timeouts, §3). A 7B model halves the footprint at some quality cost.
+- **Local model (if self-hosting Ollama)**: the heavy component. `qwen2.5:14b-instruct` (the calibrated default, see [AI_E2E_TESTING.md](AI_E2E_TESTING.md)) needs ~9 GB of weights plus headroom — a GPU with ≥12 GB VRAM is strongly recommended; CPU-only works but is slow (raise the LLM timeouts, §3). A 7B model halves the footprint at some quality cost.
 - **MinIO**: disk sized to expected artifact volume (PDFs, notebooks, images + rendered derivatives).
 
 ---
@@ -60,7 +60,7 @@ The web UI is a static React/Vite SPA. Everything else is an external service.
 ## 3. Configuration reference
 
 All configuration is environment variables, loaded by `internal/config` (a `.env`
-file is read in dev; real environment wins in prod). The AI provider/model is
+file is read in dev; real environment wins in prod). The LLM provider/model is
 additionally selected by `aiconf.local.json` (gitignored; see
 `aiconf.ollama.example.json`). Start from [`.env.example`](../.env.example).
 
@@ -113,7 +113,7 @@ additionally selected by `aiconf.local.json` (gitignored; see
 | `NBCONVERT_URL` | http://localhost:8090 |
 | `SEARXNG_URL` | http://localhost:8888 |
 
-### AI
+### LLM
 | Var | Default | Notes |
 |-----|---------|-------|
 | `OLLAMA_BASE_URL` | http://localhost:11434 | base for the model endpoint |
@@ -229,5 +229,5 @@ managed equivalent and run the API as a container.
 - **TLS**: terminate at the reverse proxy / load balancer. Set `COOKIE_SECURE=true` and a correct `COOKIE_DOMAIN` so refresh-token cookies work.
 - **MCP**: mounted at `/mcp` (SSE), authenticated with a Personal Access Token (create one in **Settings → API tokens**). Tools are read-only and forward the caller's PAT scopes.
 - **Email sink (dev)**: Mailpit UI at `:8025`. **Object console (dev)**: MinIO at `:9001`.
-- **AI graceful degradation**: with no reachable model / missing `aiconf.local.json`, AI endpoints return `503 ai.unavailable` and the rest of the app is unaffected.
+- **LLM graceful degradation**: with no reachable model / missing `aiconf.local.json`, LLM endpoints return `503 ai.unavailable` and the rest of the app is unaffected.
 </content>

@@ -617,9 +617,9 @@ export function SettingsPage() {
           <CalendarSection />
         </SectionCard>
 
-        <SectionCard title="AI Autonomy (Workspace)">
+        <SectionCard title="LLM Autonomy (Workspace)">
           <div style={{ marginBottom: 10, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-            These settings control how AI behaves across all projects in this workspace.
+            These settings control how LLM behaves across all projects in this workspace.
             Individual projects can use a more restrictive setting, but cannot exceed the workspace cap.
           </div>
           <WorkspaceAutonomyWrapper />

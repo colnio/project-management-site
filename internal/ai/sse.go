@@ -25,7 +25,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if !s.available() {
-		writeSSEError(w, "ai.unavailable", "AI provider is not configured")
+		writeSSEError(w, "ai.unavailable", "LLM provider is not configured")
 		return
 	}
 
@@ -90,15 +90,15 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("ai: spend cap check error", "err", err)
 	}
 	if !capCheck.Allowed {
-		writeSSEError(w, "ai.spend_cap_exceeded", "monthly AI spend cap exceeded")
+		writeSSEError(w, "ai.spend_cap_exceeded", "monthly LLM spend cap exceeded")
 		return
 	}
 
 	// Resolve autonomy.
 	mode, allowedTools := ResolveAutonomy(ctx, s.pool, proj.WorkspaceID, proj.ID)
 
-	// Mint internal AI token with the full set of scopes needed by AI tools.
-	// This set must cover every endpoint the AI tools call via the REST API.
+	// Mint internal LLM token with the full set of scopes needed by LLM tools.
+	// This set must cover every endpoint the LLM tools call via the REST API.
 	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, []string{
 		platform.ScopeReadProjects,
 		platform.ScopeReadSamples,
@@ -163,7 +163,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 			systemContent = contextPreamble + "\n\n" + skillBody
 		} else {
 			s.log.Warn("ai: sse: load skill failed; falling back to generic prompt", "skill", *conv.Skill, "err", skillErr)
-			systemContent = "You are an AI assistant embedded in a research project management tool.\n" +
+			systemContent = "You are an LLM assistant embedded in a research project management tool.\n" +
 				contextPreamble + "\n\n" +
 				"Instructions:\n" +
 				"- When a tool requires a project_id and the user has not specified one, default to the current project_id above.\n" +
@@ -171,7 +171,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 				"- Be concise and factual in your responses."
 		}
 	} else {
-		systemContent = "You are an AI assistant embedded in a research project management tool.\n" +
+		systemContent = "You are an LLM assistant embedded in a research project management tool.\n" +
 			contextPreamble + "\n\n" +
 			"Instructions:\n" +
 			"- When a tool requires a project_id and the user has not specified one, default to the current project_id above.\n" +
@@ -233,7 +233,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		// Check spend cap before each round.
 		capCheck, _ = checkSpendCap(ctx, s.pool, proj.WorkspaceID)
 		if !capCheck.Allowed {
-			sendSSE("error", `{"code":"ai.spend_cap_exceeded","message":"monthly AI spend cap exceeded"}`)
+			sendSSE("error", `{"code":"ai.spend_cap_exceeded","message":"monthly LLM spend cap exceeded"}`)
 			return
 		}
 

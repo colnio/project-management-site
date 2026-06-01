@@ -23,22 +23,22 @@ const AUTONOMY_MODES: {
   {
     value: 'read_only',
     label: 'Read only',
-    description: 'AI can search and read project data, but cannot propose or make any changes.',
+    description: 'LLM can search and read project data, but cannot propose or make any changes.',
   },
   {
     value: 'suggest_writes',
     label: 'Suggest writes',
-    description: 'AI drafts changes and flags them for your approval before anything is written.',
+    description: 'LLM drafts changes and flags them for your approval before anything is written.',
   },
   {
     value: 'auto_routine',
     label: 'Auto routine',
-    description: 'AI can run pre-approved routine operations (reminders, risk checks) autonomously.',
+    description: 'LLM can run pre-approved routine operations (reminders, risk checks) autonomously.',
   },
   {
     value: 'full',
     label: 'Full autonomy',
-    description: 'AI can read and write without per-action approval. Use with caution.',
+    description: 'LLM can read and write without per-action approval. Use with caution.',
   },
 ];
 
@@ -374,8 +374,8 @@ export function ProjectAutonomySection({ projectId, workspaceId }: ProjectAutono
   const update = useUpdateProjectAutonomy(projectId);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  if (isLoading) return <LoadingState message="Loading AI settings…" />;
-  if (isError || !config) return <ErrorState message="Failed to load AI settings." />;
+  if (isLoading) return <LoadingState message="Loading LLM settings…" />;
+  if (isError || !config) return <ErrorState message="Failed to load LLM settings." />;
 
   const handleSave = async (mode: AutonomyConfig['mode'], allowedTools: string[]) => {
     setSaveError(null);

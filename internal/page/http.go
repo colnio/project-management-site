@@ -52,7 +52,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPut,
 		Path:        "/v1/pages/{id}",
 		Summary:     "Update page blocks (requires If-Match)",
-		Description: "Writes a new revision for the page. Send the ETag from a prior GET as the `If-Match` header; a mismatch returns 412. Set `candidate=true` to stage an AI-generated draft for approval instead of advancing the current revision. Requires editor role on the project.",
+		Description: "Writes a new revision for the page. Send the ETag from a prior GET as the `If-Match` header; a mismatch returns 412. Set `candidate=true` to stage an LLM-generated draft for approval instead of advancing the current revision. Requires editor role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleUpdatePage)
 
@@ -100,7 +100,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodPost,
 		Path:        "/v1/pages/{id}/candidates/{cand_id}/approve",
 		Summary:     "Approve a candidate revision",
-		Description: "Promotes a candidate revision to the current revision, superseding the previous current. Used in the AI-assisted editing workflow. Requires editor role on the project.",
+		Description: "Promotes a candidate revision to the current revision, superseding the previous current. Used in the LLM-assisted editing workflow. Requires editor role on the project.",
 		Tags:        []string{"pages"},
 	}, svc.handleApproveCandidate)
 

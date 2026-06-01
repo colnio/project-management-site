@@ -361,11 +361,11 @@ func TestPATScopesOnPrincipal(t *testing.T) {
 	}
 }
 
-// ─── Internal AI Token ───────────────────────────────────────────────────────
+// ─── Internal LLM Token ──────────────────────────────────────────────────────
 
 func TestInternalAITokenLifecycle(t *testing.T) {
 	svc, ctx := newTestService(t)
-	u, _ := svc.CreateUser(ctx, "iai@graphene-lab.org", "AI User")
+	u, _ := svc.CreateUser(ctx, "iai@graphene-lab.org", "LLM User")
 	convID := uuid.New()
 
 	raw, err := svc.MintInternalAIToken(ctx, u.ID, convID, []string{"read"}, json.RawMessage(`{"k":"v"}`))

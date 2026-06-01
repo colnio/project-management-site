@@ -13,7 +13,7 @@ import (
 
 // ─── Conversation ─────────────────────────────────────────────────────────────
 
-// Conversation represents an AI chat session.
+// Conversation represents an LLM chat session.
 type Conversation struct {
 	ID        uuid.UUID `json:"id"`
 	ProjectID uuid.UUID `json:"project_id"`
@@ -156,7 +156,7 @@ func nextSeq(ctx context.Context, pool *pgxpool.Pool, convID uuid.UUID) (int, er
 
 // ─── Tool calls ───────────────────────────────────────────────────────────────
 
-// ToolCallRecord is a persisted AI tool call record.
+// ToolCallRecord is a persisted LLM tool call record.
 type ToolCallRecord struct {
 	ID             uuid.UUID  `json:"id"`
 	ConversationID *uuid.UUID `json:"conversation_id,omitempty"`

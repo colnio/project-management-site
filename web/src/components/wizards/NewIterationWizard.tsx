@@ -473,8 +473,8 @@ function AIRiskStep({
       setRunId(result.id);
     } catch (e) {
       const msg = e instanceof ApiError
-        ? (e.status === 503 ? 'AI service unavailable — you can skip this step.' : e.message)
-        : 'AI service unavailable — you can skip this step.';
+        ? (e.status === 503 ? 'LLM service unavailable — you can skip this step.' : e.message)
+        : 'LLM service unavailable — you can skip this step.';
       setRunError(msg);
     }
   };
@@ -484,14 +484,14 @@ function AIRiskStep({
 
   return (
     <>
-      <StepHeader step={4} total={4} title="AI Risk Register" />
+      <StepHeader step={4} total={4} title="LLM Risk Register" />
 
       <InfoBanner
         warn
         message="A HIGH-likelihood risk flagged for PI review will block activating this iteration until a PI signs off and the risk is resolved."
       />
 
-      <InfoBanner message="Run the AI risk assessment to draft risks for this iteration. You can skip and add risks manually later." />
+      <InfoBanner message="Run the LLM risk assessment to draft risks for this iteration. You can skip and add risks manually later." />
 
       {runError && <FormError message={runError} />}
 
@@ -507,7 +507,7 @@ function AIRiskStep({
       )}
 
       {runId && !isDone && (
-        <LoadingState message="AI is drafting risks…" />
+        <LoadingState message="LLM is drafting risks…" />
       )}
 
       {runId && isDone && (

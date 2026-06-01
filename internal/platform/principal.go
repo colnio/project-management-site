@@ -9,7 +9,7 @@ import (
 // Principal is the authenticated caller resolved by the auth middleware and
 // read by every handler. It is the single source of "who is acting" and how.
 // The same struct represents a human (JWT), an external agent (PAT), and the
-// in-app AI (internal token) — only the Via* fields differ. This keeps one
+// in-app LLM (internal token) — only the Via* fields differ. This keeps one
 // HTTP code path for all three, per spec §6.3 / §7.6.
 //
 // GlobalRole carries the user's platform-level role ("admin", "pi", or
@@ -23,7 +23,7 @@ type Principal struct {
 	// Exactly one of the Via* fields is set for non-interactive callers; both
 	// nil means a first-party browser session (JWT).
 	ViaTokenID          *uuid.UUID // PAT id, when called with Authorization: Bearer pat_...
-	ViaAIConversationID *uuid.UUID // AI conversation/run id, when called with iai_... token
+	ViaAIConversationID *uuid.UUID // LLM conversation/run id, when called with iai_... token
 
 	// Scopes is the effective capability set already intersected with the
 	// owner's resolved permissions (empty slice => full first-party session).
@@ -45,7 +45,7 @@ func (p *Principal) IsPrivileged() bool { return p.IsAdmin() || p.IsPI() }
 // Rules:
 //   - A first-party browser session (both Via* fields nil) is unrestricted and
 //     always returns true.
-//   - Token callers (PAT or internal AI) are enforced against their Scopes list;
+//   - Token callers (PAT or internal LLM) are enforced against their Scopes list;
 //     an empty list grants nothing.
 func (p *Principal) HasScope(scope string) bool {
 	if p == nil {
@@ -63,7 +63,7 @@ func (p *Principal) HasScope(scope string) bool {
 }
 
 // IsSessionOnly reports whether the principal is a first-party browser session
-// (JWT), not a PAT or internal-AI token.
+// (JWT), not a PAT or internal-LLM token.
 func (p *Principal) IsSessionOnly() bool {
 	return p != nil && p.ViaTokenID == nil && p.ViaAIConversationID == nil
 }

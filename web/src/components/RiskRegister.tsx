@@ -160,7 +160,7 @@ function RiskRow({ risk, projectId, isPI, onEdit }: RiskRowProps) {
                   padding: '1px 5px',
                 }}
               >
-                AI
+                LLM
               </span>
             )}
             {flagged && (
@@ -465,7 +465,7 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
             onClick={handleReviewWithAI}
             style={{ fontSize: 12 }}
           >
-            Review with AI
+            Review with LLM
           </button>
 
           <button

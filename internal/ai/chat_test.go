@@ -111,7 +111,7 @@ func TestService_Unavailable(t *testing.T) {
 
 	_, err := svc.CreateConversation(context.Background(), sd.Principal, sd.ProjectID, "test", nil)
 	if err == nil {
-		t.Fatal("expected error when AI unavailable")
+		t.Fatal("expected error when LLM unavailable")
 	}
 	if !strings.Contains(err.Error(), "not configured") && !strings.Contains(err.Error(), "unavailable") {
 		t.Errorf("expected unavailable error, got: %v", err)
@@ -525,7 +525,7 @@ func TestReviewRisks_ReturnsContent(t *testing.T) {
 		}},
 	})
 
-	// Build AI service wired with a real risk service.
+	// Build LLM service wired with a real risk service.
 	riskSvc := newTestRiskService(pool, projectSvc, logger)
 	svc := NewService(pool, &config.Config{Port: "19099"}, stub, authSvc, orgSvc, projectSvc, rec, logger)
 	svc.SetRiskService(riskSvc)
@@ -680,7 +680,7 @@ func TestReviewRisks_NilRisks(t *testing.T) {
 	}
 }
 
-// newTestRiskService creates a risk.Service for use in AI tests.
+// newTestRiskService creates a risk.Service for use in LLM tests.
 func newTestRiskService(pool *pgxpool.Pool, projectSvc *project.Service, log *slog.Logger) *risk.Service {
 	iterSvc := iteration.NewService(pool, projectSvc, audit.Nop{}, log)
 	return risk.NewService(pool, projectSvc, iterSvc, audit.Nop{}, log)

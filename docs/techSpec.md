@@ -3,12 +3,12 @@
 > **What changed from v1.0** (summary of resolved decisions; full list at bottom in §12):
 > - Hosting simplified: 1–2 EC2 boxes instead of App Runner + RDS + Lambda + Secrets Manager.
 > - Apple Calendar via per-user `.ics` subscription URL; CalDAV dropped. Google Calendar moves to the same `.ics` mechanism for v1.
-> - AI auth model specified: short-lived internal tokens minted per conversation, scoped to the calling user.
+> - LLM auth model specified: short-lived internal tokens minted per conversation, scoped to the calling user.
 > - Lab-specific BlockNote reference blocks (`@sample`, `@experiment`, `@artifact`) are in v1.
 > - Page versioning simplified: `Page.blocks` denorm dropped; `markdownExport` lives on `PageRevision`; auto-save debounced.
 > - Single-editor conflicts: ETag-based optimistic locking **plus** presence indicator.
 > - Webhooks deferred to v2.
-> - Sample properties stay freeform JSONB; canonical keys per `kind` is a v2 candidate (AI workflows will extract from page prose for now — flagged as a known weakness).
+> - Sample properties stay freeform JSONB; canonical keys per `kind` is a v2 candidate (LLM workflows will extract from page prose for now — flagged as a known weakness).
 > - External users: Microsoft Entra for university SSO; admin allow-lists external emails which then use local password accounts.
 > - Audit log kept forever in Postgres; partitioned by month after > 50M rows.
 > - Terminology: `iteration` everywhere (code and UI).
@@ -20,13 +20,13 @@
 
 ## 1. Overview
 
-A web application for a physics / materials science / energy storage research lab to manage **projects**, **iterations**, **physical samples**, **experiments**, and **supporting artifacts** (PDFs, Jupyter notebooks, images) — augmented with **AI-assisted risk workflows + an agentic project assistant**, **calendar integration via `.ics` subscription**, and a **first-class agent-friendly API**.
+A web application for a physics / materials science / energy storage research lab to manage **projects**, **iterations**, **physical samples**, **experiments**, and **supporting artifacts** (PDFs, Jupyter notebooks, images) — augmented with **LLM-assisted risk workflows + an agentic project assistant**, **calendar integration via `.ics` subscription**, and a **first-class agent-friendly API**.
 
 - **Target users**: 10–30 researchers in year 1 — primary lab + external collaborators.
 - **Deployment**: AWS-hosted on 1–2 EC2 instances (Go API + React SPA + S3 for artifacts).
 - **Auth**: University Microsoft 365 SSO (university users), local password accounts (external invitees), Personal Access Tokens (agents).
 - **Editing**: Notion-style block editor (BlockNote) with lab-specific reference blocks.
-- **AI**: Provider-agnostic via OpenRouter; single global key; per-workspace spend caps & autonomy controls. Internal AI uses the same public API as external agents.
+- **LLM**: Provider-agnostic via OpenRouter; single global key; per-workspace spend caps & autonomy controls. Internal LLM uses the same public API as external agents.
 - **Calendar**: In-app timelines + per-user `.ics` subscription URL consumable by Google / Apple / Outlook calendars.
 - **Agent-friendly**: Comprehensive REST + MCP, scoped PATs, OpenAPI 3.1, `/llms.txt`. (Webhooks deferred.)
 
@@ -36,7 +36,7 @@ A web application for a physics / materials science / energy storage research la
 
 | Layer | Choice | Why |
 |---|---|---|
-| Backend | **Go** (chi router) | Single-binary deploys, fast, great concurrency for AI streaming + sync jobs |
+| Backend | **Go** (chi router) | Single-binary deploys, fast, great concurrency for LLM streaming + sync jobs |
 | Database | **PostgreSQL** | `jsonb` for page content + sample properties, native FTS, durable |
 | SQL layer | sqlc + pgx | Type-safe SQL, no ORM overhead |
 | API framework | huma | Auto-generates OpenAPI 3.1 from Go handlers |
@@ -46,9 +46,9 @@ A web application for a physics / materials science / energy storage research la
 | Block editor | **BlockNote** | Notion-like UX; supports custom inline blocks |
 | Auth (humans) | Microsoft Entra ID OAuth2 + local password fallback + JWT | Uni SSO + external invitees |
 | Auth (agents) | Personal Access Tokens, scoped | Standard for agent integrations |
-| Auth (internal AI) | Short-lived internal tokens (see §6.3) | Same HTTP path as external agents |
+| Auth (internal LLM) | Short-lived internal tokens (see §6.3) | Same HTTP path as external agents |
 | File storage | **Amazon S3** | Direct browser uploads via presigned URLs |
-| AI | **OpenRouter** — single **global** API key | Provider-agnostic; admin-paid (see §7.5.1) |
+| LLM | **OpenRouter** — single **global** API key | Provider-agnostic; admin-paid (see §7.5.1) |
 | MCP server | Go MCP SDK (`mcp-go`) | Wraps the REST API; same auth, same scopes |
 | Web search (for agent) | Brave Search API or Tavily | Cheap, agent-friendly |
 | Calendar export | Per-user signed `.ics` URL | One code path; consumed by Google, Apple, Outlook |
@@ -200,8 +200,8 @@ PagePresence                   (in-memory or short-TTL Postgres; see §7.1.3)
  ├─ since, lastHeartbeat
  └─ clientId
 
-AuditLog                       (every API call, every AI tool call, every admin override)
- ├─ id, actor (user), via_token? (PAT id), via_ai_conversation? (AI internal token)
+AuditLog                       (every API call, every LLM tool call, every admin override)
+ ├─ id, actor (user), via_token? (PAT id), via_ai_conversation? (LLM internal token)
  ├─ action, resourceType, resourceId
  ├─ requestPayloadDigest, responseStatus
  └─ createdAt                   (partitioned by month past 50M rows)
@@ -251,7 +251,7 @@ PersonalAccessToken
  ├─ expiresAt?, revokedAt?, lastUsedAt
  └─ rateLimit (optional override)
 
-InternalAIToken                (see §6.3 — minted per AI conversation/run)
+InternalAIToken                (see §6.3 — minted per LLM conversation/run)
  ├─ user, conversationOrRunId
  ├─ tokenHash, scopesSnapshot (text[]), permissionsSnapshot (JSONB)
  ├─ expiresAt (~15 min, renewable)
@@ -275,7 +275,7 @@ In a battery / materials lab, a sample isn't a child of a single iteration — i
 
 Modeling samples as first-class under the project (with `IterationSample` to link them into iterations, and `SampleRelation` to capture lineage) lets you ask the questions a lab actually asks — *what's this sample's full history? which experiments has it been through? what did it derive from?* — without duplicating sample records across iterations.
 
-The **Experiment** entity captures the missing middle layer: a structured record of *what was actually done*. Cycling protocols, SEM scans, XRD measurements, syntheses, weighings — each is a row with parameters (JSONB) and a clear link to the samples involved and the artifacts produced. Without this, all that information ends up in unstructured page bodies and filenames, and search / AI context / reproducibility / risk workflows all degrade.
+The **Experiment** entity captures the missing middle layer: a structured record of *what was actually done*. Cycling protocols, SEM scans, XRD measurements, syntheses, weighings — each is a row with parameters (JSONB) and a clear link to the samples involved and the artifacts produced. Without this, all that information ends up in unstructured page bodies and filenames, and search / LLM context / reproducibility / risk workflows all degrade.
 
 ---
 
@@ -299,7 +299,7 @@ Enforcement is **server-side on every mutation**.
 
 **For API tokens**: effective capability = `intersect(token.scopes, owner's resolved permissions)`. A token can never grant more than its owner has at the moment of the request (re-resolved per request — no caching of stale permissions).
 
-**For AI tool calls**: additionally gated by `AutonomyConfig`. Admin override grants visibility into AI runs (logged).
+**For LLM tool calls**: additionally gated by `AutonomyConfig`. Admin override grants visibility into LLM runs (logged).
 
 ---
 
@@ -318,10 +318,10 @@ Enforcement is **server-side on every mutation**.
 - Local accounts have all the same JWT/refresh semantics as SSO accounts after sign-in.
 - Optional TOTP 2FA in v1.1 (post-launch).
 
-### 6.3 Internal AI auth
-The in-app AI assistant calls the same HTTP API as external agents. To do that, the orchestrator authenticates as the user:
+### 6.3 Internal LLM auth
+The in-app LLM assistant calls the same HTTP API as external agents. To do that, the orchestrator authenticates as the user:
 
-- When an AI conversation starts (or a workflow run begins), the orchestrator mints an **internal token**:
+- When an LLM conversation starts (or a workflow run begins), the orchestrator mints an **internal token**:
   - Bound to `(user_id, conversation_or_run_id)`.
   - Captures a **snapshot** of the user's effective permissions at that instant.
   - TTL ~15 minutes, renewable while the conversation is active.
@@ -331,7 +331,7 @@ The in-app AI assistant calls the same HTTP API as external agents. To do that, 
   - Higher per-minute rate limit (default 600/min).
   - `AuditLog` records `actor=user_id, via_ai_conversation=<id>` — the user remains the principal.
   - Tokens are revoked when the conversation ends, the user closes the chat, or the workflow completes.
-- **Why this matters**: external agents and the in-app AI share one HTTP code path. Any middleware (idempotency, ETag, rate limiting, audit) applies uniformly. No "back door" through Go service calls.
+- **Why this matters**: external agents and the in-app LLM share one HTTP code path. Any middleware (idempotency, ETag, rate limiting, audit) applies uniformly. No "back door" through Go service calls.
 
 ### 6.4 Agent auth (PATs)
 - Generated in **Account Settings → API Tokens**: user names the token, picks scopes, optional expiry, gets a one-time secret.
@@ -357,9 +357,9 @@ The editor ships custom block types that turn the surface from "generic Notion c
 - `@experiment:<experiment_id>` — inline mention or card; renders method, samples, result summary preview.
 - `@artifact:<artifact_id>` — card; renders thumbnail + filename + uploaded-by/date.
 
-These give the AI's `search_project_content` results structured citation back to entities, and let researchers cross-link without typing IDs by hand. Implemented as BlockNote custom blocks (`createBlockSpec`); resolved server-side on render so stale references display gracefully.
+These give the LLM's `search_project_content` results structured citation back to entities, and let researchers cross-link without typing IDs by hand. Implemented as BlockNote custom blocks (`createBlockSpec`); resolved server-side on render so stale references display gracefully.
 
-#### 7.1.2 Page versioning & AI rollback
+#### 7.1.2 Page versioning & LLM rollback
 
 Every page change creates an **immutable revision**. Storage is **content-addressable** (git-style): the canonical block JSON is stored once in `PageBlob` keyed by SHA-256, and `PageRevision` rows reference a blob with metadata.
 
@@ -370,23 +370,23 @@ Every page change creates an **immutable revision**. Storage is **content-addres
 
 **Revision sources**:
 - `human` — explicit user save in the editor.
-- `ai` — written by the AI agent or a workflow run.
+- `ai` — written by the LLM agent or a workflow run.
 - `auto_save` — debounced background save.
 - `restore` — non-destructive revert.
 - `import` — bulk import or initial seed.
 
-**AI safety guardrails**:
-- Before the AI's first write to a page in any session, the prior current revision is labeled `pre_ai_safety_point` and pinned (immune from GC).
-- In `suggest_writes` mode: AI writes create a **candidate** revision (not current) that the user approves in a diff view. Reject keeps the candidate for audit.
-- In `auto_routine` / `full` modes: AI writes become current immediately, but each AI revision links to its originating `AIToolCall`.
-- **Runaway protection**: if **N consecutive AI revisions on the same page** happen without an intervening human revision (default N=3), the orchestrator pauses further AI writes on that page until a human reviews. Per-page-session; revisions inside a single `AIWorkflowRun` are exempt (a multi-step workflow may legitimately write 5 intermediate revisions to a page).
+**LLM safety guardrails**:
+- Before the LLM's first write to a page in any session, the prior current revision is labeled `pre_ai_safety_point` and pinned (immune from GC).
+- In `suggest_writes` mode: LLM writes create a **candidate** revision (not current) that the user approves in a diff view. Reject keeps the candidate for audit.
+- In `auto_routine` / `full` modes: LLM writes become current immediately, but each LLM revision links to its originating `AIToolCall`.
+- **Runaway protection**: if **N consecutive LLM revisions on the same page** happen without an intervening human revision (default N=3), the orchestrator pauses further LLM writes on that page until a human reviews. Per-page-session; revisions inside a single `AIWorkflowRun` are exempt (a multi-step workflow may legitimately write 5 intermediate revisions to a page).
 
 **Retention** (defaults; configurable per workspace later):
-- All revisions: **kept forever** by default. Disk is cheap; trust in the AI undo story is not. PI can opt into GC later.
+- All revisions: **kept forever** by default. Disk is cheap; trust in the LLM undo story is not. PI can opt into GC later.
 - `auto_save` revisions: rolling window, keep last 20 per page, GC nightly.
 
 **One-click recovery**:
-- "Undo last AI edit" button surfaces whenever the current revision has `source = ai`.
+- "Undo last LLM edit" button surfaces whenever the current revision has `source = ai`.
 - **Page history panel**: timeline of revisions with source, author/tool, timestamp, label, content size; diff against any other revision; restore to any.
 - Restore is itself a new revision (non-destructive).
 
@@ -422,7 +422,7 @@ POST   /v1/pages/{id}/candidates/{cand_id}/approve
 POST   /v1/pages/{id}/candidates/{cand_id}/reject
 ```
 
-**Token scopes**: `read:page_revisions`, `write:page_restore`. AI write tools (`draft_page` etc.) keep needing `write:pages` plus their `AutonomyConfig` gate.
+**Token scopes**: `read:page_revisions`, `write:page_restore`. LLM write tools (`draft_page` etc.) keep needing `write:pages` plus their `AutonomyConfig` gate.
 
 ### 7.2 Artifact pipeline
 
@@ -468,9 +468,9 @@ Returns an RFC 5545 `.ics` stream containing every event in the user's scope (de
 
 **v2 candidates**: Google Calendar OAuth for real-time push; Apple two-way sync via CalDAV.
 
-### 7.4 AI: Risk Assessment Workflows
+### 7.4 LLM: Risk Assessment Workflows
 
-Predefined, structured workflows the AI walks the user through. Each is a **JSON file** in the repo (`/workflows/*.json`) loaded at server boot. Results saved as a structured record **and** rendered as a Page on the target entity.
+Predefined, structured workflows the LLM walks the user through. Each is a **JSON file** in the repo (`/workflows/*.json`) loaded at server boot. Results saved as a structured record **and** rendered as a Page on the target entity.
 
 Workflow template (example, JSON):
 ```json
@@ -505,12 +505,12 @@ Workflow template (example, JSON):
 
 **PI review flagging logic**:
 A workflow output is flagged for PI review if **either**:
-- The AI emits `flagged_for_PI_review: true` in the synthesis output, **OR**
+- The LLM emits `flagged_for_PI_review: true` in the synthesis output, **OR**
 - `overall_rating >= 4`.
 
-The deterministic threshold provides a floor the AI can't talk us out of; the AI flag provides ceiling judgment for cases that don't trip the threshold. Either path sends an email via SES + in-app notification to the workspace PI.
+The deterministic threshold provides a floor the LLM can't talk us out of; the LLM flag provides ceiling judgment for cases that don't trip the threshold. Either path sends an email via SES + in-app notification to the workspace PI.
 
-**Sample-properties caveat (v1)**: because `Sample.properties` is freeform JSONB, the `gather_context` step assembles prose context — page bodies, artifact metadata, the JSONB blob serialized — and lets the AI extract chemistry / mass / voltage from prose. This is **fragile** and a known v1 weakness. The risk: an AI rating is only as reliable as its context extraction. **v2 candidate**: canonical typed keys per `kind` (chemistry, mass_g, capacity_mah, voltage_window_v) populated from sample forms.
+**Sample-properties caveat (v1)**: because `Sample.properties` is freeform JSONB, the `gather_context` step assembles prose context — page bodies, artifact metadata, the JSONB blob serialized — and lets the LLM extract chemistry / mass / voltage from prose. This is **fragile** and a known v1 weakness. The risk: an LLM rating is only as reliable as its context extraction. **v2 candidate**: canonical typed keys per `kind` (chemistry, mass_g, capacity_mah, voltage_window_v) populated from sample forms.
 
 Initial seeded library:
 - `battery_safety_risk_v1`
@@ -519,9 +519,9 @@ Initial seeded library:
 
 Runtime (Go): walks each step; `gather_context` → DB queries; `ai_question` → OpenRouter with assembled context; `ai_synthesis` → markdown summary + structured JSON validated against `outputSchema`.
 
-### 7.5 AI: Agentic Project Assistant
+### 7.5 LLM: Agentic Project Assistant
 
-Surface: per-project chat panel. **The assistant authenticates with an internal AI token and calls the public REST API** (§6.3). Same endpoints, same scopes, same audit as external agents.
+Surface: per-project chat panel. **The assistant authenticates with an internal LLM token and calls the public REST API** (§6.3). Same endpoints, same scopes, same audit as external agents.
 
 **Read tools** (always available):
 - `search_project_content(query)`, `read_page(id)`, `read_sample(id)`, `get_sample_lineage(sample_id)`, `list_experiments(sample_id?)`, `read_experiment(id)`, `list_artifacts(parent_type, parent_id)`, `read_artifact_summary(id)`, `web_search(query)`, `fetch_url(url)`.
@@ -537,9 +537,9 @@ Surface: per-project chat panel. **The assistant authenticates with an internal 
 
 Implementation: OpenRouter tool-calling API; responses streamed via **SSE** from Go; every tool call recorded in `AIToolCall`.
 
-#### 7.5.1 AI cost & key model
+#### 7.5.1 LLM cost & key model
 
-**The OpenRouter API key is global** — single key in the sealed `.env` on the app box, used by the orchestrator for *all* AI calls. The lab pays centrally; users do not bring keys.
+**The OpenRouter API key is global** — single key in the sealed `.env` on the app box, used by the orchestrator for *all* LLM calls. The lab pays centrally; users do not bring keys.
 
 **Per-workspace config**:
 - **Model selection** — which OpenRouter model to use. Default seeded (suggest Claude Sonnet for the workflow runs; cheaper model for chat).
@@ -553,7 +553,7 @@ Implementation: OpenRouter tool-calling API; responses streamed via **SSE** from
 
 ### 7.6 Agent-Friendly API
 
-**Principle**: every action a human can take through the UI is available through a documented API. The internal AI assistant uses the same surface.
+**Principle**: every action a human can take through the UI is available through a documented API. The internal LLM assistant uses the same surface.
 
 **API conventions**:
 - Versioned: `/v1/...`.
@@ -629,8 +629,8 @@ GET    /v1/search?project={id}&q=...
 ```
                                   ┌──► Microsoft Entra ID (uni SSO)
 [ Browser / Agent / Claude Code ] ─┤
-        │                         └──► PAT / local password / internal AI token (in-API)
-        │   HTTPS, SSE for AI streaming, presigned uploads direct to S3
+        │                         └──► PAT / local password / internal LLM token (in-API)
+        │   HTTPS, SSE for LLM streaming, presigned uploads direct to S3
         ▼
 [ Route 53 ] ──► [ EC2 #1: app box ]
                     ├─ Caddy (TLS, reverse proxy, serves SPA static)
@@ -638,7 +638,7 @@ GET    /v1/search?project={id}&q=...
                     │   ├─ HTTP handlers (versioned, OpenAPI-described)
                     │   ├─ MCP server (/mcp, wraps REST)
                     │   ├─ Domain services (modular packages)
-                    │   ├─ AI orchestrator (OpenRouter client + tool dispatch)
+                    │   ├─ LLM orchestrator (OpenRouter client + tool dispatch)
                     │   └─ River worker (in-process)
                     ├─ nbconvert sidecar (Python container, systemd-managed)
                     └─ .env (sealed; OpenRouter key, OAuth secrets, signing keys)
@@ -774,14 +774,14 @@ Built against MSW mocks before B is done.
 
 (No F-track webhook subtask — deferred to v2.)
 
-#### Track G — AI *(deps: A1, A4, F1)*
+#### Track G — LLM *(deps: A1, A4, F1)*
 
-- **G1. AI orchestrator core** — OpenRouter client, tool registry, SSE streaming, spend metering, **internal-token minter** (§6.3).
+- **G1. LLM orchestrator core** — OpenRouter client, tool registry, SSE streaming, spend metering, **internal-token minter** (§6.3).
 - **G2. Tool gating** — read tools always on; write tools gated by `AutonomyConfig`.
-- **G3. Workflow engine** — JSON loader, step runner (`gather_context` / `ai_question` / `ai_synthesis`), output validator, PI-flag computation (AI flag OR `overall_rating >= 4`).
+- **G3. Workflow engine** — JSON loader, step runner (`gather_context` / `ai_question` / `ai_synthesis`), output validator, PI-flag computation (LLM flag OR `overall_rating >= 4`).
 - **G4. Workflow library content** — `battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1` (prompts authored with the PI).
 - **G5. Conversation service** — message store scoped to project, audit.
-- **G6. AI chat UI** — per-project panel, streaming, tool-call approval dialogs.
+- **G6. LLM chat UI** — per-project panel, streaming, tool-call approval dialogs.
 - **G7. Workflow runner UI** — pick workflow, step-by-step view, result render.
 - **G8. Autonomy config UI** — workspace + project settings.
 
@@ -831,7 +831,7 @@ Two engineers, "Eng-A" mostly backend, "Eng-B" mostly frontend, with overlap.
 
 This is called out separately because it's the **biggest semi-controversial design decision** in v1.
 
-**The decision**: `Sample.properties` is freeform JSONB. No canonical keys per `kind`. AI workflows extract structured data (chemistry, mass, voltage windows, capacity) from page bodies and from whatever shape researchers happen to write into the JSONB blob.
+**The decision**: `Sample.properties` is freeform JSONB. No canonical keys per `kind`. LLM workflows extract structured data (chemistry, mass, voltage windows, capacity) from page bodies and from whatever shape researchers happen to write into the JSONB blob.
 
 **Why we're shipping it this way**:
 - Faster adoption — no schema friction for the first batch of users.
@@ -839,9 +839,9 @@ This is called out separately because it's the **biggest semi-controversial desi
 - v2 schema migration is straightforward once usage patterns are clear.
 
 **What we accept as the cost**:
-- AI risk ratings depend on the AI parsing "NMC811" / "LiNi0.8Mn0.1Co0.1O2" / "nickel-rich" out of prose consistently. It will sometimes fail.
+- LLM risk ratings depend on the LLM parsing "NMC811" / "LiNi0.8Mn0.1Co0.1O2" / "nickel-rich" out of prose consistently. It will sometimes fail.
 - No structured filtering or reporting (e.g. "show me all samples with chemistry containing nickel and capacity < 150 mAh").
-- Workflow outputs are less auditable — "why did the AI give this a 4?" answer may be "it misread the chemistry."
+- Workflow outputs are less auditable — "why did the LLM give this a 4?" answer may be "it misread the chemistry."
 
 **v2 commitment**: once we see real usage, define canonical typed keys per `kind` (e.g. for `cell`: `chemistry`, `mass_g`, `capacity_mah`, `nominal_voltage_v`, `cycling_protocol`). Migrate existing samples best-effort. Workflows then read structured fields first, prose second.
 
@@ -856,7 +856,7 @@ This is called out separately because it's the **biggest semi-controversial desi
 - Two-way calendar sync.
 - Google Calendar OAuth integration (`.ics` subscription instead).
 - Apple CalDAV integration (`.ics` subscription instead).
-- User-authored AI workflows (v1 ships with curated library).
+- User-authored LLM workflows (v1 ships with curated library).
 - Citation / reference manager.
 - Org-wide / cross-workspace API tokens (v1 tokens are per-user only).
 - **Outgoing webhooks** (deferred to v2).
@@ -870,7 +870,7 @@ This is called out separately because it's the **biggest semi-controversial desi
 ## 12. Open Questions / Decisions for Later
 
 1. **External-collaborator policy beyond v1** — current model: admin allow-lists individual emails. Do we want allow-listed domains too? (Probably yes by month 3.)
-2. **Default AI model per workspace** — Claude Sonnet vs GPT-4o vs an open model. Likely Sonnet for workflows, cheaper model for chat; PI to confirm.
+2. **Default LLM model per workspace** — Claude Sonnet vs GPT-4o vs an open model. Likely Sonnet for workflows, cheaper model for chat; PI to confirm.
 3. **Default workspace spend cap.** Suggest $200/mo for the primary lab workspace, $20/mo for collaborator workspaces; PI to set.
 4. **Backup upgrade trigger** — when do we migrate from nightly EBS snapshots to `pg_basebackup` + WAL archiving? Suggest: when uptime SLA matters or when data > 20 GB.
 5. **Canonical sample-property schemas per kind** — v2 priority (see §10).
@@ -882,4 +882,4 @@ This is called out separately because it's the **biggest semi-controversial desi
 11. **Webhook design when re-introduced** — HMAC signing, retry policy, delivery log; spec to be written when a concrete consumer appears.
 12. **Audit log archive trigger** — at what row count or table size do we move to S3-archived old partitions? Suggest revisit at 50M rows.
 13. **2FA** — TOTP for local accounts in v1.1; not in v1.
-14. **AI revision GC opt-in** — currently keep-forever; PI may want a GC policy once a few months of data exist.
+14. **LLM revision GC opt-in** — currently keep-forever; PI may want a GC policy once a few months of data exist.

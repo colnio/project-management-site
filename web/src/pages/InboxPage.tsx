@@ -16,7 +16,7 @@ import { safeAppPath } from '@/lib/safeAppPath';
 
 const KIND_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   pi_flag: { label: 'PI Flag', color: '#9a2a1e', bg: '#fce8e4' },
-  ai_proposal: { label: 'AI Proposal', color: '#2c5b6a', bg: '#e6eef0' },
+  ai_proposal: { label: 'LLM Proposal', color: '#2c5b6a', bg: '#e6eef0' },
   action_item: { label: 'Action Item', color: '#3f6022', bg: '#eef4e6' },
   comment: { label: 'Comment', color: '#5a503a', bg: '#f4f0e6' },
   system: { label: 'System', color: 'var(--muted)', bg: 'var(--paper-2)' },

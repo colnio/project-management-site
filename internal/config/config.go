@@ -57,7 +57,7 @@ type Config struct {
 	NBConvertURL string
 
 	// SearXNG (agent web search). Kept here so config stays in one place even
-	// though the AI track is not yet built.
+	// though the LLM track is not yet built.
 	SearxNGURL string
 }
 

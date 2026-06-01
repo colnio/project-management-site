@@ -7,7 +7,7 @@ looking [`techSpec.md`](./techSpec.md). It is updated at each checkpoint.
 
 A **modular monolith**: a single Go binary (`cmd/api`) serving a chi + huma HTTP
 API backed by one Postgres database, plus a React SPA in `web/`. Background
-processing (River) and the AI orchestrator (`internal/ai`) are both in-process.
+processing (River) and the LLM orchestrator (`internal/ai`) are both in-process.
 
 ```
 [ Browser SPA :5173 ] ──/v1, /openapi.json──▶ [ Go API :8080 ]
@@ -29,12 +29,12 @@ RateLimiter → Idempotency → huma operation`.
 
 - **AuthResolver** reads the `Authorization: Bearer` token and resolves a
   `Principal` onto the request context. Token kind is chosen by prefix: `pat_`
-  (PAT), `iai_` (internal AI token), otherwise a first-party access JWT. A
+  (PAT), `iai_` (internal LLM token), otherwise a first-party access JWT. A
   *missing* token is allowed (public routes); a *present but invalid* token is
   401. The `TokenVerifier` interface (satisfied by `auth.Service`) keeps
   `platform` free of an import cycle.
 - **RateLimiter**: Postgres-backed sliding window (`rate_limit_hits`, migration
-  00133) with in-memory fallback in tests. Covers PATs, internal-AI tokens, and
+  00133) with in-memory fallback in tests. Covers PATs, internal-LLM tokens, and
   JWT sessions (keyed by user ID). A separate **IP limiter** (20/min default)
   protects `POST /v1/auth/login` and `/v1/auth/register`.
 - **Idempotency**: for write methods carrying `Idempotency-Key`, captures the
@@ -45,13 +45,13 @@ RateLimiter → Idempotency → huma operation`.
   power optimistic concurrency (used by pages).
 
 `Principal` is the single "who is acting" type for humans (JWT), external agents
-(PAT), and the in-app AI (internal token) — only the `Via*` fields differ, which
+(PAT), and the in-app LLM (internal token) — only the `Via*` fields differ, which
 keeps one HTTP code path for all three.
 
 ## Identity & permissions
 
 - **auth** owns users, Argon2id local credentials, refresh sessions, PATs, and
-  internal-AI tokens. Access tokens are HS256 JWTs (carrying a `role` claim);
+  internal-LLM tokens. Access tokens are HS256 JWTs (carrying a `role` claim);
   refresh tokens are opaque, hashed, httpOnly cookies. Auth is **email/password
   only** (OIDC/Entra was removed). Users **self-register** via
   `POST /v1/auth/register` against an email-domain allowlist (`ALLOWED_EMAIL_DOMAINS`,
@@ -63,7 +63,7 @@ keeps one HTTP code path for all three.
   (`PATCH /v1/me/profile`) before app access.
 - **Global roles.** `users.global_role` ∈ {`admin`,`pi`,`member`} replaces the old
   `is_system_admin` bool. `Principal.IsPrivileged()` (= admin∥pi) is the override
-  used across modules (audit access, workspace/meeting/AI membership bypass) and
+  used across modules (audit access, workspace/meeting/LLM membership bypass) and
   gates workspace creation and the Risk-Assessment PI-review flag. The **admin**
   module (`/v1/admin/users`, scopes `read:admin`/`write:admin`, privileged-only)
   lists users and lets admins/PIs approve/suspend, change global role, and reject
@@ -87,10 +87,10 @@ keeps one HTTP code path for all three.
   `read:admin`, `write:admin`, `admin:org`, `manage:tokens`, `write:profile`.
   The helper `platform.RequireScope(p, scope)` is called immediately after
   `platform.PrincipalFrom` in every authenticated huma handler **and** on custom
-  chi routes (e.g. AI SSE streaming). Enforcement rule: token callers with a
+  chi routes (e.g. LLM SSE streaming). Enforcement rule: token callers with a
   **non-empty** scope list are restricted to those scopes; empty scopes were
   backfilled (migration 00132). Browser JWT sessions are unrestricted. PAT
-  management endpoints are session-only. The internal-AI orchestrator token is
+  management endpoints are session-only. The internal-LLM orchestrator token is
   minted with exactly the scopes its registered tools require. The Settings PAT
   dialog now consumes a shared frontend scope list (`web/src/lib/tokenScopes.ts`)
   that mirrors this backend taxonomy exactly; the browser refuses token creation
@@ -107,9 +107,9 @@ keeps one HTTP code path for all three.
 | page | `pages`, `page_blobs`, `page_revisions`, `page_presence` | content-addressable (SHA-256 blob), immutable revision graph, ETag/If-Match (412), candidate approve/reject, non-destructive restore, presence heartbeat, auto-save GC; `GET /v1/projects/{id}/pages?parent_type=&parent_id=` returns `{items:[{id,project_id,parent_type,parent_id,title,updated_at,current_revision_id}]}` with titles derived from the markdown export |
 | artifact | `artifacts`, `sample_artifacts`, `experiment_artifacts` | presigned MinIO upload handshake (create → PUT → complete); processing handed to Track D; typed attachment joins |
 | calendar | `project_events`, `calendar_subscriptions` | event CRUD; signed per-user `.ics` feed at `/v1/cal/{user_id}/{token}.ics` (token is the bearer, no auth middleware), re-checking access via a synthetic principal |
-| risk | `risks` | H1 — first-class Risk Register: likelihood/impact/mitigation/Plan B, PI-review flag, per-project `seq`; `source` human/ai with `workflow_run_id` link; AI workflows call `UpsertFromWorkflow` |
+| risk | `risks` | H1 — first-class Risk Register: likelihood/impact/mitigation/Plan B, PI-review flag, per-project `seq`; `source` human/ai with `workflow_run_id` link; LLM workflows call `UpsertFromWorkflow` |
 | meeting | `meetings` | H2 — workspace/project meetings; jsonb attendees/decisions/action_items; workspace-membership guard |
-| inbox | _(read-only aggregation)_ | H2 — aggregates PI-flagged risks, proposed AI tool calls, audit entries, and pending approval requests into `GET /v1/workspaces/{id}/inbox` (owns no tables) |
+| inbox | _(read-only aggregation)_ | H2 — aggregates PI-flagged risks, proposed LLM tool calls, audit entries, and pending approval requests into `GET /v1/workspaces/{id}/inbox` (owns no tables) |
 | approval | `approval_requests` | Risk-assessment sign-off: stakeholder recipients snapshotted as jsonb (workspace members ∪ project collaborators); create emails recipients + audits; decide (approve/reject) by a recipient or project editor; pending requests surface in the inbox; workspace-scoped queries go through `project.ListIDsForWorkspace` |
 
 Cross-entity references between sibling domains are stored as bare uuids (no
@@ -129,7 +129,7 @@ direct SQL joins across sibling tables are not used.
   API**: it makes an HTTP call to `127.0.0.1:<port>/v1/...` forwarding the MCP
   client's PAT (extracted from the connection's `Authorization` header), so the
   full middleware chain (auth, audit, rate-limit, permissions) applies uniformly —
-  no service-call back door. Write tools are intentionally absent (gated by AI
+  no service-call back door. Write tools are intentionally absent (gated by LLM
   autonomy config, Track G). For local customer-zero smoke runs, the repo ships
   `scripts/seed_api_mcp_integration.sh`, which seeds a realistic PAT-authenticated
   project dataset through REST and then runs a live MCP readback check via
@@ -151,14 +151,14 @@ thumbnails via pure-Go `disintegration/imaging` (substituted for govips because
 libvips/cgo isn't required locally — prod can swap back). Status moves
 pending → processing → done|failed.
 
-## AI (Track G — complete)
+## LLM (Track G — complete)
 
 The agentic-chat backend (`internal/ai`, Tracks G1/G2/G5) is implemented:
 
 - **Provider boundary.** A single OpenAI-compatible `Client` (`internal/ai/client.go`)
   is the only place that talks to a model — `Chat` (non-stream) and `ChatStream`
   (SSE). The active provider is loaded from `aiconf.local.json` (gitignored;
-  `{active, <provider>:{model,token,api_base}}`); if absent, AI endpoints return
+  `{active, <provider>:{model,token,api_base}}`); if absent, LLM endpoints return
   503 and the server still boots. Swapping OpenRouter/Ollama/LiteLLM is a config +
   one-file change. A `stubClient` makes all tests deterministic with no live calls.
 - **Same path as external agents.** When a chat message is sent, the service mints
@@ -167,16 +167,17 @@ The agentic-chat backend (`internal/ai`, Tracks G1/G2/G5) is implemented:
   `127.0.0.1:<port>/v1/...` with that token (mirroring the MCP server). All
   middleware (auth, audit, rate-limit) applies; the user stays the audited
   principal via `ViaAIConversationID`. No service back door.
+
 - **System prompt context.** When a message is submitted, `internal/ai/sse.go`
   injects a system message carrying the current `project_id`, project name,
   `workspace_id`, and date (wrapped in XML tags as untrusted data) so the
   assistant answers project-scoped questions without asking the user to specify
-  a project. The SSE route requires `write:ai` scope like other AI write endpoints.
+  a project. The SSE route requires `write:ai` scope like other LLM write endpoints.
 - **Skills.** A conversation may carry a `skill` (column on `ai_conversations`).
   Skill markdown lives in the embeddable `skills/` package (`skills/embed.go`,
   `LoadSkill`, same pattern as `workflows/`); when a conversation has a skill,
   sse.go appends that markdown verbatim after the context preamble as the system
-  prompt (used by the Risk Register's "Review with AI", which seeds a
+  prompt (used by the Risk Register's "Review with LLM", which seeds a
   `risk_assesment_skill` conversation). Falls back to the generic prompt if the
   skill is missing.
 - **Synchronous risk review.** `POST /v1/projects/{id}/ai/risk-review` (`read:ai`)
@@ -212,7 +213,7 @@ emails the workspace PI (Mailpit/SES) and records a notice. The synthesis is
 rendered as a Page on the target entity (`result_page_id`). Runs are stored in
 `ai_workflow_runs` (00115) and execute synchronously for v1 (River-async is a
 follow-up). On completion the engine also calls `risk.Service.UpsertFromWorkflow`
-(wired via `ai.Service.SetRiskService`) to materialize AI-sourced rows in the
+(wired via `ai.Service.SetRiskService`) to materialize LLM-sourced rows in the
 **Risk Register** — one risk per `category_ratings` entry, idempotent per run.
 `GET /v1/ai/workflows` returns each definition's steps + `outputSchema` so the
 Templates UI can render a step accordion and the schema. Endpoints:
@@ -232,10 +233,10 @@ Templates UI can render a step accordion and the schema. Endpoints:
 - **Meetings (`internal/meeting`).** Workspace- and project-scoped meetings with
   jsonb attendees/decisions/action-items, guarded by workspace membership.
 - **Inbox (`internal/inbox`).** A read-only aggregation (owns no tables) that
-  unions PI-flagged risks, `proposed` AI tool calls, and recent audit entries into
+  unions PI-flagged risks, `proposed` LLM tool calls, and recent audit entries into
   a single workspace feed; powers the Inbox page and the Home dashboard.
 - **People** reuses `org` memberships, enriched with user email/display name.
-- **Templates** are the AI workflow definitions surfaced as browsable pages.
+- **Templates** are the LLM workflow definitions surfaced as browsable pages.
 
 ## Data & storage
 
@@ -289,14 +290,14 @@ Also: F1 settings page (PAT create/list/revoke + calendar `.ics` subscription wi
 rotate); E3/E4 calendar views — a FullCalendar month/week/agenda calendar
 (per-project and unified) plus a lightweight custom Gantt timeline (iterations as
 date-positioned bars + event markers, per-project and unified; FullCalendar's
-premium timeline is deliberately avoided); and the AI frontend (G6/G7/G8): a
+premium timeline is deliberately avoided); and the LLM frontend (G6/G7/G8): a
 per-project streaming **chat panel** (a fetch-based SSE reader renders token
 deltas, tool calls/results, citations, spend warnings, and approve/reject on
 proposed write tool-calls), a **workflow runner**, and **autonomy config**.
 The **design-parity UX layer (H1–H3)** adds: a `RiskRegister` table on the
 Overview/iteration pages; three Overview layouts (Editorial/Dashboard/Stream); a
 **Tweaks panel** (theme/density/accent persisted to `localStorage` and applied via
-`data-` attributes + CSS vars on `<html>`, with a full dark token set); the AI
+`data-` attributes + CSS vars on `<html>`, with a full dark token set); the LLM
 chat panel **docked** as a right rail (reserving width via `--ai-w`) with citations
 and a spend-cap meter; the new-project/new-iteration **wizards** (the iteration
 wizard surfaces the HIGH-risk activation gate); a Home **dashboard** (project grid
@@ -317,7 +318,7 @@ build.
 ## Production transition (config swaps only)
 
 Per the spec, going to AWS is endpoint/config changes, not a rewrite: S3 endpoint
-dropped for real S3, SMTP → SES, AI client → OpenRouter (a one-file swap inside
+dropped for real S3, SMTP → SES, LLM client → OpenRouter (a one-file swap inside
 `internal/ai/`), Terraform + Caddy added. **`config.Load()` fails closed in
 production** if signing keys, `COOKIE_SECURE`, or dev-default S3 credentials are
 still in use. Set `DIGEST_SIGN_KEY` separately from `INVITE_SIGN_KEY`. OpenAPI

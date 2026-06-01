@@ -12,7 +12,7 @@ import (
 // principal. It DOES reject a token that is present but invalid with 401, so
 // callers get a clear signal rather than silent anonymous access.
 //
-// Token kind is chosen by prefix: pat_ → PAT, iai_ → internal AI token,
+// Token kind is chosen by prefix: pat_ → PAT, iai_ → internal LLM token,
 // otherwise a first-party access JWT.
 func AuthResolver(v TokenVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

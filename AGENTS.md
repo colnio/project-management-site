@@ -1,6 +1,6 @@
-# AGENTS.md — conventions for contributors and AI agents
+# AGENTS.md — conventions for contributors and LLM agents
 
-This file is the contract for anyone (human or AI) adding code to this repo. It
+This file is the contract for anyone (human or LLM) adding code to this repo. It
 captures the rules that keep the modular monolith coherent and that were learned
 the hard way while building Tracks A–B in parallel. Read it before writing code.
 
@@ -17,13 +17,13 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
    **every mutation, server-side** — UI checks don't count.
 3. **Audit every mutation.** Accept an `audit.Recorder` and record an
    `audit.Entry` (action, resource_type, resource_id) for each write. Tests
-   assert it (use a capturing fake recorder). This includes AI-driven mutations:
+   assert it (use a capturing fake recorder). This includes LLM-driven mutations:
    the workspace-autonomy write was previously missing an audit entry — every
-   write path, regardless of whether it is human- or AI-initiated, must emit one.
+   write path, regardless of whether it is human- or LLM-initiated, must emit one.
 4. **Enforce scopes on every authenticated handler.** Immediately after
    `platform.PrincipalFrom`, call `platform.RequireScope(p, <scope>)` with the
    correct `read:<domain>` or `write:<domain>` scope. The full scope taxonomy is
-   defined in `internal/platform/scopes.go`. PAT and internal-AI tokens with a
+   defined in `internal/platform/scopes.go`. PAT and internal-LLM tokens with a
    **non-empty** scope list are fully restricted to those scopes (empty scopes
    were backfilled via migration `00132`; the legacy bypass is removed). Browser
    JWT sessions bypass scope checks. PAT management (`/v1/tokens`) and profile
@@ -37,15 +37,15 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
    (admin∥pi), `IsAdmin()`, `IsPI()` for global checks. Self-registration is
    domain-allowlisted and starts `status='pending'`; the approval gate lives at
    token issuance (`handleLogin`/`rotateRefresh`), not in middleware.
-5. **AI calls the public API as the user.** Track G is built (`internal/ai`). The
+5. **LLM calls the public API as the user.** Track G is built (`internal/ai`). The
    orchestrator never reaches into other modules' tables: it mints a short-lived
    internal token (`iai_`) and calls the public REST API at `127.0.0.1:<port>/v1`,
    so auth/audit/rate-limit/permissions apply uniformly. Write tools are gated by
-   `AutonomyConfig`. New AI-driven side effects (e.g. risk-register population)
+   `AutonomyConfig`. New LLM-driven side effects (e.g. risk-register population)
    should go through the owning module's exported Go API (see
    `risk.Service.UpsertFromWorkflow`, wired via `ai.Service.SetRiskService`), not
    cross-module SQL.
-   - The AI system prompt is now injected with `project_id`, project name,
+   - The LLM system prompt is now injected with `project_id`, project name,
      `workspace_id`, and the current date by `internal/ai/sse.go` so the assistant
      answers project-scoped questions without prompting the user to specify a project.
      DB-sourced values in prompts are wrapped in XML tags and marked untrusted.
@@ -78,7 +78,7 @@ the hard way while building Tracks A–B in parallel. Read it before writing cod
 - Per-module ranges already used: extensions 00001, idempotency 00025,
   audit 00010, auth 00020, org 00030–34, project 00040, iteration 00050–51,
   sample 00060, experiment 00070–71 (+ EX-N codes 00121), page 00080,
-  artifact 00090, calendar 00100, AI 00110–115, risk 00120, meetings 00122,
+  artifact 00090, calendar 00100, LLM 00110–115, risk 00120, meetings 00122,
   inbox indexes 00123, meetings kickoff 00124, pages.slot 00125,
   ai_conversations.skill 00126, approval_requests 00127,
   user accounts (global_role/status/profile) 00128, experiment tags 00130,

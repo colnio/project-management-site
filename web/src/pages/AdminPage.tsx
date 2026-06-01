@@ -77,8 +77,8 @@ function WorkspaceInfoSection({ workspaceId }: { workspaceId: string | undefined
 function AIOverviewSection({ workspaceId }: { workspaceId: string }) {
   const { data: usage, isLoading, isError } = useAIUsage(workspaceId);
 
-  if (isLoading) return <LoadingState message="Loading AI usage…" />;
-  if (isError || !usage) return <ErrorState message="Failed to load AI usage." />;
+  if (isLoading) return <LoadingState message="Loading LLM usage…" />;
+  if (isError || !usage) return <ErrorState message="Failed to load LLM usage." />;
 
   const pct = Math.min(100, Math.round(usage.pct * 100));
 
@@ -197,7 +197,7 @@ function AuditSourceBadge({ entry }: { entry: AuditEntry }) {
         padding: '1px 7px', fontFamily: 'var(--mono)', fontSize: 10,
         fontWeight: 600, whiteSpace: 'nowrap',
       }}>
-        AI
+        LLM
       </span>
     );
   }
@@ -642,7 +642,7 @@ export function AdminPage() {
         </SectionCard>
 
         {workspaceId && (
-          <SectionCard title="AI Overview">
+          <SectionCard title="LLM Overview">
             <AIOverviewSection workspaceId={workspaceId} />
           </SectionCard>
         )}
