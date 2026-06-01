@@ -84,6 +84,12 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Messaging a chat resets its idle-expiration window. Best-effort: a failed
+	// touch must not abort the message stream.
+	if err := touchConversation(ctx, s.pool, convID); err != nil {
+		s.log.Warn("ai: touch conversation on message", "conversation_id", convID, "err", err)
+	}
+
 	// Spend cap check.
 	capCheck, err := checkSpendCap(ctx, s.pool, proj.WorkspaceID)
 	if err != nil {

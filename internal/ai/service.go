@@ -144,6 +144,11 @@ func (s *Service) GetConversationMessages(ctx context.Context, p *platform.Princ
 	if _, _, err := s.projects.Authorize(ctx, p, conv.ProjectID, org.RoleViewer); err != nil {
 		return nil, err
 	}
+	// Opening a chat resets its idle-expiration window, even with no new
+	// message. Best-effort: a failed touch must not fail the read.
+	if err := touchConversation(ctx, s.pool, convID); err != nil {
+		s.log.Warn("ai: touch conversation on open", "conversation_id", convID, "err", err)
+	}
 	return listMessages(ctx, s.pool, convID)
 }
 
