@@ -149,7 +149,28 @@ func (s *Service) GetConversationMessages(ctx context.Context, p *platform.Princ
 	if err := touchConversation(ctx, s.pool, convID); err != nil {
 		s.log.Warn("ai: touch conversation on open", "conversation_id", convID, "err", err)
 	}
-	return listMessages(ctx, s.pool, convID)
+	msgs, err := listMessages(ctx, s.pool, convID)
+	if err != nil {
+		return nil, err
+	}
+	// Enrich each message tool_call with its persisted record's status and UUID
+	// so the client can render Approve/Reject for suggest_writes proposals and
+	// target the approve/reject endpoint with the right id. The OpenAI call id on
+	// the message is replaced with the record UUID for matched calls.
+	statusByCall, err := loadToolCallStatusByCallID(ctx, s.pool, convID)
+	if err != nil {
+		s.log.Warn("ai: load tool call status for enrichment", "conversation_id", convID, "err", err)
+	} else {
+		for _, m := range msgs {
+			for i := range m.ToolCalls {
+				if rec, ok := statusByCall[m.ToolCalls[i].ID]; ok {
+					m.ToolCalls[i].Status = rec.Status
+					m.ToolCalls[i].ID = rec.RecordID.String()
+				}
+			}
+		}
+	}
+	return msgs, nil
 }
 
 // ─── Tool call approval/rejection ────────────────────────────────────────────

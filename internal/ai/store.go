@@ -197,14 +197,23 @@ type ToolCallRecord struct {
 	CreatedAt      time.Time  `json:"created_at"`
 }
 
-func recordToolCall(ctx context.Context, pool *pgxpool.Pool, convID *uuid.UUID, tool string, inputJSON json.RawMessage, status string) (*ToolCallRecord, error) {
+// recordToolCall persists an LLM tool-call attempt. callID is the OpenAI
+// tool_call id carried on the assistant message; it links this record back to
+// the message tool_call so the conversation API can enrich it with status (and
+// this record's UUID) for the Approve/Reject controls. Pass "" when no message
+// tool_call id applies (e.g. workflow steps).
+func recordToolCall(ctx context.Context, pool *pgxpool.Pool, convID *uuid.UUID, tool string, inputJSON json.RawMessage, status, callID string) (*ToolCallRecord, error) {
 	var id uuid.UUID
 	var createdAt time.Time
+	var callIDArg *string
+	if callID != "" {
+		callIDArg = &callID
+	}
 	err := pool.QueryRow(ctx,
-		`INSERT INTO ai_tool_calls (conversation_id, tool, input_json, status)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO ai_tool_calls (conversation_id, tool, input_json, status, call_id)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, created_at`,
-		convID, tool, []byte(inputJSON), status,
+		convID, tool, []byte(inputJSON), status, callIDArg,
 	).Scan(&id, &createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("ai: record tool call: %w", err)
@@ -216,6 +225,38 @@ func recordToolCall(ctx context.Context, pool *pgxpool.Pool, convID *uuid.UUID, 
 		Status:         status,
 		CreatedAt:      createdAt,
 	}, nil
+}
+
+// toolCallStatus is the per-call_id enrichment used to surface a message
+// tool_call's approval status and its record UUID.
+type toolCallStatus struct {
+	RecordID uuid.UUID
+	Status   string
+}
+
+// loadToolCallStatusByCallID returns, for a conversation, a map from the OpenAI
+// tool_call id to its persisted record (UUID + status). Only rows that carry a
+// call_id participate, so older rows are simply skipped.
+func loadToolCallStatusByCallID(ctx context.Context, pool *pgxpool.Pool, convID uuid.UUID) (map[string]toolCallStatus, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT id, call_id, status FROM ai_tool_calls
+		 WHERE conversation_id=$1 AND call_id IS NOT NULL`,
+		convID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ai: load tool call status: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]toolCallStatus{}
+	for rows.Next() {
+		var id uuid.UUID
+		var callID, status string
+		if err := rows.Scan(&id, &callID, &status); err != nil {
+			return nil, err
+		}
+		out[callID] = toolCallStatus{RecordID: id, Status: status}
+	}
+	return out, rows.Err()
 }
 
 func updateToolCallOutput(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, outputJSON json.RawMessage, status string, executedBy *uuid.UUID) error {

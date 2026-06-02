@@ -339,7 +339,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 					status = "rejected"
 				} else if propose && !execute {
 					// suggest_writes or auto_routine for draft_page: record as proposed
-					rec, rErr := recordToolCall(ctx, s.pool, &convID, tc.Function.Name, inputJSON, "proposed")
+					rec, rErr := recordToolCall(ctx, s.pool, &convID, tc.Function.Name, inputJSON, "proposed", tc.ID)
 					if rErr != nil {
 						s.log.Warn("ai: record proposed tool call", "err", rErr)
 					}
@@ -355,7 +355,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 					})
 				} else {
 					// auto-execute
-					rec, rErr := recordToolCall(ctx, s.pool, &convID, tc.Function.Name, inputJSON, "executed")
+					rec, rErr := recordToolCall(ctx, s.pool, &convID, tc.Function.Name, inputJSON, "executed", tc.ID)
 					if rErr != nil {
 						s.log.Warn("ai: record executed tool call", "err", rErr)
 					}
@@ -371,7 +371,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				// Read tool — always execute.
-				rec, rErr := recordToolCall(ctx, s.pool, &convID, tc.Function.Name, inputJSON, "executed")
+				rec, rErr := recordToolCall(ctx, s.pool, &convID, tc.Function.Name, inputJSON, "executed", tc.ID)
 				if rErr != nil {
 					s.log.Warn("ai: record read tool call", "err", rErr)
 				}

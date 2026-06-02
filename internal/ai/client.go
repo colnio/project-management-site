@@ -45,6 +45,11 @@ type ToolCall struct {
 	ID       string       `json:"id"`
 	Type     string       `json:"type"`
 	Function FunctionCall `json:"function"`
+	// Status is populated only when serializing a stored conversation message to
+	// the API (GetConversationMessages enriches it from the ai_tool_calls record).
+	// It is never set on the model-request path, so omitempty keeps it out of the
+	// payload sent to the LLM provider.
+	Status string `json:"status,omitempty"`
 }
 
 // FunctionCall is the name+arguments pair inside a ToolCall.

@@ -26,7 +26,7 @@ func TestGetToolCall_PreservesInputJSON(t *testing.T) {
 	}
 
 	want := `{"title":"E2E Smoke Test Iteration","status":"planned"}`
-	rec, err := recordToolCall(ctx, pool, &conv.ID, "create_iteration", json.RawMessage(want), "proposed")
+	rec, err := recordToolCall(ctx, pool, &conv.ID, "create_iteration", json.RawMessage(want), "proposed", "")
 	if err != nil {
 		t.Fatalf("record tool call: %v", err)
 	}

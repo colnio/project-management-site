@@ -575,7 +575,7 @@ func TestApproveToolCall_RejectsForeignConversation(t *testing.T) {
 		t.Fatalf("create conv B: %v", err)
 	}
 
-	tc, err := recordToolCall(ctx, pool, &convB.ID, "list_samples", json.RawMessage(`{}`), "proposed")
+	tc, err := recordToolCall(ctx, pool, &convB.ID, "list_samples", json.RawMessage(`{}`), "proposed", "")
 	if err != nil {
 		t.Fatalf("record tool call: %v", err)
 	}
@@ -616,7 +616,7 @@ func TestRejectToolCall_RejectsForeignConversation(t *testing.T) {
 		t.Fatalf("create conv B: %v", err)
 	}
 
-	tc, err := recordToolCall(ctx, pool, &convB.ID, "list_samples", json.RawMessage(`{}`), "proposed")
+	tc, err := recordToolCall(ctx, pool, &convB.ID, "list_samples", json.RawMessage(`{}`), "proposed", "")
 	if err != nil {
 		t.Fatalf("record tool call: %v", err)
 	}
