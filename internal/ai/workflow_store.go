@@ -13,19 +13,20 @@ import (
 
 // WorkflowRun represents a persisted workflow execution.
 type WorkflowRun struct {
-	ID            uuid.UUID       `json:"id"`
-	WorkflowKey   string          `json:"workflow_key"`
-	ProjectID     *uuid.UUID      `json:"project_id,omitempty"`
-	SampleID      *uuid.UUID      `json:"sample_id,omitempty"`
-	ExperimentID  *uuid.UUID      `json:"experiment_id,omitempty"`
-	StartedBy     uuid.UUID       `json:"started_by"`
-	Status        string          `json:"status"`
-	StepResults   json.RawMessage `json:"step_results"`
-	Output        json.RawMessage `json:"output,omitempty"`
-	ResultPageID  *uuid.UUID      `json:"result_page_id,omitempty"`
-	Error         string          `json:"error,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
+	ID           uuid.UUID       `json:"id"`
+	WorkflowKey  string          `json:"workflow_key"`
+	ProjectID    *uuid.UUID      `json:"project_id,omitempty"`
+	SampleID     *uuid.UUID      `json:"sample_id,omitempty"`
+	ExperimentID *uuid.UUID      `json:"experiment_id,omitempty"`
+	IterationID  *uuid.UUID      `json:"iteration_id,omitempty"`
+	StartedBy    uuid.UUID       `json:"started_by"`
+	Status       string          `json:"status"`
+	StepResults  json.RawMessage `json:"step_results"`
+	Output       json.RawMessage `json:"output,omitempty"`
+	ResultPageID *uuid.UUID      `json:"result_page_id,omitempty"`
+	Error        string          `json:"error,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
 }
 
 // WorkflowTarget holds the resource IDs for a workflow run.
@@ -33,18 +34,19 @@ type WorkflowTarget struct {
 	ProjectID    uuid.UUID
 	SampleID     *uuid.UUID
 	ExperimentID *uuid.UUID
+	IterationID  *uuid.UUID
 }
 
 func createWorkflowRun(ctx context.Context, pool *pgxpool.Pool, key string, target WorkflowTarget, userID uuid.UUID) (*WorkflowRun, error) {
 	var run WorkflowRun
 	err := pool.QueryRow(ctx,
-		`INSERT INTO ai_workflow_runs (workflow_key, project_id, sample_id, experiment_id, started_by, status)
-		 VALUES ($1, $2, $3, $4, $5, 'running')
-		 RETURNING id, workflow_key, project_id, sample_id, experiment_id, started_by, status,
+		`INSERT INTO ai_workflow_runs (workflow_key, project_id, sample_id, experiment_id, iteration_id, started_by, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, 'running')
+		 RETURNING id, workflow_key, project_id, sample_id, experiment_id, iteration_id, started_by, status,
 		           step_results, output, result_page_id, error, created_at, updated_at`,
-		key, target.ProjectID, target.SampleID, target.ExperimentID, userID,
+		key, target.ProjectID, target.SampleID, target.ExperimentID, target.IterationID, userID,
 	).Scan(
-		&run.ID, &run.WorkflowKey, &run.ProjectID, &run.SampleID, &run.ExperimentID,
+		&run.ID, &run.WorkflowKey, &run.ProjectID, &run.SampleID, &run.ExperimentID, &run.IterationID,
 		&run.StartedBy, &run.Status, &run.StepResults, &run.Output, &run.ResultPageID,
 		&run.Error, &run.CreatedAt, &run.UpdatedAt,
 	)
@@ -58,11 +60,11 @@ func createWorkflowRun(ctx context.Context, pool *pgxpool.Pool, key string, targ
 func GetRun(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*WorkflowRun, error) {
 	var run WorkflowRun
 	err := pool.QueryRow(ctx,
-		`SELECT id, workflow_key, project_id, sample_id, experiment_id, started_by, status,
+		`SELECT id, workflow_key, project_id, sample_id, experiment_id, iteration_id, started_by, status,
 		        step_results, output, result_page_id, error, created_at, updated_at
 		 FROM ai_workflow_runs WHERE id=$1`, id,
 	).Scan(
-		&run.ID, &run.WorkflowKey, &run.ProjectID, &run.SampleID, &run.ExperimentID,
+		&run.ID, &run.WorkflowKey, &run.ProjectID, &run.SampleID, &run.ExperimentID, &run.IterationID,
 		&run.StartedBy, &run.Status, &run.StepResults, &run.Output, &run.ResultPageID,
 		&run.Error, &run.CreatedAt, &run.UpdatedAt,
 	)

@@ -131,7 +131,7 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 
 		// Populate the risk register from workflow output.
 		if s.risks != nil {
-			if upsertErr := s.risks.UpsertFromWorkflow(ctx, target.ProjectID, nil, key, run.ID, output, stepResults, p.UserID); upsertErr != nil {
+			if upsertErr := s.risks.UpsertFromWorkflow(ctx, target.ProjectID, target.IterationID, key, run.ID, output, stepResults, p.UserID); upsertErr != nil {
 				s.log.Warn("ai: workflow: risk upsert failed", "run_id", run.ID, "err", upsertErr)
 			}
 		}

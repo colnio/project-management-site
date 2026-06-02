@@ -81,6 +81,13 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 			}
 			target.ExperimentID = &eid
 		}
+		if input.Body.IterationID != "" {
+			iid, err := uuid.Parse(input.Body.IterationID)
+			if err != nil {
+				return nil, platform.BadRequest("invalid_iteration_id", "invalid iteration id")
+			}
+			target.IterationID = &iid
+		}
 
 		run, err := svc.RunWorkflow(ctx, p, input.Key, target)
 		if err != nil {
@@ -143,6 +150,7 @@ type runWorkflowInput struct {
 		ProjectID    string `json:"project_id" required:"true"`
 		SampleID     string `json:"sample_id,omitempty"`
 		ExperimentID string `json:"experiment_id,omitempty"`
+		IterationID  string `json:"iteration_id,omitempty"`
 	}
 }
 

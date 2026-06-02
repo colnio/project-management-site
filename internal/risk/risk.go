@@ -341,8 +341,13 @@ func (s *Service) ListFlaggedForPIReviewByWorkspace(ctx context.Context, workspa
 // ─── UpsertFromWorkflow ──────────────────────────────────────────────────────
 
 // UpsertFromWorkflow is called by the LLM engine after a successful workflow
-// run. It deletes prior LLM-sourced risks for the project (that have a
-// workflow_run_id set) and inserts fresh ones derived from output.
+// run. It deletes prior LLM-sourced risks scoped to the same target (iteration
+// or project-level) and inserts fresh ones derived from output.
+//
+// The delete is scoped to avoid clobbering unrelated AI risks:
+//   - if iterationID != nil: only AI risks for that iteration are removed.
+//   - if iterationID == nil: only project-level AI risks (iteration_id IS NULL)
+//     are removed, leaving iteration-scoped AI risks untouched.
 //
 // Output shape expected:
 //
@@ -398,22 +403,29 @@ func (s *Service) UpsertFromWorkflow(
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	_, err = tx.Exec(ctx,
-		`DELETE FROM risks WHERE project_id = $1 AND source = 'ai' AND workflow_run_id IS NOT NULL`,
-		projectID,
-	)
+	if iterationID != nil {
+		_, err = tx.Exec(ctx,
+			`DELETE FROM risks WHERE iteration_id = $1 AND source = 'ai' AND workflow_run_id IS NOT NULL`,
+			iterationID,
+		)
+	} else {
+		_, err = tx.Exec(ctx,
+			`DELETE FROM risks WHERE project_id = $1 AND iteration_id IS NULL AND source = 'ai' AND workflow_run_id IS NOT NULL`,
+			projectID,
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("risk: upsert workflow: delete prior: %w", err)
 	}
 
 	// Build risk rows to insert.
 	type riskRow struct {
-		title       string
-		likelihood  string
-		impactHead  string
-		impactDesc  string
-		mitigation  string
-		flagged     bool
+		title      string
+		likelihood string
+		impactHead string
+		impactDesc string
+		mitigation string
+		flagged    bool
 	}
 
 	var rows []riskRow
