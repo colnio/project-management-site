@@ -241,6 +241,15 @@ func getToolCall(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*ToolCa
 		return nil, fmt.Errorf("ai: get tool call: %w", err)
 	}
 	tc.ConversationID = convID
+	// Preserve the stored JSON verbatim so callers (e.g. ApproveToolCall) can
+	// re-dispatch the tool with its original arguments. Without this the scanned
+	// bytes are dropped and InputJSON marshals to "null", losing all arguments.
+	if len(rawIn) > 0 {
+		tc.InputJSON = json.RawMessage(rawIn)
+	}
+	if len(rawOut) > 0 {
+		tc.OutputJSON = json.RawMessage(rawOut)
+	}
 	return &tc, nil
 }
 
