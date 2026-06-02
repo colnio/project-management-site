@@ -184,24 +184,7 @@ func (s *Service) ApproveToolCall(ctx context.Context, p *platform.Principal, co
 	}
 
 	// Mint an internal token to execute the call.
-	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, []string{
-		platform.ScopeReadProjects,
-		platform.ScopeReadSamples,
-		platform.ScopeReadExperiments,
-		platform.ScopeReadIterations,
-		platform.ScopeReadPages,
-		platform.ScopeReadArtifacts,
-		platform.ScopeReadRisks,
-		platform.ScopeReadCalendar,
-		platform.ScopeReadApprovals,
-		platform.ScopeWritePages,
-		platform.ScopeWriteIterations,
-		platform.ScopeWriteCalendar,
-		platform.ScopeWriteSamples,
-		platform.ScopeWriteExperiments,
-		platform.ScopeWriteRisks,
-		platform.ScopeWriteApprovals,
-	}, nil)
+	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, internalAIScopes, nil)
 	if err != nil {
 		return nil, fmt.Errorf("ai: mint token for approval: %w", err)
 	}

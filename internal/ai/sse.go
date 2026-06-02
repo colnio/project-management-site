@@ -105,24 +105,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 
 	// Mint internal LLM token with the full set of scopes needed by LLM tools.
 	// This set must cover every endpoint the LLM tools call via the REST API.
-	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, []string{
-		platform.ScopeReadProjects,
-		platform.ScopeReadSamples,
-		platform.ScopeReadExperiments,
-		platform.ScopeReadIterations,
-		platform.ScopeReadPages,
-		platform.ScopeReadArtifacts,
-		platform.ScopeReadRisks,
-		platform.ScopeReadCalendar,
-		platform.ScopeReadApprovals,
-		platform.ScopeWritePages,
-		platform.ScopeWriteIterations,
-		platform.ScopeWriteCalendar,
-		platform.ScopeWriteSamples,
-		platform.ScopeWriteExperiments,
-		platform.ScopeWriteRisks,
-		platform.ScopeWriteApprovals,
-	}, nil)
+	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, internalAIScopes, nil)
 	if err != nil {
 		writeSSEError(w, "ai.internal_error", "failed to create internal token")
 		return

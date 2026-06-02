@@ -94,24 +94,7 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 	}
 
 	// Mint a run-scoped internal token with the full set of scopes needed by LLM tools.
-	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, run.ID, []string{
-		platform.ScopeReadProjects,
-		platform.ScopeReadSamples,
-		platform.ScopeReadExperiments,
-		platform.ScopeReadIterations,
-		platform.ScopeReadPages,
-		platform.ScopeReadArtifacts,
-		platform.ScopeReadRisks,
-		platform.ScopeReadCalendar,
-		platform.ScopeReadApprovals,
-		platform.ScopeWritePages,
-		platform.ScopeWriteIterations,
-		platform.ScopeWriteCalendar,
-		platform.ScopeWriteSamples,
-		platform.ScopeWriteExperiments,
-		platform.ScopeWriteRisks,
-		platform.ScopeWriteApprovals,
-	}, nil)
+	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, run.ID, internalAIScopes, nil)
 	if err != nil {
 		_ = s.markRunFailed(ctx, run.ID, "{}", "failed to mint internal token: "+err.Error())
 		return nil, fmt.Errorf("ai: workflow: mint token: %w", err)
