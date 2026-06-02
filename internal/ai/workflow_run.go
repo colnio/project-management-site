@@ -98,11 +98,19 @@ func (s *Service) RunWorkflow(ctx context.Context, p *platform.Principal, key st
 		platform.ScopeReadProjects,
 		platform.ScopeReadSamples,
 		platform.ScopeReadExperiments,
+		platform.ScopeReadIterations,
 		platform.ScopeReadPages,
 		platform.ScopeReadArtifacts,
+		platform.ScopeReadRisks,
+		platform.ScopeReadCalendar,
+		platform.ScopeReadApprovals,
 		platform.ScopeWritePages,
 		platform.ScopeWriteIterations,
 		platform.ScopeWriteCalendar,
+		platform.ScopeWriteSamples,
+		platform.ScopeWriteExperiments,
+		platform.ScopeWriteRisks,
+		platform.ScopeWriteApprovals,
 	}, nil)
 	if err != nil {
 		_ = s.markRunFailed(ctx, run.ID, "{}", "failed to mint internal token: "+err.Error())

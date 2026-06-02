@@ -25,7 +25,7 @@ import (
 type Service struct {
 	pool     *pgxpool.Pool
 	cfg      *config.Config
-	client   Client   // nil means LLM is disabled
+	client   Client // nil means LLM is disabled
 	authSvc  *auth.Service
 	orgSvc   *org.Service
 	projects *project.Service
@@ -188,11 +188,19 @@ func (s *Service) ApproveToolCall(ctx context.Context, p *platform.Principal, co
 		platform.ScopeReadProjects,
 		platform.ScopeReadSamples,
 		platform.ScopeReadExperiments,
+		platform.ScopeReadIterations,
 		platform.ScopeReadPages,
 		platform.ScopeReadArtifacts,
+		platform.ScopeReadRisks,
+		platform.ScopeReadCalendar,
+		platform.ScopeReadApprovals,
 		platform.ScopeWritePages,
 		platform.ScopeWriteIterations,
 		platform.ScopeWriteCalendar,
+		platform.ScopeWriteSamples,
+		platform.ScopeWriteExperiments,
+		platform.ScopeWriteRisks,
+		platform.ScopeWriteApprovals,
 	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("ai: mint token for approval: %w", err)
@@ -200,9 +208,10 @@ func (s *Service) ApproveToolCall(ctx context.Context, p *platform.Principal, co
 	defer func() { _ = s.authSvc.RevokeInternalAITokens(ctx, convID) }()
 
 	restCall := makeRESTCaller(s.restBase, iaiToken)
+	restCallHdrs := makeRESTCallerWithHeaders(s.restBase, iaiToken)
 
 	inputJSON, _ := json.Marshal(tc.InputJSON)
-	result, _, execErr := dispatchTool(ctx, tc.Tool, string(inputJSON), proj.ID.String(), proj.WorkspaceID.String(), restCall)
+	result, _, execErr := dispatchTool(ctx, tc.Tool, string(inputJSON), proj.ID.String(), proj.WorkspaceID.String(), restCall, restCallHdrs)
 
 	status := "executed"
 	if execErr != nil {

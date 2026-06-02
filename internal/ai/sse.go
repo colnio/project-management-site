@@ -109,11 +109,19 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		platform.ScopeReadProjects,
 		platform.ScopeReadSamples,
 		platform.ScopeReadExperiments,
+		platform.ScopeReadIterations,
 		platform.ScopeReadPages,
 		platform.ScopeReadArtifacts,
+		platform.ScopeReadRisks,
+		platform.ScopeReadCalendar,
+		platform.ScopeReadApprovals,
 		platform.ScopeWritePages,
 		platform.ScopeWriteIterations,
 		platform.ScopeWriteCalendar,
+		platform.ScopeWriteSamples,
+		platform.ScopeWriteExperiments,
+		platform.ScopeWriteRisks,
+		platform.ScopeWriteApprovals,
 	}, nil)
 	if err != nil {
 		writeSSEError(w, "ai.internal_error", "failed to create internal token")
@@ -155,6 +163,8 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		xmlData("today", time.Now().Format("2006-01-02")) + "\n\n" +
 		"You are running inside a web application; there is no local filesystem. " +
 		"Use the available tools to read project data and produce the final report as a chat message and/or via the draft_page tool.\n" +
+		"A project is organized into iterations (time-boxed phases); it also contains experiments and samples. " +
+		"Iterations are distinct from experiments — use the list_iterations tool to enumerate a project's iterations, not list_experiments.\n" +
 		// The project_id above is wrapped in XML data tags for safety; a smaller
 		// model may otherwise copy the literal "<project_id>" tag as an argument.
 		// Restate it as a plain value and pin the response language so the model
@@ -229,6 +239,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 
 	// Tool-use loop.
 	restCall := makeRESTCaller(s.restBase, iaiToken)
+	restCallHdrs := makeRESTCallerWithHeaders(s.restBase, iaiToken)
 	tools := gatedTools(proj.ID.String(), proj.WorkspaceID.String(), mode, allowedTools)
 
 	var finalAssistantContent string
@@ -365,7 +376,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 					if rErr != nil {
 						s.log.Warn("ai: record executed tool call", "err", rErr)
 					}
-					resultJSON, _, toolErr = dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, proj.ID.String(), proj.WorkspaceID.String(), restCall)
+					resultJSON, _, toolErr = dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, proj.ID.String(), proj.WorkspaceID.String(), restCall, restCallHdrs)
 					if toolErr != nil {
 						resultJSON = fmt.Sprintf(`{"error":%q}`, toolErr.Error())
 					}
@@ -381,7 +392,7 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 				if rErr != nil {
 					s.log.Warn("ai: record read tool call", "err", rErr)
 				}
-				resultJSON, _, toolErr = dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, proj.ID.String(), proj.WorkspaceID.String(), restCall)
+				resultJSON, _, toolErr = dispatchTool(ctx, tc.Function.Name, tc.Function.Arguments, proj.ID.String(), proj.WorkspaceID.String(), restCall, restCallHdrs)
 				if toolErr != nil {
 					resultJSON = fmt.Sprintf(`{"error":%q}`, toolErr.Error())
 				}
