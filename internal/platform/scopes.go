@@ -2,9 +2,9 @@ package platform
 
 import "fmt"
 
-// Scope constants define the capability taxonomy used by PATs and internal-AI
+// Scope constants define the capability taxonomy used by PATs and internal-LLM
 // tokens. JWT browser sessions bypass scope enforcement (HasScope always true).
-// PAT and internal-AI callers are limited to their Scopes list.
+// PAT and internal-LLM callers are limited to their Scopes list.
 const (
 	ScopeReadProjects  = "read:projects"
 	ScopeWriteProjects = "write:projects"

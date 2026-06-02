@@ -21,11 +21,11 @@ import (
 	"github.com/colnio/project-management-site/internal/risk"
 )
 
-// Service is the AI module's domain service.
+// Service is the LLM module's domain service.
 type Service struct {
 	pool     *pgxpool.Pool
 	cfg      *config.Config
-	client   Client   // nil means AI is disabled
+	client   Client // nil means LLM is disabled
 	authSvc  *auth.Service
 	orgSvc   *org.Service
 	projects *project.Service
@@ -46,14 +46,14 @@ func (s *Service) SetPIFlagNotifier(n PIFlagNotifier) {
 	s.piNotify = n
 }
 
-// SetRiskService wires the risk service into the AI service so that completed
+// SetRiskService wires the risk service into the LLM service so that completed
 // risk-assessment workflow runs can populate the risk register. Call this in
 // main.go after both services are constructed.
 func (s *Service) SetRiskService(risks *risk.Service) {
 	s.risks = risks
 }
 
-// NewService constructs the AI service. If client is nil, all AI endpoints
+// NewService constructs the LLM service. If client is nil, all LLM endpoints
 // return 503 ai.unavailable.
 func NewService(
 	pool *pgxpool.Pool,
@@ -78,13 +78,13 @@ func NewService(
 	}
 }
 
-// available reports whether the AI client is configured.
+// available reports whether the LLM client is configured.
 func (s *Service) available() bool {
 	return s.client != nil
 }
 
 func (s *Service) unavailableErr() error {
-	return platform.Errorf(503, "ai.unavailable", "AI provider is not configured")
+	return platform.Errorf(503, "ai.unavailable", "LLM provider is not configured")
 }
 
 // ─── Conversation management ─────────────────────────────────────────────────
@@ -144,7 +144,33 @@ func (s *Service) GetConversationMessages(ctx context.Context, p *platform.Princ
 	if _, _, err := s.projects.Authorize(ctx, p, conv.ProjectID, org.RoleViewer); err != nil {
 		return nil, err
 	}
-	return listMessages(ctx, s.pool, convID)
+	// Opening a chat resets its idle-expiration window, even with no new
+	// message. Best-effort: a failed touch must not fail the read.
+	if err := touchConversation(ctx, s.pool, convID); err != nil {
+		s.log.Warn("ai: touch conversation on open", "conversation_id", convID, "err", err)
+	}
+	msgs, err := listMessages(ctx, s.pool, convID)
+	if err != nil {
+		return nil, err
+	}
+	// Enrich each message tool_call with its persisted record's status and UUID
+	// so the client can render Approve/Reject for suggest_writes proposals and
+	// target the approve/reject endpoint with the right id. The OpenAI call id on
+	// the message is replaced with the record UUID for matched calls.
+	statusByCall, err := loadToolCallStatusByCallID(ctx, s.pool, convID)
+	if err != nil {
+		s.log.Warn("ai: load tool call status for enrichment", "conversation_id", convID, "err", err)
+	} else {
+		for _, m := range msgs {
+			for i := range m.ToolCalls {
+				if rec, ok := statusByCall[m.ToolCalls[i].ID]; ok {
+					m.ToolCalls[i].Status = rec.Status
+					m.ToolCalls[i].ID = rec.RecordID.String()
+				}
+			}
+		}
+	}
+	return msgs, nil
 }
 
 // ─── Tool call approval/rejection ────────────────────────────────────────────
@@ -179,25 +205,17 @@ func (s *Service) ApproveToolCall(ctx context.Context, p *platform.Principal, co
 	}
 
 	// Mint an internal token to execute the call.
-	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, []string{
-		platform.ScopeReadProjects,
-		platform.ScopeReadSamples,
-		platform.ScopeReadExperiments,
-		platform.ScopeReadPages,
-		platform.ScopeReadArtifacts,
-		platform.ScopeWritePages,
-		platform.ScopeWriteIterations,
-		platform.ScopeWriteCalendar,
-	}, nil)
+	iaiToken, err := s.authSvc.MintInternalAIToken(ctx, p.UserID, convID, internalAIScopes, nil)
 	if err != nil {
 		return nil, fmt.Errorf("ai: mint token for approval: %w", err)
 	}
 	defer func() { _ = s.authSvc.RevokeInternalAITokens(ctx, convID) }()
 
 	restCall := makeRESTCaller(s.restBase, iaiToken)
+	restCallHdrs := makeRESTCallerWithHeaders(s.restBase, iaiToken)
 
 	inputJSON, _ := json.Marshal(tc.InputJSON)
-	result, _, execErr := dispatchTool(ctx, tc.Tool, string(inputJSON), proj.ID.String(), proj.WorkspaceID.String(), restCall)
+	result, _, execErr := dispatchTool(ctx, tc.Tool, string(inputJSON), proj.ID.String(), proj.WorkspaceID.String(), restCall, restCallHdrs)
 
 	status := "executed"
 	if execErr != nil {
@@ -335,7 +353,7 @@ func (s *Service) checkWorkspaceMember(ctx context.Context, p *platform.Principa
 
 // ─── ListProposedToolCallsByWorkspace ─────────────────────────────────────────
 
-// ProposedToolCallItem is a lightweight view of a proposed AI tool call.
+// ProposedToolCallItem is a lightweight view of a proposed LLM tool call.
 type ProposedToolCallItem struct {
 	ID        uuid.UUID
 	Tool      string
@@ -343,7 +361,7 @@ type ProposedToolCallItem struct {
 	CreatedAt time.Time
 }
 
-// ListProposedToolCallsByWorkspace returns proposed AI tool calls for all projects
+// ListProposedToolCallsByWorkspace returns proposed LLM tool calls for all projects
 // in the given workspace, ordered by created_at DESC, limited to limit rows.
 func (s *Service) ListProposedToolCallsByWorkspace(ctx context.Context, workspaceID uuid.UUID, limit int) ([]ProposedToolCallItem, error) {
 	projectIDs, err := s.projects.ListIDsForWorkspace(ctx, workspaceID)
@@ -399,7 +417,7 @@ func (s *Service) SetProjectAutonomy(ctx context.Context, p *platform.Principal,
 
 // ─── Risk review ─────────────────────────────────────────────────────────────
 
-// ReviewRisks calls the AI to summarise the risk register for a project (or
+// ReviewRisks calls the LLM to summarise the risk register for a project (or
 // an iteration within it) and return a concise readiness recommendation.
 // The caller is authorised as Viewer; no write scopes are required.
 func (s *Service) ReviewRisks(ctx context.Context, p *platform.Principal, projectID uuid.UUID, iterationID *uuid.UUID) (string, error) {

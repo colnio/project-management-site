@@ -57,7 +57,7 @@ func New(deps *ServerDeps) *Server {
 		config.OpenAPIPath = "/openapi"
 	}
 	config.Info.Description = "REST API for the lab project-management platform. " +
-		"Every action available in the UI is available here; the in-app AI assistant " +
+		"Every action available in the UI is available here; the in-app LLM assistant " +
 		"uses the same surface. See /llms.txt for an agent-oriented summary.\n\n" +
 		"## Authentication\n\n" +
 		"Most endpoints require a JWT access token issued by `POST /v1/auth/login`. " +

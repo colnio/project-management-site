@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,13 +115,13 @@ func (f *fakeUsers) SetPassword(_ context.Context, _ uuid.UUID, _ string) error 
 // ─── Test environment ─────────────────────────────────────────────────────────
 
 type testEnv struct {
-	pool     *pgxpool.Pool
-	riskSvc  *risk.Service
-	orgSvc   *org.Service
-	projSvc  *project.Service
-	iterSvc  *iteration.Service
-	users    *fakeUsers
-	rec      *capturingRecorder
+	pool    *pgxpool.Pool
+	riskSvc *risk.Service
+	orgSvc  *org.Service
+	projSvc *project.Service
+	iterSvc *iteration.Service
+	users   *fakeUsers
+	rec     *capturingRecorder
 }
 
 var truncateTables = []string{
@@ -307,7 +308,7 @@ func TestUpsertFromWorkflow_ReplacesPriorAI(t *testing.T) {
 		"overall_rating": 3,
 		"summary":        "first pass",
 	}
-	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run1, output1, owner.ID); err != nil {
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run1, output1, nil, owner.ID); err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
 
@@ -327,7 +328,13 @@ func TestUpsertFromWorkflow_ReplacesPriorAI(t *testing.T) {
 		"category_ratings": map[string]any{"supply": 4, "safety": 2},
 		"mitigations":      []any{"monitor"},
 	}
-	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run2, output2, owner.ID); err != nil {
+	// Per-category step results carry their own mitigations; each category row
+	// must use its step's list, not the shared global "monitor".
+	stepResults := map[string]any{
+		"supply_risk": map[string]any{"rating": 4, "mitigations": []any{"dual-source suppliers", "hold safety stock"}},
+		"safety_risk": map[string]any{"rating": 2, "mitigations": []any{"add PPE checklist"}},
+	}
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run2, output2, stepResults, owner.ID); err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
 	if err := env.pool.QueryRow(ctx,
@@ -338,6 +345,28 @@ func TestUpsertFromWorkflow_ReplacesPriorAI(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("after second upsert: want 2 category risks, got %d", count)
+	}
+
+	// Each category row must carry its own step's mitigations, not a shared one.
+	var supplyMit, safetyMit string
+	if err := env.pool.QueryRow(ctx,
+		`SELECT mitigation FROM risks WHERE project_id = $1 AND title = 'Supply'`, proj.ID,
+	).Scan(&supplyMit); err != nil {
+		t.Fatalf("supply mitigation: %v", err)
+	}
+	if err := env.pool.QueryRow(ctx,
+		`SELECT mitigation FROM risks WHERE project_id = $1 AND title = 'Safety'`, proj.ID,
+	).Scan(&safetyMit); err != nil {
+		t.Fatalf("safety mitigation: %v", err)
+	}
+	if supplyMit == safetyMit {
+		t.Fatalf("category mitigations must differ, both = %q", supplyMit)
+	}
+	if !strings.Contains(supplyMit, "dual-source suppliers") {
+		t.Errorf("supply mitigation = %q, want its own step's list", supplyMit)
+	}
+	if !strings.Contains(safetyMit, "add PPE checklist") {
+		t.Errorf("safety mitigation = %q, want its own step's list", safetyMit)
 	}
 }
 
@@ -448,6 +477,109 @@ func TestHasBlockingHighRisk(t *testing.T) {
 	}
 	if !blocked {
 		t.Fatal("expected blocking risk")
+	}
+}
+
+// TestUpsertFromWorkflow_IterationScoped verifies that:
+//  1. An iteration-scoped upsert writes risks with the correct iteration_id.
+//  2. A subsequent project-level (nil iterationID) upsert does NOT delete the
+//     iteration-scoped AI risks.
+//  3. A second iteration-scoped upsert for a DIFFERENT iteration leaves the
+//     first iteration's AI risks intact.
+func TestUpsertFromWorkflow_IterationScoped(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "iter-wf-owner@example.com", "Iter WF Owner")
+	proj := seedProject(t, env, owner.ID)
+
+	// Create two iterations in the same project.
+	iter1, err := env.iterSvc.CreateIteration(ctx, proj.ID, "Iter 1", "", "planned", nil, nil, owner.ID)
+	if err != nil {
+		t.Fatalf("create iter1: %v", err)
+	}
+	iter2, err := env.iterSvc.CreateIteration(ctx, proj.ID, "Iter 2", "", "planned", nil, nil, owner.ID)
+	if err != nil {
+		t.Fatalf("create iter2: %v", err)
+	}
+
+	run1 := uuid.New()
+	output := map[string]any{
+		"category_ratings": map[string]any{
+			"timeline_risk": "3",
+			"safety_risk":   "4",
+		},
+	}
+
+	// (a) Upsert scoped to iter1.
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, &iter1.ID, "risk_assess", run1, output, nil, owner.ID); err != nil {
+		t.Fatalf("upsert iter1: %v", err)
+	}
+
+	// Verify rows are scoped to iter1.
+	var count int
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE iteration_id = $1 AND source = 'ai'`, iter1.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count iter1 after upsert: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("after iter1 upsert: want 2 ai risks for iter1, got %d", count)
+	}
+
+	// (b) Project-level upsert must NOT delete iter1 AI risks.
+	run2 := uuid.New()
+	projOutput := map[string]any{
+		"overall_rating": 2,
+		"summary":        "project-level run",
+	}
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "risk_assess", run2, projOutput, nil, owner.ID); err != nil {
+		t.Fatalf("upsert project-level: %v", err)
+	}
+
+	// iter1 AI risks must still be present.
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE iteration_id = $1 AND source = 'ai'`, iter1.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count iter1 after project upsert: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("project-level upsert must not delete iter1 AI risks; got %d remaining", count)
+	}
+
+	// Project-level AI risk (iteration_id IS NULL) must exist.
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE project_id = $1 AND iteration_id IS NULL AND source = 'ai'`, proj.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count project-level after upsert: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("after project-level upsert: want 1 project-level ai risk, got %d", count)
+	}
+
+	// (c) Upsert scoped to iter2 must NOT delete iter1 AI risks.
+	run3 := uuid.New()
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, &iter2.ID, "risk_assess", run3, output, nil, owner.ID); err != nil {
+		t.Fatalf("upsert iter2: %v", err)
+	}
+
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE iteration_id = $1 AND source = 'ai'`, iter1.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count iter1 after iter2 upsert: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("iter2 upsert must not delete iter1 AI risks; got %d remaining", count)
+	}
+
+	// iter2 risks should now exist.
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE iteration_id = $1 AND source = 'ai'`, iter2.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count iter2 after upsert: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("after iter2 upsert: want 2 ai risks for iter2, got %d", count)
 	}
 }
 

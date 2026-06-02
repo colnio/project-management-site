@@ -326,7 +326,7 @@ export function WorkflowRunner({ projectId, defaultSampleId, defaultExperimentId
             color: 'var(--ink-2)',
           } as React.CSSProperties}
         >
-          AI Workflows
+          LLM Workflows
         </div>
         <div style={{ padding: '16px 18px', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Workflow select */}

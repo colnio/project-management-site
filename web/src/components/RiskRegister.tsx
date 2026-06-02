@@ -17,6 +17,7 @@
  *   PI-review toggle    → visible only when isPrivileged(user) === true
  */
 import { useState } from 'react';
+import { useRouter } from '@tanstack/react-router';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import {
   useProjectRisks,
@@ -160,7 +161,7 @@ function RiskRow({ risk, projectId, isPI, onEdit }: RiskRowProps) {
                   padding: '1px 5px',
                 }}
               >
-                AI
+                LLM
               </span>
             )}
             {flagged && (
@@ -292,7 +293,10 @@ interface RiskRegisterProps {
 
 export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
   const qc = useQueryClient();
+  const router = useRouter();
   const [runError, setRunError] = useState<string | null>(null);
+  const [runResult, setRunResult] = useState<string | null>(null);
+  const [runResultPageId, setRunResultPageId] = useState<string | null>(null);
 
   // Dialog state: null = closed, 'create' = new risk, Risk object = edit mode
   const [dialogState, setDialogState] = useState<null | 'create' | Risk>(null);
@@ -312,7 +316,7 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
   const handleReviewWithAI = () => {
     const scope = iterationId ? 'iteration' : 'project';
     reviewWithAI(
-      'risk_assesment_skill',
+      'risk_assessment_skill',
       `Begin a structured risk assessment for this ${scope}. Start with Phase 1 (Context Mapping).`,
     );
   };
@@ -327,14 +331,31 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
 
   const handleRunAssessment = () => {
     setRunError(null);
+    setRunResult(null);
+    setRunResultPageId(null);
     runWorkflow.mutate(
-      { key: 'project_risk_v1', project_id: projectId },
       {
-        onSuccess: () => {
-          void qc.invalidateQueries({ queryKey: riskKeys.projectRisks(projectId) });
-          if (iterationId) {
-            void qc.invalidateQueries({ queryKey: riskKeys.iterationRisks(iterationId) });
+        key: 'project_risk_v1',
+        project_id: projectId,
+        ...(iterationId ? { iteration_id: iterationId } : {}),
+      },
+      {
+        onSuccess: (run) => {
+          if (run.status === 'failed') {
+            setRunError(run.error || 'Risk assessment failed.');
+            return;
           }
+          // Build a concise summary from run.output
+          const o = run.output ?? {};
+          const cats = o.category_ratings ? Object.keys(o.category_ratings).length : 0;
+          const parts: string[] = ['Risk assessment complete'];
+          if (o.overall_rating) parts.push(`overall risk ${o.overall_rating}/5`);
+          if (cats) parts.push(`${cats} risk${cats === 1 ? '' : 's'} updated`);
+          if (o.flagged_for_PI_review) parts.push('flagged for PI review');
+          setRunResult(parts.join(' · '));
+          if (run.result_page_id) setRunResultPageId(run.result_page_id);
+          void qc.invalidateQueries({ queryKey: riskKeys.projectRisks(projectId) });
+          if (iterationId) void qc.invalidateQueries({ queryKey: riskKeys.iterationRisks(iterationId) });
         },
         onError: (err) => {
           setRunError(err instanceof Error ? err.message : 'Workflow failed');
@@ -443,6 +464,55 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
             </span>
           )}
 
+          {runResult && !runError && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontFamily: 'var(--mono)',
+                fontSize: 11,
+                color: 'var(--good)',
+                maxWidth: 320,
+                overflow: 'hidden',
+              }}
+            >
+              <span
+                style={{
+                  flex: '1 1 0',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={runResult}
+              >
+                {runResult}
+              </span>
+              {runResultPageId && (
+                <button
+                  className="top-btn"
+                  style={{ fontSize: 11, flexShrink: 0 }}
+                  onClick={() =>
+                    void router.navigate({
+                      to: '/pages/$pageId',
+                      params: { pageId: runResultPageId },
+                    })
+                  }
+                >
+                  View report
+                </button>
+              )}
+              <button
+                className="icon-btn"
+                onClick={() => { setRunResult(null); setRunResultPageId(null); }}
+                title="Dismiss"
+                style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0, padding: '2px 4px' }}
+              >
+                ✕
+              </button>
+            </span>
+          )}
+
           <button
             className="top-btn"
             onClick={() => setDialogState('create')}
@@ -465,7 +535,7 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
             onClick={handleReviewWithAI}
             style={{ fontSize: 12 }}
           >
-            Review with AI
+            Review with LLM
           </button>
 
           <button
@@ -478,7 +548,9 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
         </div>
 
         {/* Body */}
-        {isLoading ? (
+        {runWorkflow.isPending ? (
+          <LoadingState message="LLM is assessing risks — this can take a minute or two…" />
+        ) : isLoading ? (
           <LoadingState message="Loading risks…" />
         ) : isError ? (
           <ErrorState message="Failed to load risks." />

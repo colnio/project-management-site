@@ -7,7 +7,33 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/colnio/project-management-site/internal/platform"
 )
+
+// internalAIScopes is the canonical set of OAuth scopes minted into every
+// short-lived internal AI token (iai_…). It must cover every REST endpoint
+// that any LLM tool calls. This is the single source of truth; sse.go,
+// service.go, and workflow_run.go all reference this slice instead of
+// duplicating the literal.
+var internalAIScopes = []string{
+	platform.ScopeReadProjects,
+	platform.ScopeReadSamples,
+	platform.ScopeReadExperiments,
+	platform.ScopeReadIterations,
+	platform.ScopeReadPages,
+	platform.ScopeReadArtifacts,
+	platform.ScopeReadRisks,
+	platform.ScopeReadCalendar,
+	platform.ScopeReadApprovals,
+	platform.ScopeWritePages,
+	platform.ScopeWriteIterations,
+	platform.ScopeWriteCalendar,
+	platform.ScopeWriteSamples,
+	platform.ScopeWriteExperiments,
+	platform.ScopeWriteRisks,
+	platform.ScopeWriteApprovals,
+}
 
 // Autonomy modes.
 const (

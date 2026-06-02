@@ -53,8 +53,8 @@ write "dev-only" code paths for these — we point the same client at a local se
 | Human SSO | Microsoft Entra OIDC | **mock-oauth2-server** (Compose) | Real OAuth2/PKCE; only `issuer`/`client_id`/`secret` env differ |
 | External users | Local password (Argon2id) | same | Offline; no change between dev/prod |
 | Agent auth (PAT) | Argon2id-hashed tokens | same | No external dependency |
-| Internal AI auth | Short-lived token (spec §6.3) | same | No external dependency |
-| AI completions | OpenRouter (global key) | **Ollama native** (`:11434`) | OpenAI-compatible `/v1/chat/completions` |
+| Internal LLM auth | Short-lived token (spec §6.3) | same | No external dependency |
+| LLM completions | OpenRouter (global key) | **Ollama native** (`:11434`) | OpenAI-compatible `/v1/chat/completions` |
 | Notebook render | nbconvert sidecar | **nbconvert container** (Compose) | Same HTTP contract |
 | Web search (agent) | Brave / Tavily | **SearXNG** (Compose) | Same `web_search` tool shape, JSON API |
 | Background jobs | River (in-process) | same | Postgres-backed; identical |
@@ -68,9 +68,9 @@ A containerized Ollama on a dev Mac cannot use the Metal GPU and is unacceptably
 `ollama serve` on the host; the Go API reaches it at `http://localhost:11434`. Everything else is
 containerized for reproducibility.
 
-### AI provider note
+### LLM provider note
 
-For now the AI orchestrator calls **Ollama directly** (no provider-abstraction layer). Because we
+For now the LLM orchestrator calls **Ollama directly** (no provider-abstraction layer). Because we
 use Ollama's OpenAI-compatible endpoint, the eventual OpenRouter swap is contained to one file in
 `internal/ai/`. Do **not** spread Ollama-specific assumptions across the codebase — keep the HTTP
 client and request/response shaping in a single package so the prod swap stays a small change.
@@ -196,7 +196,7 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
 - [x] **B2 Iterations** — CRUD, ordering, status, start/end, `IterationSample` join.
 - [x] **B3 Pages** — `PageBlob` (SHA-256, blocks-only JSONB) + immutable `PageRevision` graph with
   `markdownExport`; source enum; candidate/approve/reject; restore-as-new-revision; retention +
-  nightly GC (River); ETag; `PagePresence` (SSE + 30s-TTL heartbeat); AI guardrails (§7.1.2).
+  nightly GC (River); ETag; `PagePresence` (SSE + 30s-TTL heartbeat); LLM guardrails (§7.1.2).
 - [x] **B4 Samples** — CRUD, freeform `properties` JSONB, `kind` enum, `SampleRelation` lineage +
   `/lineage` endpoint.
 - [x] **B5 Experiments** — CRUD, `method` enum, `parameters` JSONB, `ExperimentSample` join,
@@ -237,25 +237,25 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
   client pointed at `http://localhost:8080/mcp`.
 - [x] **F4** `/llms.txt` generated from OpenAPI.
 
-### Track G — AI (local Ollama) *(deps A1, A4, F1)*
+### Track G — LLM (local Ollama) *(deps A1, A4, F1)*
 
 - [x] **G1 Orchestrator** — Ollama client (`/v1/chat/completions`, OpenAI-compatible) with tool
   defs; tool registry; SSE streaming to the browser; internal-token minting; metering into
   `AIUsageRecord` (use Ollama's `prompt_eval_count`/`eval_count`; `usdCost = 0` locally).
-- [x] **G2 Tool gating** — read tools always on; write tools gated by `AutonomyConfig`. The AI
+- [x] **G2 Tool gating** — read tools always on; write tools gated by `AutonomyConfig`. The LLM
   calls the **public REST API** with its internal token (same path as external agents).
 - [x] **G3 Workflow engine** — JSON loader; step runner (`gather_context` → DB, `ai_question` →
   Ollama, `ai_synthesis` → markdown + schema-validated JSON); PI flag if
   `flagged_for_PI_review == true` OR `overall_rating >= 4` → Mailpit email + in-app notice.
 - [x] **G4 Workflow library** — `battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1`.
 - [x] **G5 Conversation service** — project-scoped message store, audited.
-- [x] **G6 AI chat UI** — `design/ai-panel.jsx`: streaming, citations, tool-call approval dialogs.
+- [x] **G6 LLM chat UI** — `design/ai-panel.jsx`: streaming, citations, tool-call approval dialogs.
 - [x] **G7 Workflow runner UI** — `design/risk.jsx` + `design/create-flows.jsx` walkthroughs.
 - [x] **G8 Autonomy config UI** — workspace + project settings.
 
 ---
 
-## 7. AI integration with Ollama
+## 7. LLM integration with Ollama
 
 - **Config**: copy `aiconf.ollama.example.json` → `aiconf.local.json` (gitignored) with
   `active: "ollama"`, `api_base: "http://localhost:11434/v1"`, and `model: "qwen2.5:14b-instruct"`
@@ -281,7 +281,7 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
   permission + audit assertions per the DoD. River jobs tested with the in-process worker.
 - **Frontend**: Vitest + Testing Library; **MSW** mocks the OpenAPI surface so Track C can proceed
   ahead of Track B, then runs against the live local API once endpoints exist.
-- **AI**: workflow-engine unit tests stub the Ollama client with golden fixtures (deterministic,
+- **LLM**: workflow-engine unit tests stub the Ollama client with golden fixtures (deterministic,
   no model needed). An opt-in integration test (`go test -tags=ollama`) hits real Ollama to smoke
   test tool-calling.
 
@@ -297,7 +297,7 @@ Each subtask must meet the **Definition of Done** (spec §9.5) before merge:
    PDF and an `.ipynb` (confirm thumbnail + nbconvert HTML render from MinIO).
 6. **Editor**: insert `@sample`/`@experiment` reference blocks, edit, confirm auto-save creates a
    `PageRevision`; open history, diff, restore.
-7. **AI chat**: ask a question → confirm SSE streaming + a `search_project_content` tool call with
+7. **LLM chat**: ask a question → confirm SSE streaming + a `search_project_content` tool call with
    citations; in `suggest_writes` mode, have it draft a page → approve the candidate in the diff view.
 8. **Risk workflow**: run `battery_safety_risk_v1` on a cell → confirm the rendered risk register
    page; if `rating >= 4`, confirm the PI-flag email in Mailpit (<http://localhost:8025>).
@@ -316,7 +316,7 @@ rewrites:
 - Terraform (VPC, 2× EC2, S3, SES, Route 53, IAM, EBS snapshots).
 - Caddy + TLS (Let's Encrypt) reverse proxy.
 - OIDC env → Microsoft Entra (`issuer`/`client_id`/`secret`).
-- AI client → OpenRouter backend (contained to `internal/ai/`).
+- LLM client → OpenRouter backend (contained to `internal/ai/`).
 - Object storage → real S3 (drop the `S3_ENDPOINT` override).
 - Email → SES (drop Mailpit).
 - CloudWatch observability; sealed `.env`.

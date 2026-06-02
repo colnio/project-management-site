@@ -182,6 +182,67 @@ func TestHTTPClient_ChatStream_Basic(t *testing.T) {
 	}
 }
 
+// TestHTTPClient_ChatStream_ParallelToolCalls guards the streamed tool-call
+// accumulator. Providers like DeepInfra emit several tool calls in one turn,
+// streaming each fragment in its own delta keyed by an `index`. Accumulating by
+// slice position instead of that index concatenated the names into one bogus
+// tool (e.g. "list_sampleslist_experiments…"). Each call must stay separate.
+func TestHTTPClient_ChatStream_ParallelToolCalls(t *testing.T) {
+	events := []string{
+		// Three parallel calls announced (one per delta, distinct index).
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"list_samples","arguments":""}}]},"finish_reason":null}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_b","type":"function","function":{"name":"list_experiments","arguments":""}}]},"finish_reason":null}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":2,"id":"call_c","type":"function","function":{"name":"list_artifacts","arguments":""}}]},"finish_reason":null}]}`,
+		// Argument fragments arrive out of order, split across deltas.
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"limit\":"}}]},"finish_reason":null}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":null}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"5}"}}]},"finish_reason":null}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":2,"function":{"arguments":"{}"}}]},"finish_reason":null}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`data: [DONE]`,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for _, e := range events {
+			_, _ = fmt.Fprintln(w, e)
+			_, _ = fmt.Fprintln(w)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewHTTPClient(&Provider{Model: "m", Token: "t", APIBase: srv.URL})
+	ch, err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []ChatMessage{{Role: "user", Content: "list everything"}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream error: %v", err)
+	}
+
+	var got []ToolCall
+	for chunk := range ch {
+		if chunk.Err != nil {
+			t.Fatalf("stream chunk error: %v", chunk.Err)
+		}
+		got = append(got, chunk.ToolCalls...)
+	}
+
+	if len(got) != 3 {
+		t.Fatalf("expected 3 separate tool calls, got %d: %+v", len(got), got)
+	}
+	want := []ToolCall{
+		{ID: "call_a", Type: "function", Function: FunctionCall{Name: "list_samples", Arguments: "{}"}},
+		{ID: "call_b", Type: "function", Function: FunctionCall{Name: "list_experiments", Arguments: `{"limit":5}`}},
+		{ID: "call_c", Type: "function", Function: FunctionCall{Name: "list_artifacts", Arguments: "{}"}},
+	}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("tool call %d = %+v, want %+v", i, got[i], w)
+		}
+	}
+}
+
 // ─── Stub client tests ────────────────────────────────────────────────────────
 
 func TestStubClient_Chat(t *testing.T) {

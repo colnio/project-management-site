@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,6 +45,11 @@ type ToolCall struct {
 	ID       string       `json:"id"`
 	Type     string       `json:"type"`
 	Function FunctionCall `json:"function"`
+	// Status is populated only when serializing a stored conversation message to
+	// the API (GetConversationMessages enriches it from the ai_tool_calls record).
+	// It is never set on the model-request path, so omitempty keeps it out of the
+	// payload sent to the LLM provider.
+	Status string `json:"status,omitempty"`
 }
 
 // FunctionCall is the name+arguments pair inside a ToolCall.
@@ -257,13 +263,17 @@ func (c *httpClient) ChatStream(ctx context.Context, req ChatRequest) (<-chan St
 			}
 			data := strings.TrimPrefix(line, "data: ")
 			if data == "[DONE]" {
-				// Flush accumulated tool calls.
+				// Flush accumulated tool calls in index order (indices are
+				// usually 0..n-1, but don't assume they're contiguous).
 				if len(toolCallAccum) > 0 {
+					idxs := make([]int, 0, len(toolCallAccum))
+					for i := range toolCallAccum {
+						idxs = append(idxs, i)
+					}
+					sort.Ints(idxs)
 					var tcs []ToolCall
-					for i := 0; i < len(toolCallAccum); i++ {
-						if tc, ok := toolCallAccum[i]; ok {
-							tcs = append(tcs, *tc)
-						}
+					for _, i := range idxs {
+						tcs = append(tcs, *toolCallAccum[i])
 					}
 					ch <- StreamChunk{ToolCalls: tcs}
 				}
@@ -271,10 +281,26 @@ func (c *httpClient) ChatStream(ctx context.Context, req ChatRequest) (<-chan St
 				return
 			}
 
+			// The streamed tool_call delta carries an `index` that identifies
+			// which tool call a fragment belongs to. Parse it explicitly — the
+			// public ToolCall type omits it. Keying on this index (not the slice
+			// position within a single delta) is required for parallel tool
+			// calls, where each delta typically holds one fragment.
 			var evt struct {
 				Choices []struct {
-					Delta        ChatMessage `json:"delta"`
-					FinishReason *string     `json:"finish_reason"`
+					Delta struct {
+						Content   string `json:"content"`
+						ToolCalls []struct {
+							Index    int    `json:"index"`
+							ID       string `json:"id"`
+							Type     string `json:"type"`
+							Function struct {
+								Name      string `json:"name"`
+								Arguments string `json:"arguments"`
+							} `json:"function"`
+						} `json:"tool_calls"`
+					} `json:"delta"`
+					FinishReason *string `json:"finish_reason"`
 				} `json:"choices"`
 				Usage *Usage `json:"usage"`
 			}
@@ -296,17 +322,23 @@ func (c *httpClient) ChatStream(ctx context.Context, req ChatRequest) (<-chan St
 				ch <- StreamChunk{ContentDelta: delta.Content}
 			}
 
-			// Accumulate tool call deltas.
-			for i, tc := range delta.ToolCalls {
-				if existing, ok := toolCallAccum[i]; ok {
-					existing.Function.Arguments += tc.Function.Arguments
-					if tc.Function.Name != "" {
-						existing.Function.Name += tc.Function.Name
-					}
-				} else {
-					copy := tc
-					toolCallAccum[i] = &copy
+			// Accumulate tool call deltas, keyed by the provider's tool-call
+			// index so concurrent calls don't clobber each other. Name and
+			// arguments may both arrive split across deltas, so concatenate.
+			for _, tc := range delta.ToolCalls {
+				existing, ok := toolCallAccum[tc.Index]
+				if !ok {
+					existing = &ToolCall{}
+					toolCallAccum[tc.Index] = existing
 				}
+				if tc.ID != "" {
+					existing.ID = tc.ID
+				}
+				if tc.Type != "" {
+					existing.Type = tc.Type
+				}
+				existing.Function.Name += tc.Function.Name
+				existing.Function.Arguments += tc.Function.Arguments
 			}
 		}
 		if err := scanner.Err(); err != nil {

@@ -323,7 +323,7 @@ export function SendForApprovalDialog({
               marginBottom: 6,
             }}
           >
-            <FieldLabel>AI Risk Review</FieldLabel>
+            <FieldLabel>LLM Risk Review</FieldLabel>
             <button
               className="top-btn"
               onClick={handleGenerateReview}
@@ -348,7 +348,7 @@ export function SendForApprovalDialog({
           <textarea
             className="field-input"
             rows={5}
-            placeholder='Click "Generate review" to get an AI-written risk summary, or type your own...'
+            placeholder='Click "Generate review" to get an LLM-written risk summary, or type your own...'
             value={aiReview}
             onChange={e => setAiReview(e.target.value)}
             disabled={createRequest.isPending}

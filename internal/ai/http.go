@@ -11,15 +11,15 @@ import (
 	"github.com/colnio/project-management-site/internal/platform"
 )
 
-// Register mounts all huma AI endpoints on the API.
+// Register mounts all huma LLM endpoints on the API.
 func Register(api huma.API, svc *Service) {
 	// Conversations.
 	huma.Register(api, huma.Operation{
 		OperationID: "ai-create-conversation",
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/ai/conversations",
-		Summary:     "Create an AI conversation",
-		Tags:        []string{"AI"},
+		Summary:     "Create an LLM conversation",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *aiCreateConversationInput) (*aiConversationOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -43,8 +43,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-list-conversations",
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/ai/conversations",
-		Summary:     "List AI conversations for a project",
-		Tags:        []string{"AI"},
+		Summary:     "List LLM conversations for a project",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *aiListConversationsInput) (*aiConversationListOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -73,8 +73,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-get-conversation-messages",
 		Method:      http.MethodGet,
 		Path:        "/v1/ai/conversations/{id}",
-		Summary:     "Get messages for an AI conversation",
-		Tags:        []string{"AI"},
+		Summary:     "Get messages for an LLM conversation",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *aiConversationMessagesInput) (*aiMessagesOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -104,8 +104,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-approve-tool-call",
 		Method:      http.MethodPost,
 		Path:        "/v1/ai/conversations/{id}/tool-calls/{tcid}/approve",
-		Summary:     "Approve a proposed AI tool call",
-		Tags:        []string{"AI"},
+		Summary:     "Approve a proposed LLM tool call",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *aiToolCallActionInput) (*aiToolCallOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -133,8 +133,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-reject-tool-call",
 		Method:      http.MethodPost,
 		Path:        "/v1/ai/conversations/{id}/tool-calls/{tcid}/reject",
-		Summary:     "Reject a proposed AI tool call",
-		Tags:        []string{"AI"},
+		Summary:     "Reject a proposed LLM tool call",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *aiToolCallActionInput) (*aiToolCallOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -163,8 +163,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-get-workspace-usage",
 		Method:      http.MethodGet,
 		Path:        "/v1/workspaces/{id}/ai/usage",
-		Summary:     "Get AI usage summary for a workspace",
-		Tags:        []string{"AI"},
+		Summary:     "Get LLM usage summary for a workspace",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *autonomyScopeInput) (*aiUsageSummaryOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -189,8 +189,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-get-workspace-autonomy",
 		Method:      http.MethodGet,
 		Path:        "/v1/workspaces/{id}/autonomy",
-		Summary:     "Get workspace AI autonomy config",
-		Tags:        []string{"AI"},
+		Summary:     "Get workspace LLM autonomy config",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *autonomyScopeInput) (*autonomyOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -214,8 +214,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-put-workspace-autonomy",
 		Method:      http.MethodPut,
 		Path:        "/v1/workspaces/{id}/autonomy",
-		Summary:     "Set workspace AI autonomy config",
-		Tags:        []string{"AI"},
+		Summary:     "Set workspace LLM autonomy config",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *autonomyPutInput) (*autonomyOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -242,8 +242,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-get-project-autonomy",
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/autonomy",
-		Summary:     "Get project AI autonomy config",
-		Tags:        []string{"AI"},
+		Summary:     "Get project LLM autonomy config",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *autonomyScopeInput) (*autonomyOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -267,8 +267,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-put-project-autonomy",
 		Method:      http.MethodPut,
 		Path:        "/v1/projects/{id}/autonomy",
-		Summary:     "Set project AI autonomy config",
-		Tags:        []string{"AI"},
+		Summary:     "Set project LLM autonomy config",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *autonomyPutInput) (*autonomyOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -296,8 +296,8 @@ func Register(api huma.API, svc *Service) {
 		OperationID: "ai-risk-review",
 		Method:      http.MethodPost,
 		Path:        "/v1/projects/{id}/ai/risk-review",
-		Summary:     "AI risk register review for a project",
-		Tags:        []string{"AI"},
+		Summary:     "LLM risk register review for a project",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *aiRiskReviewInput) (*aiRiskReviewOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {

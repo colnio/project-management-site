@@ -1,5 +1,5 @@
 /**
- * Tests for the artifact upload state machine and token-scope selection.
+ * Tests for the artifact upload state machine and PAT scope selection.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ArtifactUpload } from '../components/ArtifactUpload';
 import { uploadToPresignedUrl } from '../hooks/useArtifactQueries';
+import { TOKEN_SCOPES, hasSelectedTokenScopes } from '../lib/tokenScopes';
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -141,27 +142,22 @@ describe('Token scope selection', () => {
     expect(scopes.size).toBe(1);
   });
 
-  it('allows all known scopes to be selected', () => {
-    const KNOWN_SCOPES = [
-      'read:projects',
-      'read:samples',
-      'read:experiments',
-      'read:artifacts',
-      'read:pages',
-      'read:events',
-      'write:projects',
-      'write:samples',
-      'write:experiments',
-      'write:artifacts',
-    ];
-    const selected = new Set(KNOWN_SCOPES);
-    expect(selected.size).toBe(KNOWN_SCOPES.length);
-    KNOWN_SCOPES.forEach(s => expect(selected.has(s)).toBe(true));
+  it('mirrors the backend PAT scope taxonomy', () => {
+    expect(new Set(TOKEN_SCOPES).size).toBe(TOKEN_SCOPES.length);
+    expect(TOKEN_SCOPES).toContain('read:calendar');
+    expect(TOKEN_SCOPES).toContain('write:calendar');
+    expect(TOKEN_SCOPES).toContain('read:iterations');
+    expect(TOKEN_SCOPES).toContain('write:iterations');
+    expect(TOKEN_SCOPES).toContain('read:risks');
+    expect(TOKEN_SCOPES).toContain('write:risks');
+    expect(TOKEN_SCOPES).toContain('manage:tokens');
+    expect(TOKEN_SCOPES).toContain('write:profile');
+    expect(TOKEN_SCOPES).not.toContain('read:events');
   });
 
-  it('empty scopes array is valid', () => {
-    const scopes: string[] = [];
-    expect(scopes.length).toBe(0);
+  it('requires at least one selected scope', () => {
+    expect(hasSelectedTokenScopes(new Set())).toBe(false);
+    expect(hasSelectedTokenScopes(new Set(['read:projects']))).toBe(true);
   });
 });
 

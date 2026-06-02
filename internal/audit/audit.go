@@ -1,4 +1,4 @@
-// Package audit records an immutable trail of every mutation, AI tool call, and
+// Package audit records an immutable trail of every mutation, LLM tool call, and
 // admin override. Every other module depends on the Recorder interface defined
 // here; the Postgres-backed implementation and query endpoints live alongside
 // in this package (A2). The interface is kept small and stable so modules can
@@ -13,7 +13,7 @@ import (
 )
 
 // Entry is a single audit record. Actor is always the human principal even when
-// the call arrived via a PAT or the in-app AI (the Via* fields capture the
+// the call arrived via a PAT or the in-app LLM (the Via* fields capture the
 // delegation), so "who is ultimately responsible" is never ambiguous.
 type Entry struct {
 	Actor                uuid.UUID

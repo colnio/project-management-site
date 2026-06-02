@@ -23,7 +23,7 @@ Settings. Accounts can also be **suspended** by an admin/PI. (Invite emails land
 you receive an **approval email** (same Mailpit inbox in dev).
 
 **Email notifications** — **Settings → Notifications** controls optional categories
-(PI flags, AI proposals, mentions, meetings, daily digest). Account, security, and
+(PI flags, LLM proposals, mentions, meetings, daily digest). Account, security, and
 admin announcements cannot be disabled. **Admins/PIs** can send a lab-wide or
 workspace-wide broadcast from **Admin → Email Broadcast**.
 
@@ -120,19 +120,19 @@ the active **iteration** page.
   iteration has an unresolved HIGH risk flagged for PI review, you **cannot move
   that iteration to _active_** — the platform blocks the transition until the flag
   is cleared (this is the PI sign-off gate).
-- Risks are authored by hand or **drafted by AI**: run a risk-assessment workflow
-  (see _AI assistant_) and the engine fills the register with AI-sourced rows
+- Risks are authored by hand or **drafted by LLM**: run a risk-assessment workflow
+  (see _LLM assistant_) and the engine fills the register with LLM-sourced rows
   (rating → likelihood, plus mitigations), tagged with the originating run.
 - **Editing by hand**: use **+ Add risk** to create a risk, or the per-row pencil
   to edit and the ✕ to delete. The **PI-review flag** toggle is shown only to
   principal investigators (system-admin accounts); everyone else can still add,
   edit, and delete risks and see the PI REVIEW chip.
-- **Review with AI**: opens the sidebar AI assistant in a guided, multi-phase
+- **Review with LLM**: opens the sidebar LLM assistant in a guided, multi-phase
   risk-assessment dialogue (driven by the `risk_assesment_skill`). Unlike the
   one-click "Run risk assessment" workflow, this is interactive — answer the
   assistant's prompts to build the assessment.
 - **Send for approval**: opens a dialog to pick stakeholders (workspace members
-  and project collaborators), write a description, and **Generate review** (an AI
+  and project collaborators), write a description, and **Generate review** (an LLM
   summary of the risk register you can edit). Sending creates a tracked approval
   request, emails the stakeholders, and posts it to their workspace **Inbox**,
   where a recipient (or a project editor) can **Approve** or **Reject** it.
@@ -145,7 +145,7 @@ the active **iteration** page.
   the Overview, or from the Tweaks panel.
 - Open the **Tweaks** panel (gear in the sidebar foot) to change the Overview
   layout, toggle **dark mode**, pick an **accent color**, set **density**
-  (compact / regular / comfy), toggle the AI panel, set the AI **autonomy** mode,
+  (compact / regular / comfy), toggle the LLM panel, set the LLM **autonomy** mode,
   and jump to a project tab. Choices persist across reloads.
 
 ## Workspace surfaces
@@ -153,28 +153,28 @@ the active **iteration** page.
 The sidebar exposes workspace-level pages for the currently selected workspace:
 
 - **Inbox** — a single feed of things needing attention (PI-flag reviews, proposed
-  AI writes, audit/system events), grouped Today / Earlier / Older and filterable
+  LLM writes, audit/system events), grouped Today / Earlier / Older and filterable
   by kind; each item deep-links to its source.
 - **People** — the member directory grouped by Owners / Admins / Members /
   External, with avatars, roles, and join dates.
 - **Meetings** — workspace/project meetings split into upcoming and past; open one
   for its agenda, decisions, action-items, attendees, and editable notes. Create a
   meeting with the **New meeting** button.
-- **Admin** — workspace settings, an AI usage overview (spend today/month vs the
+- **Admin** — workspace settings, an LLM usage overview (spend today/month vs the
   monthly cap), the members table, the risk-workflow library, and the audit log.
 - **Templates** — the risk-assessment workflow library; each opens a definition
   page showing the step accordion (with prompt text) and the output schema.
 
 ## Creating projects & iterations
 
-- **New project** (from the Workspaces view) is a wizard: Basics → an optional **AI
+- **New project** (from the Workspaces view) is a wizard: Basics → an optional **LLM
   risk-assessment** step that drafts the register → Team → an optional first
   iteration.
 - **New iteration** (from a project's Iterations tab) is a wizard: Basics →
-  Cycling protocol → Samples picker → an optional **AI-drafted iteration risk
+  Cycling protocol → Samples picker → an optional **LLM-drafted iteration risk
   register**. If the draft raises a HIGH risk flagged for PI review, activating the
   iteration is blocked until a PI signs off.
-- Both AI steps degrade gracefully if the assistant isn't configured — you can
+- Both LLM steps degrade gracefully if the assistant isn't configured — you can
   always skip and finish.
 
 ## Calendar
@@ -205,7 +205,10 @@ The sidebar exposes workspace-level pages for the currently selected workspace:
   the sidebar) — create a named, scoped token (the secret, prefixed `pat_`, is
   shown once), see last-used, and revoke. Send it as `Authorization: Bearer pat_...`.
   Tokens are scoped (e.g. `read:projects`, `write:samples`) and never grant more
-  than you have.
+  than you have. The create-token dialog mirrors the full backend scope taxonomy
+  (projects, iterations, risks, artifacts, pages, meetings, calendar, AI, inbox,
+  notify, approvals, audit, admin, token/profile management) and requires at
+  least one scope before creation.
 - Writes accept an `Idempotency-Key` header (24h replay window). Resources that
   support optimistic concurrency emit an `ETag`; send it back in `If-Match`.
 - **Agent discovery**: `GET /llms.txt` lists every endpoint (generated from the
@@ -214,15 +217,19 @@ The sidebar exposes workspace-level pages for the currently selected workspace:
   MCP client at it with `Authorization: Bearer pat_...`; it exposes read-only
   tools (list/read projects, samples, lineage, experiments, pages, artifacts) that
   wrap the same REST API with the same auth, scopes, and audit. (Write tools are
-  reserved for the in-app AI assistant, gated by autonomy config.)
+  reserved for the in-app LLM assistant, gated by autonomy config.) For a full
+  local smoke run that seeds project data and then validates the MCP readback
+  path, run `./scripts/seed_api_mcp_integration.sh`. The helper prefers the
+  seeded `Graphene Lab` workspace; override with `WORKSPACE_NAME="..."` or
+  `--workspace-name ...` if your local data uses a different workspace.
 
-## AI assistant
+## LLM assistant
 
-The platform includes an AI assistant (configured via `aiconf.local.json` — an
-OpenAI-compatible endpoint; if it's not configured the AI features show "not
+The platform includes an LLM assistant (configured via `aiconf.local.json` — an
+OpenAI-compatible endpoint; if it's not configured the LLM features show "not
 configured" and everything else still works).
 
-- **Chat** — open **Ask AI** from a project to dock a Cursor-style assistant panel
+- **Chat** — open **Ask LLM** from a project to dock a Cursor-style assistant panel
   on the right, scoped to that project. Replies **stream** in live. The assistant
   is automatically aware of the current project (name, ID) and workspace — you do
   not need to specify which project you mean. It can answer questions like "what
@@ -235,15 +242,15 @@ configured" and everything else still works).
   iteration status, create a reminder, flag for review) depends on the project's
   **autonomy mode** — in `suggest_writes` it proposes a change and you **approve
   or reject** it inline.
-- **Risk-assessment workflows** — the **AI Workflows** tab runs a guided
+- **Risk-assessment workflows** — the **LLM Workflows** tab runs a guided
   assessment (`battery_safety_risk_v1`, `experimental_risk_v1`, `project_risk_v1`)
   against a project/sample/experiment. The result shows an overall rating,
   per-category ratings, and mitigations, and is saved as a page on the entity. If
-  the rating is high (≥4) or the AI flags it, the **PI is emailed** for review.
-- **Autonomy & cost** — set the AI's autonomy `mode`
+  the rating is high (≥4) or the LLM flags it, the **PI is emailed** for review.
+- **Autonomy & cost** — set the LLM's autonomy `mode`
   (`read_only` / `suggest_writes` / `auto_routine` / `full`) and allowed write
   tools per workspace (Settings) and per project (a project can't exceed its
-  workspace). Every AI request is metered against a monthly spend cap (it refuses
+  workspace). Every LLM request is metered against a monthly spend cap (it refuses
   at the cap and warns at 80%), and the assistant acts as *you* — all its API
   calls are permission-checked and audited under your identity.
 

@@ -17,7 +17,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/workspaces/{id}/inbox",
 		Summary:     "Workspace inbox",
-		Description: "Returns an aggregated feed of actionable items for the workspace: PI-flagged risks, pending AI proposals, and recent audit activity. Capped at 50 items, ordered newest-first. Requires workspace membership.",
+		Description: "Returns an aggregated feed of actionable items for the workspace: PI-flagged risks, pending LLM proposals, and recent audit activity. Capped at 50 items, ordered newest-first. Requires workspace membership.",
 		Tags:        []string{"inbox"},
 	}, svc.handleListInbox)
 }

@@ -20,6 +20,7 @@ import type { User } from '@/api/types';
 import { WorkspaceAutonomySection } from '@/components/AutonomyConfig';
 import { CalendarSubscriptionPanel } from '@/components/CalendarSubscriptionPanel';
 import { AppearanceSection } from '@/components/AppearanceSection';
+import { TOKEN_SCOPES, hasSelectedTokenScopes } from '@/lib/tokenScopes';
 import {
   useNotificationPreferences,
   useUpdateNotificationPreferences,
@@ -32,21 +33,6 @@ const TITLE_OPTIONS = [
   { value: 'PI', label: 'PI (Principal Investigator)' },
   { value: 'Staff', label: 'Research Staff' },
   { value: 'Other', label: 'Other' },
-];
-
-// ─── Known scopes ─────────────────────────────────────────────────────────────
-
-const KNOWN_SCOPES = [
-  'read:projects',
-  'read:samples',
-  'read:experiments',
-  'read:artifacts',
-  'read:pages',
-  'read:events',
-  'write:projects',
-  'write:samples',
-  'write:experiments',
-  'write:artifacts',
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -162,6 +148,7 @@ function CreateTokenDialog({ onClose, onCreated }: CreateTokenDialogProps) {
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(new Set());
   const [expiresAt, setExpiresAt] = useState('');
   const createToken = useCreateToken();
+  const hasScopes = hasSelectedTokenScopes(selectedScopes);
 
   const toggleScope = (scope: string) => {
     setSelectedScopes(prev => {
@@ -173,7 +160,7 @@ function CreateTokenDialog({ onClose, onCreated }: CreateTokenDialogProps) {
   };
 
   const handleCreate = async () => {
-    if (!name.trim()) return;
+    if (!name.trim() || !hasScopes) return;
     const result = await createToken.mutateAsync({
       name: name.trim(),
       scopes: Array.from(selectedScopes),
@@ -204,7 +191,7 @@ function CreateTokenDialog({ onClose, onCreated }: CreateTokenDialogProps) {
           <div style={{ marginBottom: 16 }}>
             <FieldLabel>Scopes</FieldLabel>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {KNOWN_SCOPES.map(scope => (
+              {TOKEN_SCOPES.map(scope => (
                 <button
                   key={scope}
                   onClick={() => toggleScope(scope)}
@@ -215,9 +202,9 @@ function CreateTokenDialog({ onClose, onCreated }: CreateTokenDialogProps) {
                 </button>
               ))}
             </div>
-            {selectedScopes.size === 0 && (
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', marginTop: 6 }}>
-                No scopes selected — token will have no permissions.
+            {!hasScopes && (
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--bad)', marginTop: 6 }}>
+                Select at least one scope.
               </div>
             )}
           </div>
@@ -237,7 +224,7 @@ function CreateTokenDialog({ onClose, onCreated }: CreateTokenDialogProps) {
           <button
             className="top-btn primary"
             onClick={() => void handleCreate()}
-            disabled={!name.trim() || createToken.isPending}
+            disabled={!name.trim() || !hasScopes || createToken.isPending}
           >
             {createToken.isPending ? 'Creating…' : 'Create token'}
           </button>
@@ -630,9 +617,9 @@ export function SettingsPage() {
           <CalendarSection />
         </SectionCard>
 
-        <SectionCard title="AI Autonomy (Workspace)">
+        <SectionCard title="LLM Autonomy (Workspace)">
           <div style={{ marginBottom: 10, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-            These settings control how AI behaves across all projects in this workspace.
+            These settings control how LLM behaves across all projects in this workspace.
             Individual projects can use a more restrictive setting, but cannot exceed the workspace cap.
           </div>
           <WorkspaceAutonomyWrapper />

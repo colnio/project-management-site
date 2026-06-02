@@ -58,8 +58,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'experiments', label: 'Experiments' },
   { id: 'artifacts', label: 'Artifacts' },
   { id: 'pages', label: 'Notes / Pages' },
-  { id: 'workflows', label: 'AI Workflows' },
-  { id: 'ai', label: 'AI Settings' },
+  { id: 'workflows', label: 'LLM Workflows' },
+  { id: 'ai', label: 'LLM Settings' },
 ];
 
 function TabBar({ active, onChange, counts }: TabBarProps) {
@@ -326,10 +326,10 @@ function ProjectHeader({ projectId, onToggleAI }: ProjectHeaderProps) {
               className="top-btn primary"
               style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
               onClick={onToggleAI}
-              title="Toggle AI panel"
+              title="Toggle LLM panel"
             >
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff', opacity: 0.85, flexShrink: 0 }} />
-              AI
+              LLM
             </button>
           )}
         </div>
@@ -1287,7 +1287,7 @@ function ProjectDetailPageInner() {
           flexShrink: 0,
         }}
       />
-      Ask AI
+      Ask LLM
     </button>
   );
 
@@ -1376,7 +1376,7 @@ function ProjectDetailPageInner() {
                       color: 'var(--ink-2)',
                     }}
                   >
-                    Project AI Settings
+                    Project LLM Settings
                   </div>
                   <div style={{ padding: '20px 20px', background: 'var(--surface)' }}>
                     <ProjectAutonomySection

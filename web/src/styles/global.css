@@ -158,6 +158,8 @@ input, select, textarea { font-family: inherit; }
 
 /* ── Sidebar ── */
 .side { position: sticky; top: 0; height: 100vh; border-right: 1px solid var(--line); background: var(--paper); display: flex; flex-direction: column; overflow: hidden; }
+.side-resize { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: col-resize; z-index: 20; touch-action: none; }
+.side-resize:hover, .side-resize:active { background: var(--ember-soft); }
 .side-head { padding: 14px 14px 10px; display: flex; align-items: center; gap: 10px; position: relative; }
 .ws-badge { width: 28px; height: 28px; border-radius: 7px; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-family: var(--serif); font-size: 18px; line-height: 1; flex: 0 0 28px; }
 .ws-name { font-weight: 600; letter-spacing: -.005em; white-space: nowrap; }

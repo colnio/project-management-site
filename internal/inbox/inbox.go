@@ -1,6 +1,6 @@
 // Package inbox implements the workspace Inbox aggregation endpoint: a
 // read-only feed of actionable items from across the platform (flagged risks,
-// proposed AI actions, recent audit activity) scoped to a workspace.
+// proposed LLM actions, recent audit activity) scoped to a workspace.
 //
 // Data is fetched through the owning modules' public APIs (risk, ai, project) —
 // there is no inbox table and no cross-module SQL. Items are capped at 50 and
@@ -74,7 +74,7 @@ func (s *Service) AggregateForWorkspace(ctx context.Context, workspaceID uuid.UU
 	}
 	items = append(items, piItems...)
 
-	// Source 2: proposed AI tool calls (via conversations linked to workspace projects).
+	// Source 2: proposed LLM tool calls (via conversations linked to workspace projects).
 	aiItems, err := s.fetchAIProposals(ctx, workspaceID)
 	if err != nil {
 		s.log.Warn("inbox: fetch ai proposals failed", "workspace_id", workspaceID, "err", err)
@@ -133,7 +133,7 @@ func (s *Service) fetchPIFlags(ctx context.Context, workspaceID uuid.UUID) ([]It
 	return items, nil
 }
 
-// ─── Source: proposed AI tool calls ──────────────────────────────────────────
+// ─── Source: proposed LLM tool calls ─────────────────────────────────────────
 
 func (s *Service) fetchAIProposals(ctx context.Context, workspaceID uuid.UUID) ([]Item, error) {
 	proposals, err := s.ai.ListProposedToolCallsByWorkspace(ctx, workspaceID, inboxCap)
@@ -146,8 +146,8 @@ func (s *Service) fetchAIProposals(ctx context.Context, workspaceID uuid.UUID) (
 		items = append(items, Item{
 			ID:        tc.ID,
 			Kind:      "ai_proposal",
-			Title:     "AI Action Pending Approval: " + tc.Tool,
-			Body:      "An AI-generated action requires your review before it is executed.",
+			Title:     "LLM Action Pending Approval: " + tc.Tool,
+			Body:      "An LLM-generated action requires your review before it is executed.",
 			Link:      "/projects/" + tc.ProjectID.String(),
 			CreatedAt: tc.CreatedAt,
 		})

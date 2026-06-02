@@ -1,6 +1,6 @@
 // Package auth implements the Identity/Auth module (A1): user management,
 // local-password login, JWT access tokens, refresh sessions,
-// personal access tokens (PATs), and internal AI tokens.
+// personal access tokens (PATs), and internal LLM tokens.
 package auth
 
 import (

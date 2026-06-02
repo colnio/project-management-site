@@ -46,7 +46,7 @@ var defaultEnabled = map[string]bool{
 func AllPreferenceCategories() []prefDef {
 	return []prefDef{
 		{Key: CategoryPIFlag, Label: "PI review flags", Description: "Notify when a risk is flagged for PI review"},
-		{Key: CategoryAIProposal, Label: "AI proposals", Description: "Notify when an AI action awaits approval"},
+		{Key: CategoryAIProposal, Label: "LLM proposals", Description: "Notify when an LLM action awaits approval"},
 		{Key: CategoryApproval, Label: "Approval requests", Description: "Notify when you are asked to approve a risk assessment"},
 		{Key: CategoryMention, Label: "Mentions", Description: "Notify when you are mentioned"},
 		{Key: CategoryMeeting, Label: "Meeting reminders", Description: "Notify before scheduled meetings"},

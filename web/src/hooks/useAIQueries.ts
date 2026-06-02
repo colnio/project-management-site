@@ -83,6 +83,7 @@ export interface AIRun {
   id: string;
   workflow_key: string;
   status: 'running' | 'completed' | 'failed';
+  error?: string;
   output?: WorkflowOutput;
   result_page_id?: string;
   step_results?: Record<string, unknown>;
@@ -253,16 +254,19 @@ export function useRunWorkflow() {
       project_id,
       sample_id,
       experiment_id,
+      iteration_id,
     }: {
       key: string;
       project_id: string;
       sample_id?: string;
       experiment_id?: string;
+      iteration_id?: string;
     }) =>
       api.post<AIRun>(`/v1/ai/workflows/${key}/run`, {
         project_id,
         sample_id,
         experiment_id,
+        iteration_id,
       }),
   });
 }

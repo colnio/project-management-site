@@ -14,6 +14,12 @@ import { Link } from '@tanstack/react-router';
 import type { Project } from '@/api/types';
 import type { InboxItem } from '@/hooks/useWorkspaceQueries';
 import { safeAppPath } from '@/lib/safeAppPath';
+import { ApiError } from '@/api/client';
+
+/** Returns true when the react-query error is an HTTP 403 Forbidden. */
+function isForbidden(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -182,7 +188,7 @@ function ProjectGrid({ workspaceId }: { workspaceId: string }) {
 // ─── Risk / PI-flag panel ─────────────────────────────────────────────────────
 
 function RiskApprovalPanel({ workspaceId }: { workspaceId: string }) {
-  const { data: inbox = [], isLoading, isError } = useInbox(workspaceId);
+  const { data: inbox = [], isLoading, isError, error } = useInbox(workspaceId);
 
   const piFlags = inbox.filter((item: InboxItem) => item.kind === 'pi_flag');
 
@@ -195,6 +201,11 @@ function RiskApprovalPanel({ workspaceId }: { workspaceId: string }) {
   }
 
   if (isError) {
+    if (isForbidden(error)) {
+      return (
+        <EmptyState message="Join a workspace to see your inbox." />
+      );
+    }
     return (
       <div style={{ padding: '10px 0', fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--muted-2)' }}>
         Could not load inbox.
@@ -308,7 +319,7 @@ const KIND_COLOR: Record<string, string> = {
 };
 
 function ActivityFeed({ workspaceId }: { workspaceId: string }) {
-  const { data: inbox = [], isLoading, isError } = useInbox(workspaceId);
+  const { data: inbox = [], isLoading, isError, error } = useInbox(workspaceId);
 
   // Show non-pi_flag items as activity
   const feedItems = inbox
@@ -324,6 +335,11 @@ function ActivityFeed({ workspaceId }: { workspaceId: string }) {
   }
 
   if (isError) {
+    if (isForbidden(error)) {
+      return (
+        <EmptyState message="No lab activity yet." />
+      );
+    }
     return (
       <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--muted-2)', padding: '10px 0' }}>
         Activity feed unavailable.
@@ -534,6 +550,31 @@ function WorkspaceChip() {
   );
 }
 
+// ─── Workspace row (label + chip, hidden when user has no workspace) ──────────
+
+function WorkspaceRow() {
+  const { workspaceId } = useCurrentWorkspace();
+  const { data: workspaces = [] } = useWorkspaces();
+  const hasWorkspace = workspaces.length > 0 && !!workspaceId;
+
+  if (!hasWorkspace) {
+    return (
+      <div style={{ marginTop: 6, fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--muted-2)' }}>
+        Join or create a workspace to get started.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+      <div style={{ color: 'var(--muted)', fontSize: 13.5 }}>
+        Workspace:
+      </div>
+      <WorkspaceChip />
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function HomePage() {
@@ -580,12 +621,7 @@ export function HomePage() {
               {user?.display_name?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'researcher'}.
             </em>
           </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-            <div style={{ color: 'var(--muted)', fontSize: 13.5 }}>
-              Workspace:
-            </div>
-            <WorkspaceChip />
-          </div>
+          <WorkspaceRow />
         </div>
 
         {/* ── Project grid ─────────────────────────────────────────────── */}

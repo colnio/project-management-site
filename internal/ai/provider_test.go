@@ -99,6 +99,55 @@ func TestLoadProvider_OpenRouter(t *testing.T) {
 	}
 }
 
+func TestLoadProvider_DeepInfra(t *testing.T) {
+	// Capitalized provider key — the generic loader resolves it case-sensitively
+	// without any hard-coded provider list.
+	conf := map[string]any{
+		"active": "DeepInfra",
+		"DeepInfra": map[string]any{
+			"model":    "deepseek-ai/DeepSeek-V4-Flash",
+			"token":    "di-test",
+			"api_base": "https://api.deepinfra.com/v1/openai",
+		},
+	}
+	data, _ := json.Marshal(conf)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "aiconf.json")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AICONF_PATH", path)
+
+	p, err := LoadProvider()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p == nil || p.Model != "deepseek-ai/DeepSeek-V4-Flash" {
+		t.Fatalf("unexpected provider: %+v", p)
+	}
+	if p.APIBase != "https://api.deepinfra.com/v1/openai" {
+		t.Errorf("api_base = %q", p.APIBase)
+	}
+}
+
+func TestLoadProvider_MissingActive(t *testing.T) {
+	// No "active" key → configuration error (not silent disable).
+	conf := map[string]any{
+		"ollama": map[string]any{"model": "m", "api_base": "http://x/v1"},
+	}
+	data, _ := json.Marshal(conf)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "aiconf.json")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AICONF_PATH", path)
+
+	if _, err := LoadProvider(); err == nil {
+		t.Fatal("expected error when 'active' is missing")
+	}
+}
+
 func TestLoadProvider_Ollama(t *testing.T) {
 	conf := map[string]any{
 		"active": "ollama",

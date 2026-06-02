@@ -333,12 +333,12 @@ func (s *Service) listPATs(ctx context.Context, userID uuid.UUID) ([]PATInfo, er
 	return out, rows.Err()
 }
 
-// ─── Internal AI Tokens ──────────────────────────────────────────────────────
+// ─── Internal LLM Tokens ─────────────────────────────────────────────────────
 
 const internalAIPrefix = "iai_"
 const internalAITTL = 15 * time.Minute
 
-// MintInternalAIToken creates a short-lived token for an AI conversation/run.
+// MintInternalAIToken creates a short-lived token for an LLM conversation/run.
 func (s *Service) MintInternalAIToken(ctx context.Context, userID, convOrRunID uuid.UUID, scopes []string, perms json.RawMessage) (rawToken string, err error) {
 	raw, e := randomBase64url(32)
 	if e != nil {
@@ -361,7 +361,7 @@ func (s *Service) MintInternalAIToken(ctx context.Context, userID, convOrRunID u
 		userID, convOrRunID, hash, prefix, scopes, []byte(perms), expiresAt,
 	)
 	if err != nil {
-		return "", fmt.Errorf("auth: mint internal AI token: %w", err)
+		return "", fmt.Errorf("auth: mint internal LLM token: %w", err)
 	}
 	return rawToken, nil
 }
@@ -394,7 +394,7 @@ func (s *Service) VerifyInternalAIToken(ctx context.Context, raw string) (*platf
 		return nil, platform.Unauthorized("token not found")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("auth: internal AI token lookup: %w", err)
+		return nil, fmt.Errorf("auth: internal LLM token lookup: %w", err)
 	}
 	if !hashMatches(storedHash, hash) {
 		return nil, platform.Unauthorized("invalid token")

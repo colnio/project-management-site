@@ -3,7 +3,7 @@
 A web application for a physics / materials science / energy-storage research lab
 to manage **projects, iterations, physical samples, experiments, and artifacts**
 (PDFs, Jupyter notebooks, images), with a first-class **Risk Register**, an
-always-on **AI assistant** (streaming chat + risk-assessment workflows), an
+always-on **LLM assistant** (streaming chat + risk-assessment workflows), an
 agent-friendly REST API, calendar `.ics` subscriptions, and workspace-level
 **Inbox / People / Meetings / Admin / Templates** surfaces.
 
@@ -12,7 +12,8 @@ SSO, OpenRouter, web search) has a local stand-in that speaks the same protocol,
 so application code is written once and only configuration changes at deploy.
 See [`docs/techSpec.md`](docs/techSpec.md) for the production design,
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for the local build guide,
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the as-built system, and
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the as-built system,
+[`docs/DEPLOY_ARCHITECTURE.md`](docs/DEPLOY_ARCHITECTURE.md) for deployment topologies and the config reference, and
 [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for usage. Security findings from the
 2026-05-29 review (all remediated) are in
 [`docs/SECURITY_FINDINGS_2026-05-29.md`](docs/SECURITY_FINDINGS_2026-05-29.md)
@@ -25,8 +26,8 @@ conventions live in [`AGENTS.md`](AGENTS.md).
 
 **All tracks A–G are implemented.** The platform is feature-complete per the v1
 spec: research data backend, agent-friendly REST + MCP, calendar, artifact
-processing, the full SPA, and the AI assistant (streaming chat with tool-calling
-+ risk-assessment workflows). The AI provider is configured via `aiconf.local.json`.
+processing, the full SPA, and the LLM assistant (streaming chat with tool-calling
++ risk-assessment workflows). The LLM provider is configured via `aiconf.local.json`.
 
 | Track | Scope | State |
 |---|---|---|
@@ -46,24 +47,24 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 | D1–D3 | Artifact workers: PDF page count, ipynb render, image thumbnails (River) | ✅ done |
 | E1–E2 | Calendar events + signed `.ics` feed | ✅ done |
 | E3–E4 | In-app calendar (FullCalendar) + custom Gantt timeline UI | ✅ done |
-| F1 | PAT settings UI + calendar subscription | ✅ done |
+| F1 | PAT settings UI + calendar subscription (full backend scope taxonomy mirrored in the token dialog; empty scope selections rejected) | ✅ done |
 | F2 | OpenAPI descriptions + examples | ✅ done |
 | F3 | MCP server (in-binary SSE at `/mcp`, PAT auth) | ✅ done |
 | F4 | `/llms.txt` generated from OpenAPI | ✅ done |
-| G1, G2, G5 | AI chat backend: orchestrator (OpenAI-compatible client), tool gating by autonomy, conversation store + metering; project/workspace context injected into system prompt; `list_projects` tool; `draft_page` block fix | ✅ done |
+| G1, G2, G5 | LLM chat backend: orchestrator (OpenAI-compatible client), tool gating by autonomy, conversation store + metering; project/workspace context injected into system prompt; `list_projects` tool; `draft_page` block fix | ✅ done |
 | G3, G4 | Risk-workflow engine + library (battery/experimental/project) | ✅ done |
-| G6, G7, G8 | AI chat UI (streaming), workflow runner UI, autonomy config UI | ✅ done |
-| H1 | **Risk Register**: first-class `risk` module (likelihood/impact/mitigation/Plan B, PI-review flag, per-project seq); AI workflows upsert AI-sourced risks; register UI on Overview + iterations | ✅ done |
+| G6, G7, G8 | LLM chat UI (streaming), workflow runner UI, autonomy config UI | ✅ done |
+| H1 | **Risk Register**: first-class `risk` module (likelihood/impact/mitigation/Plan B, PI-review flag, per-project seq); LLM workflows upsert LLM-sourced risks; register UI on Overview + iterations | ✅ done |
 | H2 | **Workspace surfaces**: `meeting` + `inbox` modules; Inbox, People directory, Meetings (list+detail), Workspace Admin, Templates (workflow library + definition pages) | ✅ done |
 | H2b | **Email notifications** (`notify`): River-backed outbox, server-side prefs, transactional pings (invite/approval/PI flag/account), daily digest, admin broadcast | ✅ done |
-| H3 | **UX layer**: docked Cursor-style AI panel (citations + spend-cap meter), Tweaks panel (3 Overview layouts, dark mode, density, accent), rich entity pages with `ArtImage/ArtPDF/ArtNotebook` embeds + `@`-mention reference blocks, human-readable `EX-N` experiment codes, new-project/new-iteration wizards with a HIGH-risk activation gate | ✅ done |
+| H3 | **UX layer**: docked Cursor-style LLM panel (citations + spend-cap meter), Tweaks panel (3 Overview layouts, dark mode, density, accent), rich entity pages with `ArtImage/ArtPDF/ArtNotebook` embeds + `@`-mention reference blocks, human-readable `EX-N` experiment codes, new-project/new-iteration wizards with a HIGH-risk activation gate | ✅ done |
 
 > **Page editor (BlockNote):** the rich editor mounts and is fully editable. The
 > earlier `render2 is not a function` crash was an `@mantine/core` v9 (React 19)
 > vs the app's React 18 mismatch — pinned to `@mantine/core`/`@mantine/hooks` v8
 > with `@blocknote/* 0.51.3` and `@tiptap/* 3.13.0` (override in
 > `web/pnpm-workspace.yaml`). An `EditorBoundary` remains as a safety net, and a
-> block-normalizer renders pages authored via the API (seed data, the AI
+> block-normalizer renders pages authored via the API (seed data, the LLM
 > `draft_page` tool) that use the simplified `{type,text}` shape. The editor uses
 > a custom schema with `sampleRef`/`experimentRef`/`artifactRef` card-embed blocks
 > and `imageEmbed`/`pdfEmbed`/`htmlEmbed` attachment blocks (HTML renders in a
@@ -73,7 +74,7 @@ processing, the full SPA, and the AI assistant (streaming chat with tool-calling
 > history) and `EntityPageEditor` (load-or-create a page seeded with an Overview
 > heading, an embedded `entityDashboard` block, and a Notes section).
 
-> **AI provider:** the orchestrator reads `aiconf.local.json` (gitignored) for an
+> **LLM provider:** the orchestrator reads `aiconf.local.json` (gitignored) for an
 > OpenAI-compatible endpoint. Currently a LiteLLM proxy with `gpt-4.1-mini`;
 > verified end-to-end (streaming chat + tool-calling + token metering). The client
 > is contained to `internal/ai/` so swapping providers (OpenRouter, Ollama) is a
@@ -86,9 +87,9 @@ projects, iterations, samples (+lineage), experiments, artifacts (gallery +
 viewers), the BlockNote page editor (reference/embed blocks, `@`-mentions,
 auto-save, conflict UI, history/restore, presence), the calendar/Gantt views, and
 settings. **Tracks A–G are complete** (agentic-chat orchestrator G1/G2/G5,
-risk-workflow engine G3/G4, AI frontend G6/G7/G8), and the **design-parity UX
+risk-workflow engine G3/G4, LLM frontend G6/G7/G8), and the **design-parity UX
 layer (H1–H3)** adds the Risk Register, the workspace-level surfaces
-(Inbox/People/Meetings/Admin/Templates), the docked AI panel with a spend-cap
+(Inbox/People/Meetings/Admin/Templates), the docked LLM panel with a spend-cap
 meter, the Tweaks/theme system (dark mode, density, accent, three Overview
 layouts), rich entity pages with inline embeds, and the creation wizards.
 
@@ -96,7 +97,7 @@ Recent additions: every entity page (project, iteration, experiment, sample) is
 now a live **BlockNote document** (`EntityPageEditor`) with the entity dashboard
 embedded as a non-editable block and editable prose sections above and below;
 `imageEmbed`/`pdfEmbed`/`htmlEmbed` blocks upload via the artifact handshake and
-render inline; a **Notes dropdown** in the sidebar lists a project's pages; the AI
+render inline; a **Notes dropdown** in the sidebar lists a project's pages; the LLM
 assistant receives a **project-scoped system prompt** (project_id + name +
 workspace_id + date) and a new `list_projects` tool; and a
 `GET /v1/projects/{id}/pages` endpoint backs the Notes dropdown and Pages tab.
@@ -130,6 +131,22 @@ Open <http://localhost:5173> and log in with `dev@graphene-lab.org` / `devpasswo
 Mailpit UI: <http://localhost:8025>. MinIO console: <http://localhost:9001>.
 OpenAPI: <http://localhost:8080/openapi.json>, docs at `/docs`.
 
+### Local integration seed helper
+
+For PAT + MCP smoke runs against the local stack, use:
+
+```bash
+./scripts/seed_api_mcp_integration.sh
+```
+
+The script prompts for a `pat_...` token if `LAB_PM_PAT` is unset, creates or
+reuses the seeded customer-zero project in `Graphene Lab`, uploads notebook
+artifacts, waits for their rendered previews, wires slot pages, and by default runs a live MCP readback check
+against `http://127.0.0.1:8080/mcp/sse`. It writes a reusable summary JSON to
+`/private/tmp/api-mcp-integration-summary.json`. If your local stack uses a
+different workspace name, set `WORKSPACE_NAME="..."` or pass
+`--workspace-name ...` when invoking the script.
+
 ### Tests
 
 ```bash
@@ -150,7 +167,7 @@ internal/
   platform/         huma setup, error envelope, auth/rate-limit/idempotency
                     middleware, ETag helpers, request Principal
   audit/            append-only AuditLog (Recorder interface used everywhere)
-  auth/             OIDC, JWT+refresh, local password, PAT, internal-AI token
+  auth/             OIDC, JWT+refresh, local password, PAT, internal-LLM token
   org/              workspaces, memberships, invites, ResolveAccess()
   project/          B1 — projects, visibility, collaborators, Authorize()
   iteration/        B2 — iterations + IterationSample
@@ -162,15 +179,16 @@ internal/
   ai/               G — OpenAI-compatible chat orchestrator, tool gating by
                     autonomy, risk-workflow engine, conversation store + metering
   risk/             H1 — first-class Risk Register (likelihood/impact/mitigation/
-                    Plan B, PI-review flag); AI workflows upsert AI-sourced risks
+                    Plan B, PI-review flag); LLM workflows upsert LLM-sourced risks
   meeting/          H2 — workspace/project meetings (agenda, decisions, action items)
-  inbox/            H2 — workspace inbox aggregation (PI flags, AI proposals, audit)
+  inbox/            H2 — workspace inbox aggregation (PI flags, LLM proposals, audit)
   mcp/              F — MCP server (SSE at /mcp) + /llms.txt generator
   jobs/             River migration helper (Postgres-backed background jobs)
   testsupport/      real-Postgres test pool (isolated DB per TEST_DATABASE_URL)
 migrations/         goose *.sql (embedded; run on boot)
 web/                React SPA (Vite + TanStack Router/Query)
 deploy/             docker-compose.dev.yml, nbconvert sidecar, searxng config
+scripts/            local helpers (`dev-local.sh`, API/MCP seed smoke script)
 docs/               techSpec, DEVELOPMENT, ARCHITECTURE, USER_GUIDE
 ```
 
@@ -185,6 +203,6 @@ packages with isolated table ownership. Modules never read each other's tables �
 cross-module access goes through the owning package's Go API (e.g. every domain
 module authorizes through `project.Authorize` → `org.ResolveAccess`). The HTTP
 contract is OpenAPI 3.1, auto-generated by huma; the frontend and external agents
-consume the same spec. The in-app AI assistant calls the same public REST API as
+consume the same spec. The in-app LLM assistant calls the same public REST API as
 external agents, authenticating with a short-lived internal token. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).

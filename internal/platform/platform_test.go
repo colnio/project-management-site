@@ -111,7 +111,7 @@ func TestRequireScope_ScopedToken_Forbidden(t *testing.T) {
 	}
 }
 
-// TestHasScope_AICallerEnforced verifies that an internal-AI caller
+// TestHasScope_AICallerEnforced verifies that an internal-LLM caller
 // (ViaAIConversationID set) with a non-empty scope list is enforced.
 func TestHasScope_AICallerEnforced(t *testing.T) {
 	convID := uuid.New()
@@ -122,10 +122,10 @@ func TestHasScope_AICallerEnforced(t *testing.T) {
 	}
 
 	if !p.HasScope(platform.ScopeReadSamples) {
-		t.Error("AI caller: HasScope('read:samples') should be true")
+		t.Error("LLM caller: HasScope('read:samples') should be true")
 	}
 	if p.HasScope(platform.ScopeWriteProjects) {
-		t.Error("AI caller: HasScope('write:projects') should be false — scope not in list")
+		t.Error("LLM caller: HasScope('write:projects') should be false — scope not in list")
 	}
 }
 

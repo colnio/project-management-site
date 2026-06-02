@@ -18,8 +18,8 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 		OperationID: "ai-list-workflows",
 		Method:      http.MethodGet,
 		Path:        "/v1/ai/workflows",
-		Summary:     "List available AI risk-assessment workflows",
-		Tags:        []string{"AI"},
+		Summary:     "List available LLM risk-assessment workflows",
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, _ *struct{}) (*workflowListOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -50,7 +50,7 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 		Method:      http.MethodPost,
 		Path:        "/v1/ai/workflows/{key}/run",
 		Summary:     "Run a risk-assessment workflow synchronously",
-		Tags:        []string{"AI"},
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *runWorkflowInput) (*workflowRunOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -81,6 +81,13 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 			}
 			target.ExperimentID = &eid
 		}
+		if input.Body.IterationID != "" {
+			iid, err := uuid.Parse(input.Body.IterationID)
+			if err != nil {
+				return nil, platform.BadRequest("invalid_iteration_id", "invalid iteration id")
+			}
+			target.IterationID = &iid
+		}
 
 		run, err := svc.RunWorkflow(ctx, p, input.Key, target)
 		if err != nil {
@@ -95,7 +102,7 @@ func RegisterWorkflows(api huma.API, svc *Service, workflows map[string]*Workflo
 		Method:      http.MethodGet,
 		Path:        "/v1/ai/runs/{id}",
 		Summary:     "Get a workflow run by ID",
-		Tags:        []string{"AI"},
+		Tags:        []string{"LLM"},
 	}, func(ctx context.Context, input *getRunInput) (*workflowRunOutput, error) {
 		p, ok := platform.PrincipalFrom(ctx)
 		if !ok {
@@ -143,6 +150,7 @@ type runWorkflowInput struct {
 		ProjectID    string `json:"project_id" required:"true"`
 		SampleID     string `json:"sample_id,omitempty"`
 		ExperimentID string `json:"experiment_id,omitempty"`
+		IterationID  string `json:"iteration_id,omitempty"`
 	}
 }
 

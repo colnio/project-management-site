@@ -3,7 +3,7 @@
 // that references a deduplicated blob (page_blobs). ETags are based on the
 // current revision ID to support optimistic concurrency via If-Match.
 //
-// AI-source revisions are inert plumbing in this module — no LLM calls are
+// LLM-source revisions are inert plumbing in this module — no LLM calls are
 // made here. The ai_tool_call_id / ViaAIConversationID fields are stored and
 // returned verbatim.
 package page

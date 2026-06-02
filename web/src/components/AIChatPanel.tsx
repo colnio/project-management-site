@@ -4,6 +4,8 @@
  * being covered. Backdrop removed. Close button collapses.
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useConversations,
@@ -21,6 +23,8 @@ import type { SSEEvent } from '@/api/sseParser';
 import { ApiError, apiFetchRaw } from '@/api/client';
 
 const PANEL_WIDTH = 380;
+const PANEL_MIN_WIDTH = 320;
+const PANEL_MAX_WIDTH = 720;
 
 // ─── Types for streaming state ────────────────────────────────────────────────
 
@@ -66,6 +70,63 @@ function formatToolResult(result: unknown): string {
 
 function isProposedToolCall(tc: AIToolCall | StreamingToolCall): boolean {
   return tc.status === 'proposed';
+}
+
+// Pretty-print a tool-result payload (string or JSON) for the expanded view.
+function formatResultBody(content: string): string {
+  const trimmed = content.trim();
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return trimmed;
+  }
+}
+
+// ─── Markdown renderer ────────────────────────────────────────────────────────
+
+// Assistant messages arrive as markdown (headings, lists, tables, code). Render
+// them with GFM support; scoped `.md` styles keep it readable in the narrow rail.
+function Markdown({ text }: { text: string }) {
+  return (
+    <div className="md">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
+// ─── Tool-result message (collapsed) ──────────────────────────────────────────
+
+// Persisted 'tool' role messages hold a raw result payload. Render them as a
+// compact, collapsed-by-default disclosure so the conversation stays readable.
+function ToolResultMessage({ msg }: { msg: AIMessage }) {
+  const [expanded, setExpanded] = useState(false);
+  const label = msg.name ? `${msg.name} result` : 'tool result';
+  return (
+    <div style={{ width: '100%', maxWidth: '88%', margin: '0 0 8px' }}>
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+          fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--muted-2)',
+          padding: '2px 6px', border: '1px solid var(--line)', borderRadius: 6,
+          background: 'var(--paper-2)',
+        }}
+      >
+        <span>{expanded ? '▾' : '▸'}</span>
+        <span>{label}</span>
+      </div>
+      {expanded && (
+        <pre style={{
+          margin: '4px 0 0', padding: '8px 10px', background: 'var(--paper-2)',
+          border: '1px solid var(--line)', borderRadius: 6, fontSize: 11,
+          fontFamily: 'var(--mono)', color: 'var(--muted)', whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word', maxHeight: 220, overflow: 'auto',
+        }}>
+          {formatResultBody(msg.content)}
+        </pre>
+      )}
+    </div>
+  );
 }
 
 // ─── Tool-call card ───────────────────────────────────────────────────────────
@@ -156,23 +217,30 @@ function CitationChips({ toolCalls }: CitationChipsProps) {
 interface MessageBubbleProps { msg: AIMessage; convId: string; }
 
 function MessageBubble({ msg, convId }: MessageBubbleProps) {
+  // Tool-result messages render as a collapsed disclosure, not a chat bubble.
+  if (msg.role === 'tool') return <ToolResultMessage msg={msg} />;
+
   const isUser = msg.role === 'user';
   const isAssistant = msg.role === 'assistant';
+  const hasContent = msg.content.trim().length > 0;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
       <div style={{ fontSize: 10.5, fontFamily: 'var(--mono)', color: 'var(--muted-2)', marginBottom: 3, textAlign: isUser ? 'right' : 'left' }}>
         {isUser ? 'you' : 'assistant'}{' · '}
         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
-      <div style={{
-        maxWidth: '88%', padding: '8px 12px',
-        borderRadius: isUser ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
-        background: isUser ? 'var(--ink)' : 'var(--paper-2)',
-        color: isUser ? 'var(--paper)' : 'var(--ink)',
-        fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-      }}>
-        {msg.content}
-      </div>
+      {hasContent && (
+        <div style={{
+          maxWidth: '88%', padding: '8px 12px',
+          borderRadius: isUser ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
+          background: isUser ? 'var(--ink)' : 'var(--paper-2)',
+          color: isUser ? 'var(--paper)' : 'var(--ink)',
+          fontSize: 13, lineHeight: 1.55, wordBreak: 'break-word',
+          ...(isUser ? { whiteSpace: 'pre-wrap' } : {}),
+        }}>
+          {isUser ? msg.content : <Markdown text={msg.content} />}
+        </div>
+      )}
       {isAssistant && msg.tool_calls && msg.tool_calls.length > 0 && (
         <div style={{ marginTop: 4, width: '100%', maxWidth: '88%' }}>
           {msg.tool_calls.map(tc => <ToolCallCard key={tc.id} tc={tc} convId={convId} />)}
@@ -199,8 +267,8 @@ function StreamingBubble({ msg, convId }: StreamingBubbleProps) {
         </div>
       ))}
       {msg.content && (
-        <div style={{ maxWidth: '88%', padding: '8px 12px', borderRadius: '10px 10px 10px 2px', background: 'var(--paper-2)', color: 'var(--ink)', fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {msg.content}
+        <div style={{ maxWidth: '88%', padding: '8px 12px', borderRadius: '10px 10px 10px 2px', background: 'var(--paper-2)', color: 'var(--ink)', fontSize: 13, lineHeight: 1.55, wordBreak: 'break-word' }}>
+          <Markdown text={msg.content} />
           <span style={{ display: 'inline-block', width: 8, height: 14, background: 'var(--ember)', marginLeft: 2, borderRadius: 1, verticalAlign: 'text-bottom', animation: 'blink 1s step-start infinite' }} />
         </div>
       )}
@@ -327,7 +395,17 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Stick-to-bottom: only auto-scroll while the user is already near the bottom,
+  // so scrolling up to read during streaming isn't yanked back down.
+  const stickToBottomRef = useRef(true);
+
+  // User-resizable panel width, persisted across sessions.
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('ai-panel-w'));
+    return saved >= PANEL_MIN_WIDTH && saved <= PANEL_MAX_WIDTH ? saved : PANEL_WIDTH;
+  });
 
   // Guard: auto-send the seed message exactly once after the seeded conversation
   // is selected. A ref prevents re-firing on re-renders.
@@ -335,11 +413,33 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
 
   // Set/clear --ai-w on <html> so the main content area shifts.
   useEffect(() => {
-    document.documentElement.style.setProperty('--ai-w', `${PANEL_WIDTH}px`);
+    document.documentElement.style.setProperty('--ai-w', `${panelWidth}px`);
     return () => {
       document.documentElement.style.setProperty('--ai-w', '0px');
     };
-  }, []);
+  }, [panelWidth]);
+
+  // Drag the panel's left edge to resize. Dragging left widens the panel.
+  const handlePanelResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panelWidth;
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, startW - (ev.clientX - startX)));
+      setPanelWidth(w);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setPanelWidth(w => { localStorage.setItem('ai-panel-w', String(w)); return w; });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [panelWidth]);
 
   useEffect(() => {
     if (convLoading) return;
@@ -370,9 +470,23 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     }
   }, [conversations, convLoading, createConv, seed]);
 
+  // Auto-scroll only when the user is already near the bottom. While streaming,
+  // if they scroll up to read, stickToBottomRef goes false and we leave them be.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (stickToBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    }
   }, [messages, streaming]);
+
+  // Track whether the message list is scrolled near the bottom.
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+
+  // A freshly selected conversation should start pinned to the bottom.
+  useEffect(() => { stickToBottomRef.current = true; }, [selectedConvId]);
 
   // Auto-send the seed kickoff message exactly once after the seeded conversation
   // is selected and the message list has loaded empty (freshly created conv).
@@ -401,6 +515,8 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     const content = (overrideContent ?? draft).trim();
     if (!content || !selectedConvId || sending) return;
 
+    // Sending a new message pins back to the bottom for this turn.
+    stickToBottomRef.current = true;
     if (!overrideContent) setDraft('');
     setSendError(null);
     setSending(true);
@@ -467,17 +583,37 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     <>
       <style>{`
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-        .ai-panel { position: fixed; top: 0; right: 0; bottom: 0; width: ${PANEL_WIDTH}px; max-width: 90vw; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; z-index: 100; box-shadow: -4px 0 24px rgba(20,18,14,0.10); }
+        .ai-panel { position: fixed; top: 0; right: 0; bottom: 0; max-width: 90vw; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; z-index: 100; box-shadow: -4px 0 24px rgba(20,18,14,0.10); }
+        .ai-resize { position: absolute; top: 0; left: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 110; touch-action: none; }
+        .ai-resize:hover, .ai-resize:active { background: var(--ember-soft); }
         .ai-panel-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; background: var(--paper); flex-shrink: 0; }
         .ai-orb { width: 10px; height: 10px; border-radius: 50%; background: var(--ember); flex-shrink: 0; }
         .ai-messages { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; }
         .ai-composer { border-top: 1px solid var(--line); padding: 10px 12px; background: var(--paper); flex-shrink: 0; }
+        .md > *:first-child { margin-top: 0; }
+        .md > *:last-child { margin-bottom: 0; }
+        .md p { margin: 0 0 8px; }
+        .md h1, .md h2, .md h3, .md h4 { margin: 12px 0 6px; line-height: 1.3; font-weight: 650; }
+        .md h1 { font-size: 16px; } .md h2 { font-size: 14.5px; } .md h3 { font-size: 13.5px; } .md h4 { font-size: 13px; }
+        .md ul, .md ol { margin: 0 0 8px; padding-left: 18px; }
+        .md li { margin: 2px 0; }
+        .md li > p { margin: 0; }
+        .md a { color: var(--ember); text-decoration: underline; }
+        .md code { font-family: var(--mono); font-size: 11.5px; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+        .md pre { margin: 0 0 8px; padding: 8px 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+        .md pre code { background: none; border: 0; padding: 0; font-size: 11.5px; }
+        .md blockquote { margin: 0 0 8px; padding: 2px 0 2px 10px; border-left: 3px solid var(--line); color: var(--muted); }
+        .md table { border-collapse: collapse; margin: 0 0 8px; display: block; overflow-x: auto; font-size: 12px; }
+        .md th, .md td { border: 1px solid var(--line); padding: 3px 7px; text-align: left; vertical-align: top; }
+        .md th { background: var(--paper); font-weight: 600; }
+        .md hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
       `}</style>
 
-      <aside className="ai-panel">
+      <aside className="ai-panel" style={{ width: panelWidth }}>
+        <div className="ai-resize" onPointerDown={handlePanelResize} title="Drag to resize" />
         <div className="ai-panel-head">
           <div className="ai-orb" />
-          <div style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>AI Assistant</div>
+          <div style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>LLM Assistant</div>
           <button className="icon-btn" onClick={onClose} style={{ fontSize: 16 }}>✕</button>
         </div>
 
@@ -486,7 +622,7 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
 
         {aiUnavailable && (
           <div style={{ padding: '10px 14px', background: 'var(--pill-blocked-bg)', color: 'var(--bad)', borderBottom: '1px solid var(--pill-blocked-bd)', fontSize: 12.5, fontFamily: 'var(--mono)' }}>
-            AI is not configured. Contact your workspace admin.
+            LLM is not configured. Contact your workspace admin.
           </div>
         )}
 
@@ -499,7 +635,7 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
           creating={createConv.isPending}
         />
 
-        <div className="ai-messages">
+        <div className="ai-messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
           {msgsLoading && <div style={{ color: 'var(--muted)', fontSize: 12, textAlign: 'center', padding: 20 }}>Loading…</div>}
           {!msgsLoading && messages.length === 0 && !streaming && (
             <div style={{ color: 'var(--muted)', fontSize: 12.5, textAlign: 'center', padding: 32 }}>

@@ -9,7 +9,7 @@ import (
 )
 
 // RateLimiter applies a per-token sliding-window limit. Only token-based
-// callers (PAT / internal AI) are limited; first-party browser sessions are
+// callers (PAT / internal LLM) are limited; first-party browser sessions are
 // not. When constructed with a Postgres pool, counters survive restarts and
 // are shared across replicas.
 type RateLimiter struct {

@@ -185,6 +185,7 @@ func (s *Service) handleListArtifacts(ctx context.Context, in *listArtifactsInpu
 	if list == nil {
 		list = []*Artifact{}
 	}
+	s.SignOriginalURLs(ctx, list)
 	return &listArtifactsOutput{Body: list}, nil
 }
 
@@ -221,6 +222,7 @@ func (s *Service) handleGetArtifact(ctx context.Context, in *getArtifactInput) (
 		return nil, err
 	}
 
+	s.SignOriginalURL(ctx, art)
 	return &getArtifactOutput{Body: art}, nil
 }
 
@@ -254,6 +256,7 @@ func (s *Service) handleCompleteArtifact(ctx context.Context, in *completeArtifa
 		return nil, err
 	}
 
+	s.SignOriginalURL(ctx, art)
 	return &completeArtifactOutput{Body: art}, nil
 }
 
@@ -356,6 +359,7 @@ func (s *Service) handleListSampleArtifacts(ctx context.Context, in *listSampleA
 	if list == nil {
 		list = []*Artifact{}
 	}
+	s.SignOriginalURLs(ctx, list)
 	return &listSampleArtifactsOutput{Body: list}, nil
 }
 
@@ -427,5 +431,6 @@ func (s *Service) handleListExperimentArtifacts(ctx context.Context, in *listExp
 	if list == nil {
 		list = []*Artifact{}
 	}
+	s.SignOriginalURLs(ctx, list)
 	return &listExperimentArtifactsOutput{Body: list}, nil
 }

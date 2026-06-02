@@ -1,5 +1,5 @@
 // Package approval implements the Approval module: project-scoped approval
-// requests that capture a description, an AI review summary, a set of
+// requests that capture a description, an LLM review summary, a set of
 // recipient snapshots, and a binary approve/reject decision.
 //
 // Authorization rules:

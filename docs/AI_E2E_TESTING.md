@@ -1,14 +1,14 @@
-# AI Workflows — End-to-End Testing Report
+# LLM Workflows — End-to-End Testing Report
 
 _Date: 2026-05-31 · Branch: `ai-workflow-e2e-testing` · Tester: Claude (Opus 4.8)_
 
-This report documents an end-to-end shakeout of every AI feature in the platform against a
+This report documents an end-to-end shakeout of every LLM feature in the platform against a
 **real local model**, the prompt-engineering done to push risk-assessment quality, five new
 workflows added to exercise the engine, and the bugs/limits found along the way. The goal was
 "can a user actually use this, and is the output good?" — verified backend-first and then
 through the live UI with Playwright.
 
-> TL;DR — All three AI modes work end-to-end against a local `qwen2.5:14b-instruct`. Risk-
+> TL;DR — All three LLM modes work end-to-end against a local `qwen2.5:14b-instruct`. Risk-
 > assessment quality is **genuinely good** (evidence-grounded, calibrated) for the synchronous
 > workflows and the one-shot risk review. The agentic **chat** mode is functional but
 > **unreliable on the local model** (inconsistent tool-calling). Four real bugs were found and
@@ -42,7 +42,7 @@ local 14B doing 1–2k-token generations. Both were made env-configurable so **p
 
 ---
 
-## 2. The three AI "modes" — results
+## 2. The three LLM "modes" — results
 
 ### Mode A — Synchronous risk workflows  ✅ good quality
 `gather_context → parallel ai_question (temp 0.1) → ai_synthesis (temp 0.2, <json>) → result
@@ -65,7 +65,7 @@ etc.), ratings are differentiated, and PI-flagging fires appropriately.
 
 ### Mode B — One-shot risk review  ✅ excellent
 `POST /v1/projects/{id}/ai/risk-review` — 42 s. Correctly summarized the register (both human
-and AI risks), ranked thermal-runaway + HF as top concerns, and produced a coherent readiness
+and LLM risks), ranked thermal-runaway + HF as top concerns, and produced a coherent readiness
 recommendation.
 
 ### Mode C — Agentic chat (SSE + tools)  ⚠️ works, but unreliable on local model
@@ -106,9 +106,9 @@ to exercise different `gather_context` sources (incl. `sample`/`sample_lineage`)
 
 | # | Severity | Bug | Fix |
 |---|---|---|---|
-| 1 | **High** | `risk.UpsertFromWorkflow` INSERT had 13 VALUES for 12 columns (stray `$9`, dangling `$11`) → **every** AI workflow run failed register population (`SQLSTATE 42601`). | Realigned placeholders (`fix(risk)`). AI risks now persist. |
+| 1 | **High** | `risk.UpsertFromWorkflow` INSERT had 13 VALUES for 12 columns (stray `$9`, dangling `$11`) → **every** LLM workflow run failed register population (`SQLSTATE 42601`). | Realigned placeholders (`fix(risk)`). LLM risks now persist. |
 | 2 | **High** | `WorkflowRunner` `RatingBadge` called `rating.toLowerCase()` on the integer ratings the workflow emits → **crashes the result panel** (and otherwise rendered badges muted). | `resolveRating()` handles numbers→colors + `n/5` display (`fix(web)`). |
-| 3 | **High** | AI workflow **result pages rendered completely blank** — `buildMarkdownBlocks` emits `heading_3`/`bulleted_list_item`, which aren't BlockNote schema types, so BlockNote silently dropped them. | `normalizeBlocks` now maps legacy types → `heading`+`props.level` / `bulletListItem` (`fix(web)`). Verified the report renders. |
+| 3 | **High** | LLM workflow **result pages rendered completely blank** — `buildMarkdownBlocks` emits `heading_3`/`bulleted_list_item`, which aren't BlockNote schema types, so BlockNote silently dropped them. | `normalizeBlocks` now maps legacy types → `heading`+`props.level` / `bulletListItem` (`fix(web)`). Verified the report renders. |
 | 4 | Medium | Chat: model echoed the literal `<project_id>` XML tag as a tool argument; language drift mid-conversation. | Plain-text project_id + English pin in chat system prompt (`fix(ai)`). |
 
 All four are committed on the branch. Touched-package tests pass (`internal/risk`, 128 web
@@ -134,10 +134,10 @@ hit them. Documented per the testing brief ("ok if not achievable with this arch
    non-streaming timeout; we raised it for testing. Hosted APIs are fast enough that the default
    is fine.
 3. **Language drift** in multi-round chat (mitigated by the English pin, but a small-model trait).
-4. **Register overwrite semantics.** `UpsertFromWorkflow` deletes *all* prior AI risks for the
-   project before inserting — so running a sample-scoped workflow overwrites the project-level AI
-   risks. Worth revisiting (scope AI-risk replacement by workflow key, or attach to the run).
-5. **Register detail.** AI category-risks share one joined mitigation string and an empty
+4. **Register overwrite semantics.** `UpsertFromWorkflow` deletes *all* prior LLM risks for the
+   project before inserting — so running a sample-scoped workflow overwrites the project-level LLM
+   risks. Worth revisiting (scope LLM-risk replacement by workflow key, or attach to the run).
+5. **Register detail.** LLM category-risks share one joined mitigation string and an empty
    per-category impact description. Fine, but per-category detail would be richer.
 
 ---
@@ -157,13 +157,13 @@ hit them. Documented per the testing brief ("ok if not achievable with this arch
 
 Driven live via the Playwright MCP browser; screenshots in the repo root:
 
-- `e2e-01-workflow-runner.png` — all 8 workflows in the picker.
-- `e2e-02-workflow-result.png` — result panel: **Overall 4/5**, **PI Review Required**, summary,
+- `screenshots/e2e-01-workflow-runner.png` — all 8 workflows in the picker.
+- `screenshots/e2e-02-workflow-result.png` — result panel: **Overall 4/5**, **PI Review Required**, summary,
   colored category badges, mitigations (validates bug #2 fix).
-- `e2e-03-result-page.png` / `e2e-04-result-page-fixed.png` — report page **before/after** the
+- `screenshots/e2e-03-result-page.png` / `screenshots/e2e-04-result-page-fixed.png` — report page **before/after** the
   block-type fix (blank → renders heading + synthesis) (validates bug #3 fix).
-- `e2e-05-risk-register.png` — Risk Register "7 / 4 PI review": 3 human + **4 AI-tagged** risks.
-- `e2e-06-chat-panel.png` — chat panel + usage metering; shows the tool-call-leak limitation.
+- `screenshots/e2e-05-risk-register.png` — Risk Register "7 / 4 PI review": 3 human + **4 LLM-tagged** risks.
+- `screenshots/e2e-06-chat-panel.png` — chat panel + usage metering; shows the tool-call-leak limitation.
 
 ---
 
@@ -183,5 +183,62 @@ fix(risk): correct column/placeholder mismatch in workflow risk upsert
 feat(ai): schema-driven synthesis + 5 new workflows + calibrated prompts
 fix(web): render numeric workflow ratings instead of crashing/muting
 fix(ai): harden chat system prompt for small local models
-fix(web): render legacy block types so AI result pages aren't blank
+fix(web): render legacy block types so LLM result pages aren't blank
+```
+
+---
+
+## 9. Re-run against a hosted model — DeepInfra `DeepSeek-V4-Flash` (2026-06-01)
+
+Recommendation #1 above was acted on. The provider was pointed at a hosted flash model and
+every LLM surface was re-driven through the live UI with Playwright (real end-user flow, not
+curl). This is the production-shaped run the local-model report could not be.
+
+| Piece | Value |
+|---|---|
+| Model | `deepseek-ai/DeepSeek-V4-Flash` via **DeepInfra** (OpenAI-compatible `/v1/openai`) |
+| Provider config | `aiconf.local.json` → `active: "DeepInfra"` |
+| Loader | `internal/ai/provider.go` now resolves the active provider by map lookup, so any provider key (incl. the capitalized `DeepInfra`) works with no code change |
+| Cost | ~$1.3e-6 per short chat turn — negligible |
+
+### Integration bug found & fixed — parallel tool calls
+The flash model emits **several tool calls in one turn** (the local 14B almost never did). The
+streamed-tool-call accumulator keyed on the *slice position* within each SSE delta instead of
+the tool call's own `index`, so three concurrent calls collapsed into one and their names were
+concatenated → `unknown tool "list_sampleslist_experimentslist_artifacts"`. Fixed in
+`internal/ai/client.go` (parse + key on `index`, flush in index order) with a regression test.
+- `screenshots/llm-e2e-02-chat-parallel-toolcall-bug.png` — the concatenated-name error (before).
+- `screenshots/llm-e2e-03-chat-parallel-toolcalls-fixed.png` — three distinct calls resolve (after).
+
+### The three LLM modes — results on the hosted model
+
+| Mode | Result | Notes |
+|---|---|---|
+| **Agentic chat** | ✅ **now reliable** | Multi-round parallel tool-calling (`list_samples`, `list_experiments`, `search_project_content`, `get_sample_lineage`, `read_sample`) then a grounded, calibrated answer. This is the mode the report called "unreliable on the local model." |
+| **Sync risk workflow** (`project_risk_v1`) | ✅ ~25 s | vs ~120 s on the local 14B. Overall 2, scientific 3, others 1; populated 4 LLM-tagged risks in the register. |
+| **Risk register upsert** | ✅ | `screenshots/llm-e2e-04-workflow-result.png`, `llm-e2e-05-risk-register-llm-sourced.png`. |
+
+### Follow-up fixes shipped from this run
+- **Per-category mitigations** (recommendation #4): every category risk previously shared one
+  identical synthesis-level mitigation list. `UpsertFromWorkflow` now threads the run's
+  per-step results and gives each category its own mitigations (DB check: 4 risks → 4 distinct
+  mitigation strings). `screenshots/llm-e2e-08-distinct-mitigations.png`.
+- **Chat readability**: assistant output now renders **markdown** (headings, GFM tables, lists,
+  code) via `react-markdown`, and verbose **tool results are collapsed** to a one-line
+  disclosure by default. `screenshots/llm-e2e-06-chat-markdown-collapsed.png`,
+  `llm-e2e-07-chat-rendered.png`.
+
+### Known minor (pre-existing, not DeepInfra)
+- "Review with LLM" opens the chat panel on the existing conversation rather than auto-seeding a
+  fresh risk-assessment kickoff. Frontend seed-state nuance, unrelated to the provider.
+- Two `internal/ai` + a couple `auth`/`platform` tests fail when run against the live **seeded**
+  dev DB (account-approval / idempotency state). They pass on an isolated DB; confirmed identical
+  on clean `main` — isolation issue, not a regression.
+
+### Commits added
+```
+feat(ai): generic provider loader — wire in DeepInfra flash model
+fix(ai): accumulate streamed tool calls by provider index
+fix(risk): give each workflow category its own mitigations
+feat(chat): render markdown + collapse tool output in the LLM panel
 ```

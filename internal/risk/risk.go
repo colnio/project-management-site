@@ -1,15 +1,15 @@
 // Package risk implements the Risk Register module: structured risk tracking
-// scoped to projects (and optionally iterations), with AI-workflow population
+// scoped to projects (and optionally iterations), with LLM-workflow population
 // and PI-review flagging.
 //
 // Authorization always delegates to project.Service.Authorize so that
 // workspace/visibility/collaborator rules are enforced consistently.
 //
-// AI-sourced risks are upserted via UpsertFromWorkflow; prior AI risks for the
+// LLM-sourced risks are upserted via UpsertFromWorkflow; prior LLM risks for the
 // same (project_id, workflow_run_id) are deleted before new ones are inserted
-// to keep re-runs idempotent. More precisely: all AI-sourced risks for the
+// to keep re-runs idempotent. More precisely: all LLM-sourced risks for the
 // project whose workflow_run_id is non-null are replaced so that each project
-// ends up with exactly one set of AI risks at a time (from the latest run).
+// ends up with exactly one set of LLM risks at a time (from the latest run).
 // Human-created risks are never touched by this operation.
 package risk
 
@@ -299,7 +299,7 @@ func (s *Service) setPIReview(ctx context.Context, id uuid.UUID, flagged bool) (
 
 // ─── ListForReview ────────────────────────────────────────────────────────────
 
-// ListForReview returns risks for a project suitable for AI review.
+// ListForReview returns risks for a project suitable for LLM review.
 // If iterationID is non-nil, only risks for that iteration are returned;
 // otherwise all risks for the project are returned.
 // Authorization is the caller's responsibility.
@@ -340,9 +340,14 @@ func (s *Service) ListFlaggedForPIReviewByWorkspace(ctx context.Context, workspa
 
 // ─── UpsertFromWorkflow ──────────────────────────────────────────────────────
 
-// UpsertFromWorkflow is called by the AI engine after a successful workflow
-// run. It deletes prior AI-sourced risks for the project (that have a
-// workflow_run_id set) and inserts fresh ones derived from output.
+// UpsertFromWorkflow is called by the LLM engine after a successful workflow
+// run. It deletes prior LLM-sourced risks scoped to the same target (iteration
+// or project-level) and inserts fresh ones derived from output.
+//
+// The delete is scoped to avoid clobbering unrelated AI risks:
+//   - if iterationID != nil: only AI risks for that iteration are removed.
+//   - if iterationID == nil: only project-level AI risks (iteration_id IS NULL)
+//     are removed, leaving iteration-scoped AI risks untouched.
 //
 // Output shape expected:
 //
@@ -356,6 +361,12 @@ func (s *Service) ListFlaggedForPIReviewByWorkspace(ctx context.Context, workspa
 //
 // One risk row is created per category_ratings entry. If category_ratings is
 // absent or empty, one overall risk is created from overall_rating + summary.
+//
+// stepResults are the per-step outputs of the run (keyed by step id). Each
+// per-category question step carries its own mitigations, so a category's row
+// gets those rather than the synthesis-level global list — otherwise every
+// category would share one identical mitigation list. The global
+// output["mitigations"] is the fallback when a category has no matching step.
 func (s *Service) UpsertFromWorkflow(
 	ctx context.Context,
 	projectID uuid.UUID,
@@ -363,6 +374,7 @@ func (s *Service) UpsertFromWorkflow(
 	workflowKey string,
 	runID uuid.UUID,
 	output map[string]any,
+	stepResults map[string]any,
 	createdBy uuid.UUID,
 ) error {
 	if output == nil {
@@ -391,22 +403,29 @@ func (s *Service) UpsertFromWorkflow(
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	_, err = tx.Exec(ctx,
-		`DELETE FROM risks WHERE project_id = $1 AND source = 'ai' AND workflow_run_id IS NOT NULL`,
-		projectID,
-	)
+	if iterationID != nil {
+		_, err = tx.Exec(ctx,
+			`DELETE FROM risks WHERE iteration_id = $1 AND source = 'ai' AND workflow_run_id IS NOT NULL`,
+			iterationID,
+		)
+	} else {
+		_, err = tx.Exec(ctx,
+			`DELETE FROM risks WHERE project_id = $1 AND iteration_id IS NULL AND source = 'ai' AND workflow_run_id IS NOT NULL`,
+			projectID,
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("risk: upsert workflow: delete prior: %w", err)
 	}
 
 	// Build risk rows to insert.
 	type riskRow struct {
-		title       string
-		likelihood  string
-		impactHead  string
-		impactDesc  string
-		mitigation  string
-		flagged     bool
+		title      string
+		likelihood string
+		impactHead string
+		impactDesc string
+		mitigation string
+		flagged    bool
 	}
 
 	var rows []riskRow
@@ -418,12 +437,18 @@ func (s *Service) UpsertFromWorkflow(
 				rating := toInt(ratingVal)
 				likelihood := ratingToLikelihood(rating)
 				flagged := globalFlagged || rating >= 4
+				// Prefer this category's own mitigations from its step result;
+				// fall back to the global synthesis list so a row is never empty.
+				mitigation := mitigationStr
+				if catMits := categoryMitigations(cat, stepResults); len(catMits) > 0 {
+					mitigation = strings.Join(catMits, "; ")
+				}
 				rows = append(rows, riskRow{
 					title:      humanize(cat),
 					likelihood: likelihood,
 					impactHead: humanize(cat),
 					impactDesc: "",
-					mitigation: mitigationStr,
+					mitigation: mitigation,
 					flagged:    flagged,
 				})
 			}
@@ -468,6 +493,69 @@ func (s *Service) UpsertFromWorkflow(
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+// categoryMitigations returns the mitigations of the step result that best
+// matches a synthesis category name. The synthesis keys category_ratings by the
+// question step id (e.g. "timeline_risk"), so a normalized comparison maps the
+// category back to its step and recovers that step's own mitigations.
+func categoryMitigations(cat string, stepResults map[string]any) []string {
+	target := normalizeRiskKey(cat)
+	if target == "" || len(stepResults) == 0 {
+		return nil
+	}
+	// Exact normalized match first, then containment either way.
+	for _, exact := range []bool{true, false} {
+		for id, v := range stepResults {
+			n := normalizeRiskKey(id)
+			if n == "" {
+				continue
+			}
+			match := n == target
+			if !exact {
+				match = strings.Contains(n, target) || strings.Contains(target, n)
+			}
+			if match {
+				if m := stepMitigationStrings(v); len(m) > 0 {
+					return m
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// stepMitigationStrings extracts the non-empty "mitigations" strings from a
+// single step result value.
+func stepMitigationStrings(v any) []string {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	arr, ok := m["mitigations"].([]any)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, item := range arr {
+		if str, ok := item.(string); ok && strings.TrimSpace(str) != "" {
+			out = append(out, str)
+		}
+	}
+	return out
+}
+
+// normalizeRiskKey lowercases, strips to alphanumerics, and drops a trailing
+// "risk" token so "Timeline Risk", "timeline_risk", and "timeline" all collapse
+// to the same key for matching categories to steps.
+func normalizeRiskKey(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSuffix(b.String(), "risk")
+}
 
 func ratingToLikelihood(rating int) string {
 	switch {

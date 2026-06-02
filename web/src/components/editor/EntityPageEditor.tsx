@@ -21,6 +21,7 @@ import { LoadingState } from '@/components/LoadingState';
 import { useProjectPages, useCreatePage, pageKeys } from '@/hooks/usePageQueries';
 import type { PageListItem } from '@/hooks/usePageQueries';
 import { PageEditorCore } from '@/components/editor/PageEditorCore';
+import { EntityDashboard } from '@/components/dashboards/EntityDashboard';
 
 export type EntityParentType = 'project' | 'iteration' | 'sample' | 'experiment';
 
@@ -150,21 +151,34 @@ export function EntityPageEditor({ parentType, parentId, projectId, slot }: Enti
 
   // ─── Render editor ────────────────────────────────────────────────────────────
 
+  // Entity detail pages (sample / experiment / iteration) surface their
+  // dashboard — identifier strip, status/method/params, linked samples, and the
+  // lineage graph — above the free-form description editor. Projects render their
+  // own dashboard in OverviewTab, so they are excluded here to avoid a duplicate.
+  const showDashboard = slot === 'description' && parentType !== 'project';
+
   return (
-    <div
-      style={{
-        border: '1px solid var(--line)',
-        borderRadius: 10,
-        overflow: 'hidden',
-        background: 'var(--surface)',
-      }}
-    >
-      <PageEditorCore
-        pageId={resolvedPageId}
-        projectId={projectId}
-        showToolbar={true}
-        enablePresence={slot !== 'notes'}
-      />
-    </div>
+    <>
+      {showDashboard && (
+        <div style={{ marginBottom: 20 }}>
+          <EntityDashboard entityType={parentType} entityId={parentId} />
+        </div>
+      )}
+      <div
+        style={{
+          border: '1px solid var(--line)',
+          borderRadius: 10,
+          overflow: 'hidden',
+          background: 'var(--surface)',
+        }}
+      >
+        <PageEditorCore
+          pageId={resolvedPageId}
+          projectId={projectId}
+          showToolbar={true}
+          enablePresence={slot !== 'notes'}
+        />
+      </div>
+    </>
   );
 }
