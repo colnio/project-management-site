@@ -68,6 +68,11 @@ type ExperimentArtifact struct {
 }
 
 // Service is the artifact module's domain service.
+// originalURLTTL bounds how long a presigned original-download URL stays valid.
+// Each API response mints a fresh one, so this only needs to outlast a single
+// page's viewing/downloading session.
+const originalURLTTL = 60 * time.Minute
+
 type Service struct {
 	pool        *pgxpool.Pool
 	projects    *project.Service
@@ -241,6 +246,44 @@ func (s *Service) CreateArtifact(ctx context.Context, projectID uuid.UUID, filen
 	})
 
 	return &art, req.URL, nil
+}
+
+// presignedOriginalURL returns a short-lived presigned GET URL for an artifact's
+// original object. Originals live in a private bucket, so the browser (PDF
+// viewer, image lightbox, download link) cannot fetch them via a raw public URL
+// — it needs a URL that carries its own signature. Returns "" when the upload
+// has not completed or presigning fails, so callers keep the existing value.
+func (s *Service) presignedOriginalURL(ctx context.Context, art *Artifact) string {
+	if art == nil || art.StorageKey == "" || art.OriginalURL == "" || s.presign == nil {
+		return ""
+	}
+	key := art.StorageKey
+	req, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: &s.bucket,
+		Key:    &key,
+	}, s3.WithPresignExpires(originalURLTTL))
+	if err != nil {
+		s.log.Warn("artifact: presign original get", "artifact_id", art.ID, "err", err)
+		return ""
+	}
+	return req.URL
+}
+
+// SignOriginalURL replaces an artifact's original_url with a fresh presigned GET
+// URL (in place) for API responses. No-op when the upload is incomplete. Apply
+// this at the HTTP boundary only — internal/worker reads use storage_key
+// directly and must not depend on a short-lived signed URL.
+func (s *Service) SignOriginalURL(ctx context.Context, art *Artifact) {
+	if u := s.presignedOriginalURL(ctx, art); u != "" {
+		art.OriginalURL = u
+	}
+}
+
+// SignOriginalURLs applies SignOriginalURL to each artifact in a slice.
+func (s *Service) SignOriginalURLs(ctx context.Context, arts []*Artifact) {
+	for _, a := range arts {
+		s.SignOriginalURL(ctx, a)
+	}
 }
 
 // CompleteUpload sets original_url and records the upload_complete audit event.
