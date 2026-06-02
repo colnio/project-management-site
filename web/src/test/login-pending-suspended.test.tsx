@@ -41,8 +41,8 @@ describe('LoginPage — approval gate messages', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'pending@u.nus.edu');
-    await user.type(screen.getByPlaceholderText('devpassword'), 'password123');
+    await user.type(screen.getByPlaceholderText('user@u.nus.edu'), 'pending@u.nus.edu');
+    await user.type(screen.getByPlaceholderText('password'), 'password123');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -57,8 +57,8 @@ describe('LoginPage — approval gate messages', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'suspended@u.nus.edu');
-    await user.type(screen.getByPlaceholderText('devpassword'), 'password123');
+    await user.type(screen.getByPlaceholderText('user@u.nus.edu'), 'suspended@u.nus.edu');
+    await user.type(screen.getByPlaceholderText('password'), 'password123');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -73,8 +73,8 @@ describe('LoginPage — approval gate messages', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'bad@email.com');
-    await user.type(screen.getByPlaceholderText('devpassword'), 'wrongpass');
+    await user.type(screen.getByPlaceholderText('user@u.nus.edu'), 'bad@email.com');
+    await user.type(screen.getByPlaceholderText('password'), 'wrongpass');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {

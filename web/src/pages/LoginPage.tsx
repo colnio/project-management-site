@@ -125,7 +125,7 @@ export function LoginPage() {
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="dev@graphene-lab.org"
+                  placeholder="user@u.nus.edu"
                   required
                   autoComplete="email"
                   style={{
@@ -157,7 +157,7 @@ export function LoginPage() {
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="devpassword"
+                  placeholder="password"
                   required
                   autoComplete="current-password"
                   style={{

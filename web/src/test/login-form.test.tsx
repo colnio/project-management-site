@@ -30,8 +30,8 @@ vi.mock('../hooks/useAuth', () => ({
 describe('LoginPage', () => {
   it('renders email and password fields with placeholder text', () => {
     render(<LoginPage />);
-    expect(screen.getByPlaceholderText('dev@graphene-lab.org')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('devpassword')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('user@u.nus.edu')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('password')).toBeInTheDocument();
   });
 
   it('renders the sign-in button', () => {
@@ -45,8 +45,8 @@ describe('LoginPage', () => {
 
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'dev@graphene-lab.org');
-    await user.type(screen.getByPlaceholderText('devpassword'), 'devpassword');
+    await user.type(screen.getByPlaceholderText('user@u.nus.edu'), 'dev@graphene-lab.org');
+    await user.type(screen.getByPlaceholderText('password'), 'devpassword');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -61,8 +61,8 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'bad@email.com');
-    await user.type(screen.getByPlaceholderText('devpassword'), 'wrongpass');
+    await user.type(screen.getByPlaceholderText('user@u.nus.edu'), 'bad@email.com');
+    await user.type(screen.getByPlaceholderText('password'), 'wrongpass');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -77,8 +77,8 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'dev@graphene-lab.org');
-    await user.type(screen.getByPlaceholderText('devpassword'), 'devpassword');
+    await user.type(screen.getByPlaceholderText('user@u.nus.edu'), 'dev@graphene-lab.org');
+    await user.type(screen.getByPlaceholderText('password'), 'devpassword');
 
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 

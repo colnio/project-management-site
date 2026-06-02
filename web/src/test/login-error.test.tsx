@@ -60,8 +60,8 @@ describe('LoginPage — real apiFetch 401 path', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByPlaceholderText('dev@graphene-lab.org'), 'bad@test.com');
-    await user.type(screen.getByPlaceholderText('devpassword'), 'wrongpass');
+    await user.type(screen.getByPlaceholderText('user@u.nus.edu'), 'bad@test.com');
+    await user.type(screen.getByPlaceholderText('password'), 'wrongpass');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     // The error message from the server body must appear in the UI
