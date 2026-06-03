@@ -45,6 +45,23 @@ func (s *Service) CreateWorkspace(ctx context.Context, name string, creatorID uu
 		return nil, fmt.Errorf("org: add owner membership: %w", err)
 	}
 
+	// Seed the workspace's AI autonomy at 'full' so AI assistance can write
+	// without a per-action approval click. The allow-list scopes auto-execution
+	// to the interactive Risk Assessment's Phase-6 finalizer (save_risk_assessment);
+	// any other write tool still falls back to "propose for approval" under full
+	// mode, keeping a human in the loop for everything except the RA write.
+	// Owners can broaden or restrict this later in settings. ON CONFLICT guards
+	// re-seeding.
+	_, err = tx.Exec(ctx,
+		`INSERT INTO autonomy_configs (scope, scope_id, mode, allowed_tools)
+		 VALUES ('workspace', $1, 'full', ARRAY['save_risk_assessment'])
+		 ON CONFLICT (scope, scope_id) DO NOTHING`,
+		ws.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("org: seed workspace autonomy: %w", err)
+	}
+
 	if err = tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("org: commit workspace creation: %w", err)
 	}

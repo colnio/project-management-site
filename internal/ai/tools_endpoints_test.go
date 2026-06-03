@@ -340,6 +340,56 @@ func TestToolEndpoints(t *testing.T) {
 	}
 }
 
+// TestSaveRiskAssessmentTwoCalls verifies that save_risk_assessment issues two
+// POSTs in order: first the RA report page, then the risk-register upsert
+// carrying the failure modes and iteration scope.
+func TestSaveRiskAssessmentTwoCalls(t *testing.T) {
+	const projID = "proj-aaa"
+	const wsID = "ws-bbb"
+
+	var calls []callRecord
+	rest := recordingRest(&calls, `{"id":"new"}`)
+
+	args := `{
+		"report_markdown":"# Risk Assessment\n\nSummary.",
+		"report_title":"Risk Assessment — XPS",
+		"risk_level":"RED",
+		"expertise":"Novice",
+		"iteration_id":"iter-1",
+		"failure_modes":[
+			{"title":"Beam heating","likelihood":"high","mitigation":"Reduce flux","flag_pi_review":true}
+		]
+	}`
+
+	_, isWrite, err := dispatchTool(context.Background(), "save_risk_assessment", args, projID, wsID, rest)
+	if err != nil {
+		t.Fatalf("dispatchTool(save_risk_assessment) error: %v", err)
+	}
+	if !isWrite {
+		t.Errorf("save_risk_assessment should be a write tool")
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 REST calls (page + risk-assessment), got %d: %+v", len(calls), calls)
+	}
+
+	page := calls[0]
+	if page.method != "POST" || !strings.Contains(page.path, "/v1/projects/"+projID+"/pages") {
+		t.Errorf("first call: want POST /v1/projects/%s/pages, got %s %s", projID, page.method, page.path)
+	}
+
+	ra := calls[1]
+	if ra.method != "POST" || !strings.Contains(ra.path, "/v1/projects/"+projID+"/risk-assessment") {
+		t.Errorf("second call: want POST /v1/projects/%s/risk-assessment, got %s %s", projID, ra.method, ra.path)
+	}
+	if ra.body["iteration_id"] != "iter-1" {
+		t.Errorf("risk-assessment body: want iteration_id=iter-1, got %v", ra.body["iteration_id"])
+	}
+	fms, ok := ra.body["failure_modes"].([]any)
+	if !ok || len(fms) != 1 {
+		t.Fatalf("risk-assessment body: want 1 failure_mode, got %v", ra.body["failure_modes"])
+	}
+}
+
 // TestUpdatePageETAGRoundTrip verifies that update_page:
 //  1. Issues a GET to /v1/pages/{id} first.
 //  2. Issues a PUT to /v1/pages/{id} with an If-Match header equal to the ETag
@@ -460,6 +510,7 @@ var toolScopeMap = map[string][]string{
 	"add_sample_relation":      {platform.ScopeWriteSamples},
 	"create_risk":              {platform.ScopeWriteRisks},
 	"update_risk":              {platform.ScopeWriteRisks},
+	"save_risk_assessment":     {platform.ScopeWritePages, platform.ScopeWriteRisks},
 	"create_approval_request":  {platform.ScopeWriteApprovals},
 	"update_page":              {platform.ScopeReadPages, platform.ScopeWritePages},
 }

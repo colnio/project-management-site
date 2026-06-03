@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useSearch, useRouter } from '@tanstack/react-router';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
@@ -27,8 +27,7 @@ import { EditProjectDialog } from '@/components/EditProjectDialog';
 import { useDeleteArtifact } from '@/hooks/useArtifactQueries';
 import { PagesPanel } from '@/components/PagesPanel';
 import { ProjectTimeline } from '@/components/gantt/ProjectTimeline';
-import { AIChatPanel } from '@/components/AIChatPanel';
-import { AIPanelProvider, useAIPanel } from '@/components/AIPanelProvider';
+import { useAIPanel } from '@/components/AIPanelProvider';
 import { WorkflowRunner } from '@/components/WorkflowRunner';
 import { ProjectAutonomySection } from '@/components/AutonomyConfig';
 import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
@@ -1245,7 +1244,11 @@ function ProjectDetailPageInner() {
   const { data: experiments = [] } = useProjectExperiments(projectId);
   const { data: iterations = [] } = useProjectIterations(projectId);
   const { data: artifacts = [] } = useProjectArtifacts(projectId);
-  const { open: aiPanelOpen, seed: aiSeed, toggle: toggleAI, close: closeAI } = useAIPanel();
+  const { toggle } = useAIPanel();
+  const toggleAI = useCallback(
+    () => toggle({ projectId, workspaceId: project?.workspace_id }),
+    [toggle, projectId, project?.workspace_id],
+  );
 
   // URL search param is the single source of truth for the active tab.
   // Unknown values (e.g. a hand-typed ?tab=settings) fall back to overview
@@ -1390,22 +1393,10 @@ function ProjectDetailPageInner() {
           </div>
         </>
       )}
-      {aiPanelOpen && (
-        <AIChatPanel
-          projectId={projectId}
-          workspaceId={project?.workspace_id}
-          onClose={closeAI}
-          seed={aiSeed}
-        />
-      )}
     </AppShell>
   );
 }
 
 export function ProjectDetailPage() {
-  return (
-    <AIPanelProvider>
-      <ProjectDetailPageInner />
-    </AIPanelProvider>
-  );
+  return <ProjectDetailPageInner />;
 }

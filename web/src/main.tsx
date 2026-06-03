@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { AIPanelProvider } from './components/AIPanelProvider';
 import { setIsAuthenticated, setProfileComplete } from './router';
 import { router } from './router';
 import { initTweaks } from './hooks/appearancePrefs';
@@ -62,7 +63,11 @@ function AppBridge() {
     );
   }
 
-  return <RouterProvider router={router} />;
+  return (
+    <AIPanelProvider>
+      <RouterProvider router={router} />
+    </AIPanelProvider>
+  );
 }
 
 const root = document.getElementById('root');

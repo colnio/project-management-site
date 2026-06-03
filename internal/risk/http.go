@@ -71,6 +71,15 @@ func Register(api huma.API, svc *Service) {
 		Description: "Sets or clears the flagged_for_pi_review flag on a risk. Requires editor role.",
 		Tags:        []string{"risks"},
 	}, svc.handleSetPIReview)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "risk-save-assessment",
+		Method:      http.MethodPost,
+		Path:        "/v1/projects/{id}/risk-assessment",
+		Summary:     "Persist an interactive risk assessment",
+		Description: "Replaces the project's (or iteration's) interactive AI risk rows with the failure modes from a completed 6-phase Risk Assessment. Requires editor role.",
+		Tags:        []string{"risks"},
+	}, svc.handleSaveAssessment)
 }
 
 // ─── Create risk ─────────────────────────────────────────────────────────────
@@ -363,6 +372,124 @@ func (s *Service) handleDeleteRisk(ctx context.Context, in *deleteRiskInput) (*d
 
 	out := &deleteRiskOutput{Status: http.StatusOK}
 	out.Body.OK = true
+	return out, nil
+}
+
+// ─── Save assessment ──────────────────────────────────────────────────────────
+
+type assessmentRiskInput struct {
+	Title             string `json:"title" required:"true" minLength:"1"`
+	Likelihood        string `json:"likelihood" enum:"high,med,low"`
+	ImpactHeadline    string `json:"impact_headline,omitempty"`
+	ImpactDescription string `json:"impact_description,omitempty"`
+	Mitigation        string `json:"mitigation,omitempty"`
+	PlanB             string `json:"plan_b,omitempty"`
+	FlagPIReview      bool   `json:"flag_pi_review,omitempty"`
+}
+
+type saveAssessmentInput struct {
+	ID   string `path:"id"`
+	Body struct {
+		IterationID  string                `json:"iteration_id,omitempty"`
+		FailureModes []assessmentRiskInput `json:"failure_modes" required:"true"`
+	}
+}
+
+type saveAssessmentOutput struct {
+	Status int
+	Body   struct {
+		Risks []*Risk `json:"risks"`
+	}
+}
+
+func (s *Service) handleSaveAssessment(ctx context.Context, in *saveAssessmentInput) (*saveAssessmentOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteRisks); err != nil {
+		return nil, err
+	}
+
+	projectID, err := uuid.Parse(in.ID)
+	if err != nil {
+		return nil, platform.BadRequest("project.invalid_id", "invalid project ID")
+	}
+
+	if _, _, err := s.projects.Authorize(ctx, p, projectID, org.RoleEditor); err != nil {
+		return nil, err
+	}
+
+	var iterationID *uuid.UUID
+	if in.Body.IterationID != "" {
+		parsed, err := uuid.Parse(in.Body.IterationID)
+		if err != nil {
+			return nil, platform.BadRequest("risk.invalid_iteration_id", "invalid iteration ID")
+		}
+		iterProjID, err := s.iterations.GetProjectIDForIteration(ctx, parsed)
+		if err != nil {
+			return nil, err
+		}
+		if iterProjID != projectID {
+			return nil, platform.BadRequest("risk.iteration_mismatch", "iteration does not belong to this project")
+		}
+		iterationID = &parsed
+	}
+
+	risks := make([]AssessmentRisk, 0, len(in.Body.FailureModes))
+	for _, fm := range in.Body.FailureModes {
+		risks = append(risks, AssessmentRisk{
+			Title:             fm.Title,
+			Likelihood:        fm.Likelihood,
+			ImpactHeadline:    fm.ImpactHeadline,
+			ImpactDescription: fm.ImpactDescription,
+			Mitigation:        fm.Mitigation,
+			PlanB:             fm.PlanB,
+			FlagPIReview:      fm.FlagPIReview,
+		})
+	}
+
+	created, err := s.UpsertFromAssessment(ctx, projectID, iterationID, p.UserID, risks)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        p.UserID,
+		ViaTokenID:   p.ViaTokenID,
+		Action:       "risk.assessment_save",
+		ResourceType: "project",
+		ResourceID:   projectID.String(),
+	})
+
+	// Notify workspace owners about any risk flagged for PI review, mirroring the
+	// manual-flag path so the blocking gate is visible to PIs.
+	if s.notify != nil {
+		var flagged []*Risk
+		for _, r := range created {
+			if r.FlaggedForPIReview {
+				flagged = append(flagged, r)
+			}
+		}
+		if len(flagged) > 0 {
+			if proj, perr := s.projects.GetProject(ctx, projectID); perr != nil {
+				s.log.Warn("risk: load project for pi flag email", "err", perr)
+			} else {
+				actionPath := fmt.Sprintf("/projects/%s", projectID)
+				for _, r := range flagged {
+					idem := fmt.Sprintf("pi_flag_risk:%s", r.ID)
+					if err := s.notify.EnqueuePIFlagForWorkspaceOwners(
+						ctx, proj.WorkspaceID, proj.Name, actionPath, r.Title, idem,
+					); err != nil {
+						s.log.Warn("risk: enqueue pi flag email failed", "err", err)
+					}
+				}
+			}
+		}
+	}
+
+	out := &saveAssessmentOutput{Status: http.StatusCreated}
+	out.Body.Risks = created
 	return out, nil
 }
 

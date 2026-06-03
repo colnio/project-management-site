@@ -371,6 +371,7 @@ function StatusStrip({ projectId, workspaceId }: StatusStripProps) {
 export interface AIChatPanelSeed {
   skill?: string;
   message?: string;
+  convId?: string;
 }
 
 interface AIChatPanelProps {
@@ -386,6 +387,13 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
   const createConv = useCreateConversation(projectId);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const { data: messages = [], isLoading: msgsLoading } = useConversationMessages(selectedConvId ?? undefined);
+
+  // A risk-assessment conversation gets a "Write report" button that runs the
+  // Phase-6 finalize (server compiles the report + risk register from the
+  // dialogue) instead of making the researcher type the literal word "report".
+  const selectedConv = conversations.find(c => c.id === selectedConvId);
+  const isRiskAssessment =
+    selectedConv?.skill === 'risk_assessment_skill' || seed?.skill === 'risk_assessment_skill';
 
   const [streaming, setStreaming] = useState<StreamingMessage | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -441,32 +449,43 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     document.body.style.userSelect = 'none';
   }, [panelWidth]);
 
+  // A seeded open provides a freshly-created conversation id: select it directly.
+  useEffect(() => {
+    if (seed?.convId) setSelectedConvId(seed.convId);
+  }, [seed?.convId]);
+
   useEffect(() => {
     if (convLoading) return;
+    // A seeded (skill) open uses its own fresh conversation — never adopt an
+    // existing one — so the procedure begins at Phase 1 every time.
+    if (seed?.skill) return;
     if (conversations.length > 0 && !selectedConvId) setSelectedConvId(conversations[0].id);
-  }, [conversations, selectedConvId, convLoading]);
+  }, [conversations, selectedConvId, convLoading, seed]);
 
   const didAutoCreate = useRef(false);
   useEffect(() => {
-    if (convLoading || didAutoCreate.current) return;
-    if (conversations.length === 0 && !createConv.isPending) {
+    if (convLoading || didAutoCreate.current || createConv.isPending) return;
+    if (seed?.skill) {
+      // The provider normally creates the seeded conversation and passes its id
+      // via seed.convId. Only self-create as a fallback when that didn't happen.
+      if (seed.convId) return;
       didAutoCreate.current = true;
-      if (seed?.skill) {
-        // Seeded flow: create a "Risk Assessment" conversation with the skill.
-        createConv.mutate(
-          { title: 'Risk Assessment', skill: seed.skill },
-          {
-            onSuccess: conv => setSelectedConvId(conv.id),
-            onError: () => { didAutoCreate.current = false; },
-          },
-        );
-      } else {
-        // Normal flow: create a generic "General" conversation.
-        createConv.mutate('General', {
+      createConv.mutate(
+        { title: 'Risk Assessment', skill: seed.skill },
+        {
           onSuccess: conv => setSelectedConvId(conv.id),
           onError: () => { didAutoCreate.current = false; },
-        });
-      }
+        },
+      );
+      return;
+    }
+    if (conversations.length === 0) {
+      // Normal flow: create a generic "General" conversation.
+      didAutoCreate.current = true;
+      createConv.mutate('General', {
+        onSuccess: conv => setSelectedConvId(conv.id),
+        onError: () => { didAutoCreate.current = false; },
+      });
     }
   }, [conversations, convLoading, createConv, seed]);
 
@@ -548,22 +567,42 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
       }
       setAiUnavailable(false);
 
+      // Track whether this turn executed a tool that mutates project data (e.g.
+      // the server-side Risk Assessment finalize that runs save_risk_assessment),
+      // so we can refresh the risk register / page lists when the turn ends.
+      let sawProjectWrite = false;
+      const PROJECT_WRITE_TOOLS = new Set(['save_risk_assessment', 'create_risk', 'update_risk', 'draft_page', 'update_page']);
+
       await readSSEStream(response, (ev: SSEEvent) => {
         setStreaming(prev => {
           if (!prev) return prev;
           if (ev.type === 'token') return { ...prev, content: prev.content + ev.delta };
           if (ev.type === 'tool_call') {
+            if (ev.name && PROJECT_WRITE_TOOLS.has(ev.name) && ev.status === 'executed') sawProjectWrite = true;
             const existing = prev.toolCalls.find(tc => tc.id === ev.id);
             if (existing) return { ...prev, toolCalls: prev.toolCalls.map(tc => tc.id === ev.id ? { ...tc, status: ev.status } : tc) };
             return { ...prev, toolCalls: [...prev.toolCalls, { id: ev.id, name: ev.name, arguments: ev.arguments, status: ev.status }] };
           }
-          if (ev.type === 'tool_result') return { ...prev, toolCalls: prev.toolCalls.map(tc => tc.id === ev.id ? { ...tc, result: ev.result } : tc) };
+          if (ev.type === 'tool_result') {
+            if (ev.name && PROJECT_WRITE_TOOLS.has(ev.name) && ev.status === 'executed') sawProjectWrite = true;
+            return { ...prev, toolCalls: prev.toolCalls.map(tc => tc.id === ev.id ? { ...tc, result: ev.result } : tc) };
+          }
           if (ev.type === 'warn') return { ...prev, warnings: [...prev.warnings, ev.message] };
           return prev;
         });
         if (ev.type === 'done' || ev.type === 'error') {
           if (ev.type === 'error') setSendError(ev.message);
           void qc.invalidateQueries({ queryKey: aiKeys.conversationMessages(selectedConvId) });
+          if (sawProjectWrite) {
+            // Refresh risk-register and page-list queries (no scope known here).
+            void qc.invalidateQueries({
+              predicate: q => {
+                const k = q.queryKey;
+                const last = Array.isArray(k) ? k[k.length - 1] : undefined;
+                return last === 'risks' || last === 'pages';
+              },
+            });
+          }
           setStreaming(null); setSending(false);
         }
       }, controller.signal);
@@ -583,8 +622,8 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
     <>
       <style>{`
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-        .ai-panel { position: fixed; top: 0; right: 0; bottom: 0; max-width: 90vw; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; z-index: 100; box-shadow: -4px 0 24px rgba(20,18,14,0.10); }
-        .ai-resize { position: absolute; top: 0; left: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 110; touch-action: none; }
+        .ai-panel { position: fixed; top: 0; right: 0; bottom: 0; max-width: 90vw; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; z-index: 400; box-shadow: -4px 0 24px rgba(20,18,14,0.10); }
+        .ai-resize { position: absolute; top: 0; left: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 410; touch-action: none; }
         .ai-resize:hover, .ai-resize:active { background: var(--ember-soft); }
         .ai-panel-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; background: var(--paper); flex-shrink: 0; }
         .ai-orb { width: 10px; height: 10px; border-radius: 50%; background: var(--ember); flex-shrink: 0; }
@@ -653,6 +692,22 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
         </div>
 
         <div className="ai-composer">
+          {isRiskAssessment && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+              <button
+                className="top-btn primary"
+                style={{ fontSize: 11.5, padding: '5px 10px', flexShrink: 0 }}
+                onClick={() => void handleSend('report')}
+                disabled={!selectedConvId || sending}
+                title="Compile the Phase-6 Risk Assessment report and populate the risk register"
+              >
+                {sending ? 'Working…' : '📝 Write report'}
+              </button>
+              <span style={{ fontSize: 10.5, fontFamily: 'var(--mono)', color: 'var(--muted-2)' }}>
+                compiles the report &amp; risk register
+              </span>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--surface)', padding: '6px 8px' }}>
             <textarea
               ref={textareaRef}

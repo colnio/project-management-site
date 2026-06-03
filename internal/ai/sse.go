@@ -17,7 +17,12 @@ import (
 	"github.com/colnio/project-management-site/internal/platform"
 )
 
-const maxToolRounds = 5
+// maxToolRounds caps how many tool-call rounds a single chat turn may take
+// before the loop forces a tool-free final answer. It is generous so that
+// research-heavy turns (e.g. the interactive Risk Assessment's Phase 6, which
+// gathers context and verifies facts via web_search) don't exhaust the budget
+// before the model emits its final write tool call (save_risk_assessment).
+const maxToolRounds = 12
 
 // HandleMessageStream is mounted as a chi POST route (not huma) to support SSE.
 // Path: /v1/ai/conversations/{id}/messages
@@ -220,12 +225,35 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		sendSSE("warn", string(d))
 	}
 
-	// Tool-use loop.
 	restCall := makeRESTCaller(s.restBase, iaiToken)
 	restCallHdrs := makeRESTCallerWithHeaders(s.restBase, iaiToken)
+
+	// Risk Assessment Phase 6 (two-model finalize). When the researcher types the
+	// report trigger in a risk_assessment conversation, the dialogue model has
+	// already done the 6-phase interrogation (Phases 1-5 hold every failure mode,
+	// classification, and mitigation). Rather than ask the strong dialogue model
+	// to also emit a long structured report — which it does unreliably, often
+	// returning nothing after exhausting its tool budget on web_search — we
+	// compile the report and risk register from the transcript with a focused,
+	// low-cost formatter model (see ra_finalize.go). This short-circuits the
+	// normal dialogue turn entirely.
+	if s.shouldFinalizeRA(conv, body.Content) {
+		s.finalizeRiskAssessment(ctx, sendSSE, convID, proj.ID.String(), proj.WorkspaceID.String(), p.UserID, existingMsgs, "", restCall, restCallHdrs)
+		doneData, _ := json.Marshal(map[string]string{"conversation_id": convID.String()})
+		sendSSE("done", string(doneData))
+		_ = s.rec.Record(ctx, audit.Entry{
+			Actor:               p.UserID,
+			ViaAIConversationID: &convID,
+			Action:              "ai.ra_finalize",
+			ResourceType:        "ai_conversation",
+			ResourceID:          convID.String(),
+		})
+		return
+	}
+
+	// Tool-use loop.
 	tools := gatedTools(proj.ID.String(), proj.WorkspaceID.String(), mode, allowedTools)
 
-	var finalAssistantContent string
 	seq := userSeq + 1
 
 	// pendingToolCalls stays true if the loop exits via the round cap while the
@@ -287,7 +315,6 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 		}
 
 		content := assistantContent.String()
-		finalAssistantContent = content
 
 		// Persist assistant message.
 		assistantMsg := ChatMessage{
@@ -442,7 +469,6 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 					_ = recordUsage(ctx, s.pool, proj.WorkspaceID, proj.ID, p.UserID, "chat", model, *usage)
 				}
 				if fc := finalContent.String(); fc != "" {
-					finalAssistantContent = fc
 					if _, err := appendMessage(ctx, s.pool, convID, seq, ChatMessage{Role: "assistant", Content: fc}); err != nil {
 						s.log.Warn("ai: persist final assistant message", "err", err)
 					}
@@ -451,8 +477,6 @@ func (s *Service) HandleMessageStream(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	_ = finalAssistantContent
 
 	doneData, _ := json.Marshal(map[string]string{"conversation_id": convID.String()})
 	sendSSE("done", string(doneData))

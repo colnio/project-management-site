@@ -492,6 +492,101 @@ func (s *Service) UpsertFromWorkflow(
 	return nil
 }
 
+// ─── UpsertFromAssessment ─────────────────────────────────────────────────────
+
+// AssessmentRisk is one failure mode from the interactive Risk Assessment
+// procedure (the 6-phase dialogue). Unlike the workflow path, likelihood and the
+// PI-review flag are decided per-risk during the dialogue rather than derived
+// from numeric ratings.
+type AssessmentRisk struct {
+	Title             string
+	Likelihood        string // "high" | "med" | "low"
+	ImpactHeadline    string
+	ImpactDescription string
+	Mitigation        string
+	PlanB             string
+	FlagPIReview      bool
+}
+
+// UpsertFromAssessment populates the risk register from a completed interactive
+// Risk Assessment (Phase 6). It mirrors UpsertFromWorkflow but for the chat path:
+// each failure mode carries its own likelihood and PI-review flag, and rows are
+// inserted with workflow_run_id = NULL.
+//
+// Idempotency on rerun: prior AI-sourced rows scoped to the same target whose
+// workflow_run_id IS NULL (i.e. earlier interactive assessments) are deleted
+// before inserting. Rows produced by the workflow engine (workflow_run_id NOT
+// NULL) and human-created rows are never touched, so the two AI paths coexist.
+//
+//   - iterationID != nil: only interactive AI risks for that iteration are removed.
+//   - iterationID == nil: only project-level interactive AI risks (iteration_id
+//     IS NULL) are removed.
+//
+// Returns the newly inserted rows.
+func (s *Service) UpsertFromAssessment(
+	ctx context.Context,
+	projectID uuid.UUID,
+	iterationID *uuid.UUID,
+	createdBy uuid.UUID,
+	risks []AssessmentRisk,
+) ([]*Risk, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("risk: upsert assessment: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if iterationID != nil {
+		_, err = tx.Exec(ctx,
+			`DELETE FROM risks WHERE iteration_id = $1 AND source = 'ai' AND workflow_run_id IS NULL`,
+			iterationID,
+		)
+	} else {
+		_, err = tx.Exec(ctx,
+			`DELETE FROM risks WHERE project_id = $1 AND iteration_id IS NULL AND source = 'ai' AND workflow_run_id IS NULL`,
+			projectID,
+		)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("risk: upsert assessment: delete prior: %w", err)
+	}
+
+	var inserted []*Risk
+	for _, r := range risks {
+		likelihood := r.Likelihood
+		if likelihood != "high" && likelihood != "med" && likelihood != "low" {
+			likelihood = "low"
+		}
+		title := strings.TrimSpace(r.Title)
+		if title == "" {
+			title = "Unnamed failure mode"
+		}
+		row := tx.QueryRow(ctx,
+			`INSERT INTO risks
+			   (project_id, iteration_id, seq, title, likelihood,
+			    impact_headline, impact_description, mitigation, plan_b,
+			    flagged_for_pi_review, source, created_by)
+			 VALUES ($1, $2,
+			         COALESCE((SELECT MAX(seq) FROM risks WHERE project_id = $1), 0) + 1,
+			         $3, $4, $5, $6, $7, $8, $9, 'ai', $10)
+			 RETURNING `+riskCols,
+			projectID, iterationID, title, likelihood,
+			r.ImpactHeadline, r.ImpactDescription, r.Mitigation, r.PlanB,
+			r.FlagPIReview, createdBy,
+		)
+		ins, scanErr := scanRisk(row)
+		if scanErr != nil {
+			return nil, fmt.Errorf("risk: upsert assessment: insert %q: %w", title, scanErr)
+		}
+		inserted = append(inserted, ins)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("risk: upsert assessment: commit: %w", err)
+	}
+	return inserted, nil
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 // categoryMitigations returns the mitigations of the step result that best

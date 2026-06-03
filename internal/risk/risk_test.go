@@ -370,6 +370,75 @@ func TestUpsertFromWorkflow_ReplacesPriorAI(t *testing.T) {
 	}
 }
 
+// TestUpsertFromAssessment_ReplacesInteractiveAIOnly verifies the interactive
+// Risk Assessment path: it inserts one row per failure mode with the per-row
+// likelihood and PI flag, replaces prior interactive AI rows (workflow_run_id
+// IS NULL) on rerun, and leaves workflow-sourced AI rows (workflow_run_id NOT
+// NULL) untouched.
+func TestUpsertFromAssessment_ReplacesInteractiveAIOnly(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "ra-owner@example.com", "RA Owner")
+	proj := seedProject(t, env, owner.ID)
+
+	// Seed a workflow-sourced AI risk (workflow_run_id NOT NULL) that must survive.
+	wfRun := uuid.New()
+	if err := env.riskSvc.UpsertFromWorkflow(ctx, proj.ID, nil, "battery_safety_risk_v1", wfRun,
+		map[string]any{"overall_rating": 4, "summary": "battery"}, nil, owner.ID); err != nil {
+		t.Fatalf("seed workflow risk: %v", err)
+	}
+
+	// First interactive assessment: 2 failure modes.
+	created, err := env.riskSvc.UpsertFromAssessment(ctx, proj.ID, nil, owner.ID, []risk.AssessmentRisk{
+		{Title: "Beam heating", Likelihood: "high", Mitigation: "Reduce flux", FlagPIReview: true},
+		{Title: "Charge drift", Likelihood: "low", Mitigation: "Ground sample"},
+	})
+	if err != nil {
+		t.Fatalf("first assessment: %v", err)
+	}
+	if len(created) != 2 {
+		t.Fatalf("want 2 created, got %d", len(created))
+	}
+
+	// Per-row likelihood and PI flag must persist exactly as supplied.
+	var flagged bool
+	var like string
+	if err := env.pool.QueryRow(ctx,
+		`SELECT flagged_for_pi_review, likelihood FROM risks WHERE project_id=$1 AND title='Beam heating'`,
+		proj.ID).Scan(&flagged, &like); err != nil {
+		t.Fatalf("query beam heating: %v", err)
+	}
+	if !flagged || like != "high" {
+		t.Errorf("beam heating: want flagged=true likelihood=high, got flagged=%v likelihood=%q", flagged, like)
+	}
+
+	// Rerun: replaces the interactive AI rows (now 1), keeps the workflow row.
+	if _, err := env.riskSvc.UpsertFromAssessment(ctx, proj.ID, nil, owner.ID, []risk.AssessmentRisk{
+		{Title: "Beam heating only", Likelihood: "med"},
+	}); err != nil {
+		t.Fatalf("rerun assessment: %v", err)
+	}
+
+	var interactiveCount, workflowCount int
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE project_id=$1 AND source='ai' AND workflow_run_id IS NULL`,
+		proj.ID).Scan(&interactiveCount); err != nil {
+		t.Fatalf("count interactive: %v", err)
+	}
+	if interactiveCount != 1 {
+		t.Errorf("after rerun: want 1 interactive AI risk, got %d", interactiveCount)
+	}
+	if err := env.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM risks WHERE project_id=$1 AND source='ai' AND workflow_run_id IS NOT NULL`,
+		proj.ID).Scan(&workflowCount); err != nil {
+		t.Fatalf("count workflow: %v", err)
+	}
+	if workflowCount != 1 {
+		t.Errorf("workflow-sourced AI risk should survive interactive rerun, got %d", workflowCount)
+	}
+}
+
 // TestCrossEntityIterationMismatch verifies that creating a risk with an
 // iteration_id belonging to a DIFFERENT project is rejected (Finding 4c).
 // The validation lives in handleCreateRisk; we exercise the handler path via

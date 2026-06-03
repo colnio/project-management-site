@@ -158,6 +158,7 @@ func allTools(projectID, workspaceID string, restHdrs ...restCallWithHeadersFn) 
 		addSampleRelationTool(),
 		createRiskTool(projectID),
 		updateRiskTool(),
+		saveRiskAssessmentTool(projectID),
 		createApprovalRequestTool(projectID),
 		updatePageTool(rhFn),
 	}
@@ -1866,6 +1867,127 @@ func updateRiskTool() toolDef {
 				return "", fmt.Errorf("update_risk: status %d: %s", status, string(data))
 			}
 			return string(data), nil
+		},
+	}
+}
+
+// saveRiskAssessmentTool persists a completed interactive Risk Assessment
+// (Phase 6 of the risk_assessment skill). In one tool call it (1) creates the RA
+// report page from the supplied markdown and (2) replaces the project's (or
+// iteration's) interactive AI risk rows with the failure-mode matrix, setting
+// PI-review flags. A single tool call means a single approval under
+// suggest_writes — far better UX than N separate create_risk calls, and the
+// register population is idempotent on rerun.
+func saveRiskAssessmentTool(injectProjectID string) toolDef {
+	return toolDef{
+		IsWrite: true,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name: "save_risk_assessment",
+				Description: "Finalize the Risk Assessment (Phase 6 only). Creates the RA report page AND writes every failure mode into the risk register in one call. Call this exactly once, at Phase 6, after the researcher types 'report'. Do not call create_risk/draft_page separately.",
+				Parameters: json.RawMessage(`{
+"type":"object",
+"properties":{
+  "report_markdown":{"type":"string","description":"The full RA report markdown per the skill's Output Template"},
+  "report_title":{"type":"string","description":"Title for the report page, e.g. 'Risk Assessment — <Technique>'"},
+  "risk_level":{"type":"string","enum":["GREEN","YELLOW","RED"],"description":"Overall triage risk level from the report"},
+  "expertise":{"type":"string","enum":["Novice","Intermediate","Expert"],"description":"Assessed researcher expertise"},
+  "iteration_id":{"type":"string","description":"UUID of the iteration to scope risks to (omit for project-level)"},
+  "failure_modes":{"type":"array","description":"One entry per row of the Failure Mode Resolution Matrix","items":{
+    "type":"object",
+    "properties":{
+      "title":{"type":"string","description":"Failure mode title (required)"},
+      "likelihood":{"type":"string","enum":["high","med","low"],"description":"Map severity C/H->high, M->med, L->low"},
+      "impact_headline":{"type":"string","description":"One-line impact"},
+      "impact_description":{"type":"string","description":"Physical mechanism + instrument indicator"},
+      "mitigation":{"type":"string","description":"Mitigation agreed in Phase 4-5"},
+      "plan_b":{"type":"string","description":"Contingency if mitigation fails"},
+      "flag_pi_review":{"type":"boolean","description":"true when triage is RED or this is an Active Threat of Critical/High severity"}
+    },
+    "required":["title"]
+  }}
+},
+"required":["report_markdown","failure_modes"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			var p struct {
+				ReportMarkdown string `json:"report_markdown"`
+				ReportTitle    string `json:"report_title"`
+				RiskLevel      string `json:"risk_level"`
+				Expertise      string `json:"expertise"`
+				IterationID    string `json:"iteration_id"`
+				FailureModes   []struct {
+					Title             string `json:"title"`
+					Likelihood        string `json:"likelihood"`
+					ImpactHeadline    string `json:"impact_headline"`
+					ImpactDescription string `json:"impact_description"`
+					Mitigation        string `json:"mitigation"`
+					PlanB             string `json:"plan_b"`
+					FlagPIReview      bool   `json:"flag_pi_review"`
+				} `json:"failure_modes"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("save_risk_assessment: parse args: %w", err)
+			}
+			if strings.TrimSpace(p.ReportMarkdown) == "" {
+				return "", fmt.Errorf("save_risk_assessment: report_markdown required")
+			}
+			if len(p.FailureModes) == 0 {
+				return "", fmt.Errorf("save_risk_assessment: at least one failure_mode required")
+			}
+
+			// 1. Create the report page. Prepend the title as a level-1 heading
+			// when the markdown doesn't already open with one.
+			md := p.ReportMarkdown
+			if title := strings.TrimSpace(p.ReportTitle); title != "" && !strings.HasPrefix(strings.TrimSpace(md), "#") {
+				md = "# " + title + "\n\n" + md
+			}
+			blocks := buildMarkdownBlocks(md)
+			blocksJSON, err := json.Marshal(blocks)
+			if err != nil {
+				return "", fmt.Errorf("save_risk_assessment: marshal blocks: %w", err)
+			}
+			pageBody := map[string]any{
+				"parent_type": "project",
+				"parent_id":   injectProjectID,
+				"blocks":      json.RawMessage(blocksJSON),
+			}
+			pageData, status, err := rest("POST", "/v1/projects/"+injectProjectID+"/pages", pageBody)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("save_risk_assessment: create page: status %d: %s", status, string(pageData))
+			}
+
+			// 2. Populate the risk register (replaces prior interactive AI rows).
+			modes := make([]map[string]any, 0, len(p.FailureModes))
+			for _, fm := range p.FailureModes {
+				modes = append(modes, map[string]any{
+					"title":              fm.Title,
+					"likelihood":         fm.Likelihood,
+					"impact_headline":    fm.ImpactHeadline,
+					"impact_description": fm.ImpactDescription,
+					"mitigation":         fm.Mitigation,
+					"plan_b":             fm.PlanB,
+					"flag_pi_review":     fm.FlagPIReview,
+				})
+			}
+			raBody := map[string]any{"failure_modes": modes}
+			if p.IterationID != "" {
+				raBody["iteration_id"] = p.IterationID
+			}
+			raData, status, err := rest("POST", "/v1/projects/"+injectProjectID+"/risk-assessment", raBody)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("save_risk_assessment: save risks: status %d: %s", status, string(raData))
+			}
+
+			return fmt.Sprintf(`{"page":%s,"risks":%s}`, string(pageData), string(raData)), nil
 		},
 	}
 }

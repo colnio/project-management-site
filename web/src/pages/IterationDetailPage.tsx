@@ -18,8 +18,6 @@ import {
 import { EntityPageEditor } from '@/components/editor/EntityPageEditor';
 import { IterationDashboard } from '@/components/dashboards/IterationDashboard';
 import { IterationStatusControls } from '@/components/dashboards/IterationStatusControls';
-import { AIChatPanel } from '@/components/AIChatPanel';
-import { AIPanelProvider, useAIPanel } from '@/components/AIPanelProvider';
 
 // ─── Local field editor ───────────────────────────────────────────────────────
 
@@ -141,7 +139,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function IterationDetailPageInner() {
   const { iterationId } = useParams({ strict: false }) as { iterationId: string };
   const { data: iteration, isLoading, isError } = useIteration(iterationId);
-  const { open: aiPanelOpen, seed: aiSeed, close: closeAI } = useAIPanel();
 
   const [editOpen, setEditOpen] = useState(false);
 
@@ -227,22 +224,10 @@ function IterationDetailPageInner() {
         />
       </div>
 
-      {aiPanelOpen && (
-        <AIChatPanel
-          projectId={iteration.project_id}
-          workspaceId={undefined}
-          onClose={closeAI}
-          seed={aiSeed}
-        />
-      )}
     </AppShell>
   );
 }
 
 export function IterationDetailPage() {
-  return (
-    <AIPanelProvider>
-      <IterationDetailPageInner />
-    </AIPanelProvider>
-  );
+  return <IterationDetailPageInner />;
 }

@@ -17,18 +17,14 @@
  *   PI-review toggle    → visible only when isPrivileged(user) === true
  */
 import { useState } from 'react';
-import { useRouter } from '@tanstack/react-router';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import {
   useProjectRisks,
   useIterationRisks,
-  useRunWorkflow,
   useDeleteRisk,
   useSetRiskPIReview,
   type Risk,
 } from '@/hooks/useRiskQueries';
-import { useQueryClient } from '@tanstack/react-query';
-import { riskKeys } from '@/hooks/useRiskQueries';
 import { useAuth } from '@/hooks/useAuth';
 import { isPrivileged } from '@/api/types';
 import { RiskFormDialog } from '@/components/RiskFormDialog';
@@ -292,12 +288,6 @@ interface RiskRegisterProps {
 }
 
 export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
-  const qc = useQueryClient();
-  const router = useRouter();
-  const [runError, setRunError] = useState<string | null>(null);
-  const [runResult, setRunResult] = useState<string | null>(null);
-  const [runResultPageId, setRunResultPageId] = useState<string | null>(null);
-
   // Dialog state: null = closed, 'create' = new risk, Risk object = edit mode
   const [dialogState, setDialogState] = useState<null | 'create' | Risk>(null);
 
@@ -313,12 +303,17 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
   // AI panel context — degrades gracefully when no provider is present
   const { reviewWithAI } = useAIPanel();
 
-  const handleReviewWithAI = () => {
-    const scope = iterationId ? 'iteration' : 'project';
-    reviewWithAI(
-      'risk_assessment_skill',
-      `Begin a structured risk assessment for this ${scope}. Start with Phase 1 (Context Mapping).`,
-    );
+  // Launch the interactive 6-phase Risk Assessment dialogue in the AI panel.
+  // The seed carries the iteration UUID (when scoped) so Phase 6 writes the
+  // resulting risks against that iteration rather than the project.
+  const handleRunAssessment = () => {
+    const kickoff = iterationId
+      ? `Begin a structured risk assessment for iteration ${iterationId}. When you reach Phase 6, pass iteration_id="${iterationId}" to save_risk_assessment so the risks are scoped to this iteration. Start with Phase 1 (Context Mapping).`
+      : `Begin a structured risk assessment for this project. Start with Phase 1 (Context Mapping).`;
+    reviewWithAI('risk_assessment_skill', kickoff, {
+      projectId,
+      workspaceId: project?.workspace_id,
+    });
   };
 
   const projectResult = useProjectRisks(iterationId ? undefined : projectId);
@@ -326,43 +321,6 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
 
   const { data: risks, isLoading, isError } =
     iterationId ? iterationResult : projectResult;
-
-  const runWorkflow = useRunWorkflow();
-
-  const handleRunAssessment = () => {
-    setRunError(null);
-    setRunResult(null);
-    setRunResultPageId(null);
-    runWorkflow.mutate(
-      {
-        key: 'project_risk_v1',
-        project_id: projectId,
-        ...(iterationId ? { iteration_id: iterationId } : {}),
-      },
-      {
-        onSuccess: (run) => {
-          if (run.status === 'failed') {
-            setRunError(run.error || 'Risk assessment failed.');
-            return;
-          }
-          // Build a concise summary from run.output
-          const o = run.output ?? {};
-          const cats = o.category_ratings ? Object.keys(o.category_ratings).length : 0;
-          const parts: string[] = ['Risk assessment complete'];
-          if (o.overall_rating) parts.push(`overall risk ${o.overall_rating}/5`);
-          if (cats) parts.push(`${cats} risk${cats === 1 ? '' : 's'} updated`);
-          if (o.flagged_for_PI_review) parts.push('flagged for PI review');
-          setRunResult(parts.join(' · '));
-          if (run.result_page_id) setRunResultPageId(run.result_page_id);
-          void qc.invalidateQueries({ queryKey: riskKeys.projectRisks(projectId) });
-          if (iterationId) void qc.invalidateQueries({ queryKey: riskKeys.iterationRisks(iterationId) });
-        },
-        onError: (err) => {
-          setRunError(err instanceof Error ? err.message : 'Workflow failed');
-        },
-      }
-    );
-  };
 
   const flaggedCount = risks?.filter(r => r.flagged_for_pi_review).length ?? 0;
 
@@ -448,71 +406,6 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
             )}
           </div>
 
-          {runError && (
-            <span
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 11,
-                color: 'var(--bad)',
-                maxWidth: 240,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {runError}
-            </span>
-          )}
-
-          {runResult && !runError && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontFamily: 'var(--mono)',
-                fontSize: 11,
-                color: 'var(--good)',
-                maxWidth: 320,
-                overflow: 'hidden',
-              }}
-            >
-              <span
-                style={{
-                  flex: '1 1 0',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-                title={runResult}
-              >
-                {runResult}
-              </span>
-              {runResultPageId && (
-                <button
-                  className="top-btn"
-                  style={{ fontSize: 11, flexShrink: 0 }}
-                  onClick={() =>
-                    void router.navigate({
-                      to: '/pages/$pageId',
-                      params: { pageId: runResultPageId },
-                    })
-                  }
-                >
-                  View report
-                </button>
-              )}
-              <button
-                className="icon-btn"
-                onClick={() => { setRunResult(null); setRunResultPageId(null); }}
-                title="Dismiss"
-                style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0, padding: '2px 4px' }}
-              >
-                ✕
-              </button>
-            </span>
-          )}
-
           <button
             className="top-btn"
             onClick={() => setDialogState('create')}
@@ -524,18 +417,9 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
           <button
             className="top-btn"
             onClick={handleRunAssessment}
-            disabled={runWorkflow.isPending}
             style={{ fontSize: 12 }}
           >
-            {runWorkflow.isPending ? 'Running…' : 'Run risk assessment'}
-          </button>
-
-          <button
-            className="top-btn"
-            onClick={handleReviewWithAI}
-            style={{ fontSize: 12 }}
-          >
-            Review with LLM
+            Run risk assessment
           </button>
 
           <button
@@ -548,9 +432,7 @@ export function RiskRegister({ projectId, iterationId }: RiskRegisterProps) {
         </div>
 
         {/* Body */}
-        {runWorkflow.isPending ? (
-          <LoadingState message="LLM is assessing risks — this can take a minute or two…" />
-        ) : isLoading ? (
+        {isLoading ? (
           <LoadingState message="Loading risks…" />
         ) : isError ? (
           <ErrorState message="Failed to load risks." />

@@ -12,6 +12,7 @@ export interface AIConversation {
   project_id: string;
   started_by: string;
   title: string;
+  skill?: string;
   created_at: string;
 }
 
@@ -166,8 +167,20 @@ export function useApproveToolCall(convId: string) {
   return useMutation({
     mutationFn: (tcId: string) =>
       api.post<{ ok: boolean }>(`/v1/ai/conversations/${convId}/tool-calls/${tcId}/approve`),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: aiKeys.conversationMessages(convId) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: aiKeys.conversationMessages(convId) });
+      // An approved write tool (e.g. save_risk_assessment, create_risk, draft_page)
+      // mutates project data server-side, so refresh the risk register and page
+      // lists shown on the dashboard/wizard. The scope isn't known here, so
+      // invalidate every risk and page-list query by key suffix.
+      void qc.invalidateQueries({
+        predicate: q => {
+          const k = q.queryKey;
+          const last = Array.isArray(k) ? k[k.length - 1] : undefined;
+          return last === 'risks' || last === 'pages';
+        },
+      });
+    },
   });
 }
 

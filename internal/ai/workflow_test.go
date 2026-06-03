@@ -33,7 +33,9 @@ func TestLoadWorkflows_AllThreeKeys(t *testing.T) {
 		t.Fatalf("LoadWorkflows: %v", err)
 	}
 
-	required := []string{"battery_safety_risk_v1", "experimental_risk_v1", "project_risk_v1"}
+	// project_risk_v1 was retired in favor of the interactive risk_assessment
+	// skill; the two remaining domain workflows still drive the register.
+	required := []string{"battery_safety_risk_v1", "experimental_risk_v1"}
 	for _, key := range required {
 		wf, ok := wfs[key]
 		if !ok {

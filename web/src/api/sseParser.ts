@@ -32,6 +32,7 @@ export type SSEToolResultEvent = {
   id: string;
   name?: string;
   result?: unknown;
+  status?: string;
 };
 export type SSEWarnEvent = { type: 'warn'; message: string };
 export type SSEDoneEvent = { type: 'done'; conversation_id: string };
@@ -108,6 +109,7 @@ function buildSSEEvent(
         id: String(payload.tool_call_id ?? payload.id ?? ''),
         name: payload.name as string | undefined,
         result: payload.result,
+        status: payload.status as string | undefined,
       };
     case 'warn':
       return { type: 'warn', message: String(payload.message ?? '') };

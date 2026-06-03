@@ -4,7 +4,7 @@
  * Step 1  Basics            title, description, start/end dates
  * Step 2  Cycling protocol  freeform notes/params textarea (appended to description)
  * Step 3  Samples picker    multi-select from project samples → link via POST /iterations/{id}/samples
- * Step 4  AI risk register  run project_risk_v1, show drafted risks + PI-gate warning
+ * Step 4  AI risk register  launch interactive risk_assessment dialogue, show risks + PI-gate warning
  *
  * Props: { projectId, onClose }
  *
@@ -17,10 +17,10 @@ import {
   useProjectSamples,
   useLinkIterationSample,
 } from '@/hooks/useQueries';
-import { useRunWorkflow, useAIRun } from '@/hooks/useAIQueries';
+import { useAIPanel } from '@/components/AIPanelProvider';
+import { useProject } from '@/hooks/useQueries';
 import { LoadingState } from '@/components/LoadingState';
 import { RiskRegister } from '@/components/RiskRegister';
-import { ApiError } from '@/api/client';
 import type { Sample } from '@/api/types';
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
@@ -461,26 +461,16 @@ function AIRiskStep({
   onBack: () => void;
   onFinish: () => void;
 }) {
-  const runWorkflow = useRunWorkflow();
-  const [runId, setRunId] = useState<string | undefined>();
-  const [runError, setRunError] = useState<string | null>(null);
-  const { data: run, isLoading: runLoading } = useAIRun(runId);
+  const { reviewWithAI } = useAIPanel();
+  const { data: project } = useProject(projectId);
 
-  const handleRun = async () => {
-    setRunError(null);
-    try {
-      const result = await runWorkflow.mutateAsync({ key: 'project_risk_v1', project_id: projectId });
-      setRunId(result.id);
-    } catch (e) {
-      const msg = e instanceof ApiError
-        ? (e.status === 503 ? 'LLM service unavailable — you can skip this step.' : e.message)
-        : 'LLM service unavailable — you can skip this step.';
-      setRunError(msg);
-    }
+  const handleRun = () => {
+    reviewWithAI(
+      'risk_assessment_skill',
+      `Begin a structured risk assessment for iteration ${iterationId}. When you reach Phase 6, pass iteration_id="${iterationId}" to save_risk_assessment so the risks are scoped to this iteration. Start with Phase 1 (Context Mapping).`,
+      { projectId, workspaceId: project?.workspace_id },
+    );
   };
-
-  const isRunning = runWorkflow.isPending || (run?.status === 'running' && runLoading);
-  const isDone = run?.status === 'completed' || run?.status === 'failed';
 
   return (
     <>
@@ -491,42 +481,31 @@ function AIRiskStep({
         message="A HIGH-likelihood risk flagged for PI review will block activating this iteration until a PI signs off and the risk is resolved."
       />
 
-      <InfoBanner message="Run the LLM risk assessment to draft risks for this iteration. You can skip and add risks manually later." />
+      <InfoBanner message="Launch the guided risk assessment. The assistant walks you through a structured 6-phase review in the side panel and drafts the risk register below when you finish. You can skip and add risks manually later." />
 
-      {runError && <FormError message={runError} />}
+      <button
+        className="top-btn primary"
+        onClick={handleRun}
+        style={{ alignSelf: 'flex-start' }}
+      >
+        Run risk assessment
+      </button>
 
-      {!runId && (
-        <button
-          className="top-btn primary"
-          onClick={() => void handleRun()}
-          disabled={isRunning}
-          style={{ alignSelf: 'flex-start', opacity: isRunning ? 0.7 : 1 }}
+      <div style={{ marginTop: 4 }}>
+        <div
+          style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 10.5,
+            color: 'var(--muted-2)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+            marginBottom: 10,
+          }}
         >
-          {isRunning ? 'Running…' : 'Run risk assessment'}
-        </button>
-      )}
-
-      {runId && !isDone && (
-        <LoadingState message="LLM is drafting risks…" />
-      )}
-
-      {runId && isDone && (
-        <div style={{ marginTop: 4 }}>
-          <div
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10.5,
-              color: 'var(--muted-2)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.07em',
-              marginBottom: 10,
-            }}
-          >
-            Drafted risks
-          </div>
-          <RiskRegister projectId={projectId} iterationId={iterationId} />
+          Risk register
         </div>
-      )}
+        <RiskRegister projectId={projectId} iterationId={iterationId} />
+      </div>
 
       <WizardFooter
         step={4}
