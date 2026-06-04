@@ -55,7 +55,7 @@ func (s *Service) handleListInbox(ctx context.Context, in *listInboxInput) (*lis
 		return nil, platform.Forbidden("not a member of this workspace")
 	}
 
-	items, err := s.AggregateForWorkspace(ctx, wsID)
+	items, err := s.AggregateForWorkspace(ctx, wsID, p.UserID)
 	if err != nil {
 		return nil, err
 	}

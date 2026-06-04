@@ -828,8 +828,9 @@ func (s *Service) handleMarkDone(ctx context.Context, in *markDoneInput) (*markD
 type addReferenceInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		RefType string `json:"ref_type" required:"true" enum:"sample,experiment,page"`
+		RefType string `json:"ref_type" required:"true" enum:"sample,experiment,page,user,project"`
 		RefID   string `json:"ref_id" required:"true"`
+		Label   string `json:"label,omitempty"`
 	}
 }
 
@@ -866,7 +867,7 @@ func (s *Service) handleAddReference(ctx context.Context, in *addReferenceInput)
 		return nil, platform.BadRequest("task.invalid_ref_id", "invalid ref_id")
 	}
 
-	ref, err := s.AddReference(ctx, taskID, in.Body.RefType, refID, p.UserID)
+	ref, err := s.AddReference(ctx, taskID, in.Body.RefType, refID, p.UserID, in.Body.Label)
 	if err != nil {
 		return nil, err
 	}

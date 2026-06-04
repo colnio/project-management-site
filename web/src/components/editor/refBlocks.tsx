@@ -307,6 +307,121 @@ export const artifactRef = createReactBlockSpec(
   }
 );
 
+// ─── userRef ─────────────────────────────────────────────────────────────────
+
+export const userRef = createReactBlockSpec(
+  {
+    type: 'userRef' as const,
+    propSchema: {
+      refId: { default: '' },
+      name:  { default: '' },
+      email: { default: '' },
+    },
+    content: 'none',
+  },
+  {
+    render: ({ block }) => {
+      const { name, email } = block.props;
+      const display = name || email;
+      return (
+        <a
+          href="/people"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 9px',
+            background: 'var(--ref-user-bg, var(--violet-tint, #ede9f7))',
+            border: '1px solid var(--ref-user-bd, var(--violet-soft, #c4b3e8))',
+            borderRadius: 7,
+            textDecoration: 'none',
+            color: 'var(--ref-user-fg, var(--violet, #5b3fa8))',
+            fontSize: 13,
+            lineHeight: 1.4,
+            cursor: 'pointer',
+            maxWidth: 320,
+            fontWeight: 500,
+          }}
+        >
+          <span style={{ fontSize: 13, flexShrink: 0 }}>@</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {display}
+          </span>
+        </a>
+      );
+    },
+  }
+);
+
+// ─── projectRef ───────────────────────────────────────────────────────────────
+
+export const projectRef = createReactBlockSpec(
+  {
+    type: 'projectRef' as const,
+    propSchema: {
+      refId:         { default: '' },
+      name:          { default: '' },
+      workspaceId:   { default: '' },
+      workspaceName: { default: '' },
+    },
+    content: 'none',
+  },
+  {
+    render: ({ block }) => {
+      const { refId, name, workspaceName } = block.props;
+      const href = refId ? `/projects/${refId}` : '#';
+      return (
+        <a
+          href={href}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 7,
+            padding: '4px 9px',
+            background: 'var(--ember-tint)',
+            border: '1px solid var(--ember-soft)',
+            borderRadius: 7,
+            textDecoration: 'none',
+            color: 'var(--ember)',
+            fontSize: 13,
+            lineHeight: 1.4,
+            cursor: 'pointer',
+            maxWidth: 400,
+          }}
+        >
+          <span style={{ fontSize: 13, flexShrink: 0 }}>◆</span>
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontWeight: 500,
+            }}
+          >
+            {name}
+          </span>
+          {workspaceName && (
+            <span
+              style={{
+                fontSize: 10,
+                padding: '1px 5px',
+                borderRadius: 4,
+                background: 'var(--ember-soft)',
+                color: 'var(--ember)',
+                fontFamily: 'var(--mono)',
+                flexShrink: 0,
+                opacity: 0.85,
+              }}
+            >
+              {workspaceName}
+            </span>
+          )}
+        </a>
+      );
+    },
+  }
+);
+
 // ─── entityDashboard ──────────────────────────────────────────────────────────
 // Non-editable block that renders an EntityDashboard for a given entity type/id.
 
@@ -489,6 +604,8 @@ export const refBlockSchema = BlockNoteSchema.create({
     sampleRef:       sampleRef(),
     experimentRef:   experimentRef(),
     artifactRef:     artifactRef(),
+    userRef:         userRef(),
+    projectRef:      projectRef(),
     entityDashboard: entityDashboard(),
     imageEmbed:      imageEmbed(),
     pdfEmbed:        pdfEmbed(),

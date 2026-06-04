@@ -28,8 +28,9 @@ export interface Task {
 export interface TaskReference {
   id: string;
   task_id: string;
-  ref_type: 'sample' | 'experiment' | 'page';
+  ref_type: 'sample' | 'experiment' | 'page' | 'user' | 'project';
   ref_id: string;
+  label: string;
   created_by: string;
   created_at: string;
 }
@@ -279,8 +280,11 @@ export function useMarkDone(taskId: string, projectId: string) {
 export function useAddReference(taskId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { ref_type: 'sample' | 'experiment' | 'page'; ref_id: string }) =>
-      api.post<TaskReference>(`/v1/tasks/${taskId}/references`, body),
+    mutationFn: (body: {
+      ref_type: 'sample' | 'experiment' | 'page' | 'user' | 'project';
+      ref_id: string;
+      label: string;
+    }) => api.post<TaskReference>(`/v1/tasks/${taskId}/references`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: taskKeys.references(taskId) });
     },
@@ -294,7 +298,7 @@ export function useRemoveReference(taskId: string) {
       ref_type,
       ref_id,
     }: {
-      ref_type: 'sample' | 'experiment' | 'page';
+      ref_type: 'sample' | 'experiment' | 'page' | 'user' | 'project';
       ref_id: string;
     }) => api.delete<{ ok: boolean }>(`/v1/tasks/${taskId}/references/${ref_type}/${ref_id}`),
     onSuccess: () => {

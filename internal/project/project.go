@@ -251,6 +251,54 @@ func (s *Service) ListProjectsForWorkspace(
 	return result, nil
 }
 
+// ReadableProject is a project the caller can read, paired with its workspace —
+// used by cross-workspace search / @-mention features.
+type ReadableProject struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	Visibility  string
+}
+
+// ListReadableProjects returns every non-archived project across all workspaces
+// the principal can read. It composes the same per-workspace access resolution as
+// ListProjectsForWorkspace: privileged users and lab members see all workspaces
+// (workspace-visible projects everywhere; private only where they collaborate),
+// while others see their member workspaces.
+//
+// Note: a pure external collaborator who is a member of no workspace (only a
+// project_collaborations entry) is not enumerated here, mirroring the existing
+// workspace-listing behaviour.
+func (s *Service) ListReadableProjects(ctx context.Context, p *platform.Principal) ([]ReadableProject, error) {
+	var workspaces []*org.Workspace
+	var err error
+	if p.IsPrivileged() || s.org.IsLabMember(p) {
+		workspaces, err = s.org.ListAllWorkspaces(ctx)
+	} else {
+		workspaces, err = s.org.ListWorkspacesForUser(ctx, p.UserID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("project: list readable: workspaces: %w", err)
+	}
+
+	var out []ReadableProject
+	for _, ws := range workspaces {
+		projs, perr := s.ListProjectsForWorkspace(ctx, p, ws.ID, false)
+		if perr != nil {
+			return nil, fmt.Errorf("project: list readable: workspace %s: %w", ws.ID, perr)
+		}
+		for _, pr := range projs {
+			out = append(out, ReadableProject{
+				ID:          pr.ID,
+				WorkspaceID: pr.WorkspaceID,
+				Name:        pr.Name,
+				Visibility:  pr.Visibility,
+			})
+		}
+	}
+	return out, nil
+}
+
 // UpdateProject applies partial updates (non-empty fields only).
 func (s *Service) UpdateProject(
 	ctx context.Context,

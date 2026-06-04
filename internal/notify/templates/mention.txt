@@ -1,0 +1,10 @@
+{{.ActorName}} mentioned you
+---
+{{.ActorName}} mentioned you{{if .Snippet}}:
+
+{{.Snippet}}{{end}}
+
+Open it:
+{{.ActionURL}}
+
+Manage notification preferences: {{.PrefsURL}}

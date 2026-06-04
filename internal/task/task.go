@@ -43,12 +43,15 @@ type Task struct {
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
-// TaskReference is a link from a task to a sample, experiment, or page.
+// TaskReference is a link from a task to a sample, experiment, page, user, or
+// project. Label is a denormalized display string captured at add time so
+// cross-workspace references render without an extra lookup.
 type TaskReference struct {
 	ID        uuid.UUID `json:"id"`
 	TaskID    uuid.UUID `json:"task_id"`
 	RefType   string    `json:"ref_type"`
 	RefID     uuid.UUID `json:"ref_id"`
+	Label     string    `json:"label"`
 	CreatedBy uuid.UUID `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -73,6 +76,12 @@ type AssigneeNotifier interface {
 	EnqueueTaskAssigned(ctx context.Context, taskID, projectID, assigneeUserID uuid.UUID, toEmail, projectName, taskTitle, actionPath, idempotencyKey string) error
 }
 
+// Mentioner records an @-mention (and notifies the mentioned user). Satisfied by
+// *mention.Service. Used when a task gains a ref_type='user' reference.
+type Mentioner interface {
+	Create(ctx context.Context, actorID, mentionedUserID uuid.UUID, sourceType string, sourceID uuid.UUID, projectID, workspaceID *uuid.UUID, link, snippet string) error
+}
+
 // Service is the task module's domain service.
 type Service struct {
 	pool       *pgxpool.Pool
@@ -82,6 +91,7 @@ type Service struct {
 	rec        audit.Recorder
 	log        *slog.Logger
 	notify     AssigneeNotifier
+	mentions   Mentioner
 }
 
 // NewService constructs a Service.
@@ -106,6 +116,11 @@ func NewService(
 // SetAssigneeNotifier wires the notify module for task assigned emails.
 func (s *Service) SetAssigneeNotifier(n AssigneeNotifier) {
 	s.notify = n
+}
+
+// SetMentioner wires the mention module so user references notify the person.
+func (s *Service) SetMentioner(m Mentioner) {
+	s.mentions = m
 }
 
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
@@ -580,9 +595,12 @@ func (s *Service) MarkDone(ctx context.Context, taskID, actorID uuid.UUID) (*Tas
 		return nil, platform.BadRequest("task.invalid_transition", "task must be in_progress to mark done")
 	}
 
+	// Only sample/experiment/page references satisfy the close gate — a task
+	// referencing only people or other projects has produced no linked artifact.
 	var refCount int
 	if err := tx.QueryRow(ctx,
-		`SELECT COUNT(*) FROM task_references WHERE task_id = $1`,
+		`SELECT COUNT(*) FROM task_references
+		 WHERE task_id = $1 AND ref_type IN ('sample','experiment','page')`,
 		taskID,
 	).Scan(&refCount); err != nil {
 		return nil, fmt.Errorf("task: mark done: count references: %w", err)
@@ -669,11 +687,13 @@ func (s *Service) DelayTask(ctx context.Context, taskID, actorID uuid.UUID, newE
 
 // ─── AddReference ────────────────────────────────────────────────────────────
 
-// AddReference attaches a sample, experiment, or page reference to a task.
-func (s *Service) AddReference(ctx context.Context, taskID uuid.UUID, refType string, refID, actorID uuid.UUID) (*TaskReference, error) {
-	validTypes := map[string]bool{"sample": true, "experiment": true, "page": true}
+// AddReference attaches a sample, experiment, page, user, or project reference to
+// a task. label is a denormalized display string captured by the caller (e.g. the
+// sample identifier or person's name) so the chip renders without a lookup.
+func (s *Service) AddReference(ctx context.Context, taskID uuid.UUID, refType string, refID, actorID uuid.UUID, label string) (*TaskReference, error) {
+	validTypes := map[string]bool{"sample": true, "experiment": true, "page": true, "user": true, "project": true}
 	if !validTypes[refType] {
-		return nil, platform.BadRequest("task.invalid_ref_type", "ref_type must be sample, experiment, or page")
+		return nil, platform.BadRequest("task.invalid_ref_type", "ref_type must be sample, experiment, page, user, or project")
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -683,10 +703,10 @@ func (s *Service) AddReference(ctx context.Context, taskID uuid.UUID, refType st
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO task_references (task_id, ref_type, ref_id, created_by)
-		 VALUES ($1, $2, $3, $4)
-		 ON CONFLICT (task_id, ref_type, ref_id) DO NOTHING`,
-		taskID, refType, refID, actorID,
+		`INSERT INTO task_references (task_id, ref_type, ref_id, label, created_by)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (task_id, ref_type, ref_id) DO UPDATE SET label = EXCLUDED.label`,
+		taskID, refType, refID, label, actorID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("task: add reference: insert: %w", err)
@@ -694,10 +714,10 @@ func (s *Service) AddReference(ctx context.Context, taskID uuid.UUID, refType st
 
 	var ref TaskReference
 	if err := tx.QueryRow(ctx,
-		`SELECT id, task_id, ref_type, ref_id, created_by, created_at
+		`SELECT id, task_id, ref_type, ref_id, label, created_by, created_at
 		 FROM task_references WHERE task_id = $1 AND ref_type = $2 AND ref_id = $3`,
 		taskID, refType, refID,
-	).Scan(&ref.ID, &ref.TaskID, &ref.RefType, &ref.RefID, &ref.CreatedBy, &ref.CreatedAt); err != nil {
+	).Scan(&ref.ID, &ref.TaskID, &ref.RefType, &ref.RefID, &ref.Label, &ref.CreatedBy, &ref.CreatedAt); err != nil {
 		return nil, fmt.Errorf("task: add reference: reload: %w", err)
 	}
 
@@ -709,6 +729,26 @@ func (s *Service) AddReference(ctx context.Context, taskID uuid.UUID, refType st
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("task: add reference: commit: %w", err)
+	}
+
+	// A user reference is an @-mention of that person — record + notify (best-effort).
+	if refType == "user" && s.mentions != nil {
+		if t, terr := s.GetTask(ctx, taskID); terr != nil {
+			s.log.Warn("task: load task for mention", "err", terr)
+		} else {
+			pid := t.ProjectID
+			var wsID *uuid.UUID
+			if proj, perr := s.projects.GetProject(ctx, t.ProjectID); perr != nil {
+				s.log.Warn("task: load project for mention", "err", perr)
+			} else {
+				ws := proj.WorkspaceID
+				wsID = &ws
+			}
+			link := fmt.Sprintf("/projects/%s?tab=tasks&task=%s", t.ProjectID, taskID)
+			if merr := s.mentions.Create(ctx, actorID, refID, "task", taskID, &pid, wsID, link, t.Title); merr != nil {
+				s.log.Warn("task: create mention failed", "err", merr)
+			}
+		}
 	}
 
 	return &ref, nil
@@ -752,7 +792,7 @@ func (s *Service) RemoveReference(ctx context.Context, taskID uuid.UUID, refType
 // ListReferences returns all references for a task ordered by created_at.
 func (s *Service) ListReferences(ctx context.Context, taskID uuid.UUID) ([]*TaskReference, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, task_id, ref_type, ref_id, created_by, created_at
+		`SELECT id, task_id, ref_type, ref_id, label, created_by, created_at
 		 FROM task_references WHERE task_id = $1 ORDER BY created_at ASC`,
 		taskID,
 	)
@@ -764,7 +804,7 @@ func (s *Service) ListReferences(ctx context.Context, taskID uuid.UUID) ([]*Task
 	var result []*TaskReference
 	for rows.Next() {
 		var r TaskReference
-		if err := rows.Scan(&r.ID, &r.TaskID, &r.RefType, &r.RefID, &r.CreatedBy, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.TaskID, &r.RefType, &r.RefID, &r.Label, &r.CreatedBy, &r.CreatedAt); err != nil {
 			return nil, fmt.Errorf("task: list references: scan: %w", err)
 		}
 		result = append(result, &r)

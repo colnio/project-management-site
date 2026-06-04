@@ -39,8 +39,10 @@ import {
   pageKeys,
 } from '@/hooks/usePageQueries';
 import type { GetPageResponse, Revision, DiffLine } from '@/hooks/usePageQueries';
-import { useProjectSamples, useProjectExperiments, useProjectArtifacts } from '@/hooks/useQueries';
+import { useProjectSamples, useProjectExperiments, useProjectArtifacts, useProject } from '@/hooks/useQueries';
 import type { Sample, Experiment, Artifact } from '@/api/types';
+import { searchMentions, useCreateMention, type SearchResult } from '@/hooks/useMentionSearch';
+import { CrossWorkspaceConfirm } from '@/components/CrossWorkspaceConfirm';
 import { useCreateArtifact, useCompleteArtifact, uploadToPresignedUrl } from '@/hooks/useArtifactQueries';
 
 import '@blocknote/mantine/style.css';
@@ -637,6 +639,21 @@ export function PageEditorCore({
   const { data: experiments = [] } = useProjectExperiments(effectiveProjectId);
   const { data: artifacts = [] }  = useProjectArtifacts(effectiveProjectId);
 
+  // Current workspace for cross-workspace guard
+  const { data: currentProject } = useProject(effectiveProjectId);
+  const currentWorkspaceId = currentProject?.workspace_id;
+
+  // Mutation for firing @-person mention notifications
+  const createMention = useCreateMention();
+
+  // ─── Cross-workspace confirm state ──────────────────────────────────────────
+
+  interface PendingInsert {
+    result: SearchResult;
+    insertFn: () => void;
+  }
+  const [pendingInsert, setPendingInsert] = useState<PendingInsert | null>(null);
+
   const insertSampleRef = useCallback((sample: Sample) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {
@@ -727,40 +744,143 @@ export function PageEditorCore({
 
   const getMentionItems = useCallback(
     async (query: string): Promise<DefaultReactSuggestionItem[]> => {
-      const q = query.toLowerCase();
-      const sampleItems: DefaultReactSuggestionItem[] = samples
-        .filter(s => !q || s.identifier?.toLowerCase().includes(q) || s.name?.toLowerCase().includes(q))
-        .slice(0, 10)
-        .map(s => ({
+      // Fall back to local in-memory data when query is empty (instant response)
+      if (!query.trim()) {
+        const sampleItems: DefaultReactSuggestionItem[] = samples.slice(0, 8).map(s => ({
           title: `${s.identifier ?? ''}${s.name ? ' — ' + s.name : ''}`,
           group: 'Samples',
           subtext: s.kind ?? undefined,
           icon: <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ref-sample-fg)' }}>s</span>,
           onItemClick: () => insertSampleRef(s),
         }));
-      const experimentItems: DefaultReactSuggestionItem[] = experiments
-        .filter(e => !q || e.method?.toLowerCase().includes(q) || e.id?.toLowerCase().includes(q))
-        .slice(0, 10)
-        .map(e => ({
+        const experimentItems: DefaultReactSuggestionItem[] = experiments.slice(0, 8).map(e => ({
           title: e.method ?? e.id.slice(0, 8),
           group: 'Experiments',
           subtext: e.status ?? undefined,
           icon: <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ref-exp-fg)' }}>e</span>,
           onItemClick: () => insertExperimentRef(e),
         }));
-      const artifactItems: DefaultReactSuggestionItem[] = artifacts
-        .filter(a => !q || a.filename?.toLowerCase().includes(q) || a.type?.toLowerCase().includes(q))
-        .slice(0, 10)
-        .map(a => ({
+        const artifactItems: DefaultReactSuggestionItem[] = artifacts.slice(0, 8).map(a => ({
           title: a.filename ?? a.id.slice(0, 8),
           group: 'Artifacts',
           subtext: a.type ?? undefined,
           icon: <span style={{ fontSize: 13 }}>📎</span>,
           onItemClick: () => insertArtifactRef(a),
         }));
-      return filterSuggestionItems([...sampleItems, ...experimentItems, ...artifactItems], query);
+        return [...sampleItems, ...experimentItems, ...artifactItems];
+      }
+
+      // For a non-empty query, call the search API
+      let results: SearchResult[] = [];
+      try {
+        results = await searchMentions(query, { projectId: effectiveProjectId });
+      } catch {
+        // Fall through with empty results; local items will still be returned
+      }
+
+      const mapped: DefaultReactSuggestionItem[] = results.map(result => {
+        // Determine whether a cross-workspace guard is needed
+        const isCrossWorkspace =
+          (result.type === 'sample' || result.type === 'experiment') &&
+          !!result.workspace_id &&
+          !!currentWorkspaceId &&
+          result.workspace_id !== currentWorkspaceId;
+
+        const doInsert = () => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ed = editor as unknown as Parameters<typeof insertOrUpdateBlock>[0];
+          if (result.type === 'sample') {
+            insertOrUpdateBlock(ed, {
+              type: 'sampleRef',
+              props: {
+                refId: result.id,
+                identifier: result.label,
+                name: result.sublabel ?? '',
+                kind: result.kind ?? '',
+                status: result.status ?? '',
+              },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any);
+          } else if (result.type === 'experiment') {
+            insertOrUpdateBlock(ed, {
+              type: 'experimentRef',
+              props: {
+                refId: result.id,
+                method: result.label,
+                summary: result.sublabel ?? '',
+                status: result.status ?? '',
+              },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any);
+          } else if (result.type === 'project') {
+            insertOrUpdateBlock(ed, {
+              type: 'projectRef',
+              props: {
+                refId: result.id,
+                name: result.label,
+                workspaceId: result.workspace_id ?? '',
+                workspaceName: result.workspace_name ?? '',
+              },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any);
+          } else if (result.type === 'people') {
+            insertOrUpdateBlock(ed, {
+              type: 'userRef',
+              props: {
+                refId: result.id,
+                name: result.label,
+                email: result.email ?? result.sublabel ?? '',
+              },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any);
+            // Fire mention notification (self-mentions ignored server-side)
+            if (pageId) {
+              createMention.mutate({
+                mentioned_user_id: result.id,
+                source_type: 'page',
+                source_id: pageId,
+                project_id: effectiveProjectId,
+                link: '/pages/' + pageId,
+              });
+            }
+          }
+        };
+
+        const groupLabel =
+          result.type === 'people'
+            ? 'People'
+            : result.type === 'sample'
+              ? 'Samples'
+              : result.type === 'experiment'
+                ? 'Experiments'
+                : 'Projects';
+
+        const subtextParts: string[] = [];
+        if (result.sublabel) subtextParts.push(result.sublabel);
+        if (result.workspace_name && result.tier > 0) subtextParts.push(result.workspace_name);
+
+        return {
+          title: result.label,
+          group: groupLabel,
+          subtext: subtextParts.join(' · ') || undefined,
+          icon: result.type === 'people'
+            ? <span style={{ fontSize: 13, color: 'var(--ref-user-fg, var(--violet, #5b3fa8))' }}>@</span>
+            : result.type === 'sample'
+              ? <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ref-sample-fg)' }}>s</span>
+              : result.type === 'experiment'
+                ? <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ref-exp-fg)' }}>e</span>
+                : <span style={{ fontSize: 13, color: 'var(--ember)' }}>◆</span>,
+          onItemClick: isCrossWorkspace
+            ? () => setPendingInsert({ result, insertFn: doInsert })
+            : doInsert,
+        };
+      });
+
+      return mapped;
     },
-    [samples, experiments, artifacts, insertSampleRef, insertExperimentRef, insertArtifactRef]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [samples, experiments, artifacts, insertSampleRef, insertExperimentRef, insertArtifactRef,
+     effectiveProjectId, currentWorkspaceId, editor, pageId, createMention]
   );
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -900,6 +1020,21 @@ export function PageEditorCore({
           e.target.value = '';
         }}
       />
+
+      {/* Cross-workspace confirm dialog */}
+      {pendingInsert && (
+        <CrossWorkspaceConfirm
+          open={true}
+          entityType={pendingInsert.result.type}
+          entityLabel={pendingInsert.result.label}
+          workspaceName={pendingInsert.result.workspace_name ?? ''}
+          onConfirm={() => {
+            pendingInsert.insertFn();
+            setPendingInsert(null);
+          }}
+          onCancel={() => setPendingInsert(null)}
+        />
+      )}
 
       {/* Editor area */}
       <EditorBoundary fallback={<ReadonlyPageFallback page={pageData} />}>

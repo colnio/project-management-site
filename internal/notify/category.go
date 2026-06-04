@@ -25,6 +25,7 @@ const (
 	TemplateDailyDigest              = "daily_digest"
 	TemplateAdminBroadcast           = "admin_broadcast"
 	TemplateTaskAssigned             = "task_assigned"
+	TemplateMention                  = "mention"
 )
 
 // mandatoryCategories cannot be disabled via the preferences API.

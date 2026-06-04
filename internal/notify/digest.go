@@ -86,7 +86,7 @@ func (s *Service) enqueueDigestForUser(ctx context.Context, userID uuid.UUID, em
 		if err := wsRows.Scan(&wsID); err != nil {
 			return err
 		}
-		items, err := s.inbox.AggregateForWorkspace(ctx, wsID)
+		items, err := s.inbox.AggregateForWorkspace(ctx, wsID, userID)
 		if err != nil {
 			return err
 		}

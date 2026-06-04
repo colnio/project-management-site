@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import type { Project, Workspace, Sample, Experiment } from '@/api/types';
 import { useProjectSamples, useProjectExperiments } from '@/hooks/useQueries';
 import { useProjectPages, type PageListItem } from '@/hooks/usePageQueries';
+import { useMentionSearch, type SearchResult } from '@/hooks/useMentionSearch';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -18,8 +19,8 @@ interface PaletteItem {
   id: string;
   label: string;
   sub?: string;
-  kind: 'project' | 'workspace' | 'sample' | 'experiment' | 'page';
-  data: Project | Workspace | Sample | Experiment | PageListItem;
+  kind: 'project' | 'workspace' | 'sample' | 'experiment' | 'page' | 'people';
+  data: Project | Workspace | Sample | Experiment | PageListItem | SearchResult;
 }
 
 function fuzzyMatch(query: string, text: string): number {
@@ -87,7 +88,33 @@ export function CommandPalette({
   const { data: activeExperiments = [] } = useProjectExperiments(activeProjectId);
   const { data: activePages = [] } = useProjectPages(activeProjectId);
 
+  // Cross-workspace API search (enabled when query.length >= 1)
+  const { data: searchResults = [] } = useMentionSearch(query, { projectId: activeProjectId });
+
   const activeProject = projects.find(p => p.id === activeProjectId);
+
+  // Build the set of IDs already covered by local items so we can de-dupe
+  const localSampleIds = new Set(activeSamples.map(s => s.id));
+  const localExperimentIds = new Set(activeExperiments.map(e => e.id));
+  const localProjectIds = new Set(projects.map(p => p.id));
+
+  // Only include search results for non-empty queries, and deduplicate
+  const searchItems: PaletteItem[] = query.length >= 1
+    ? searchResults
+        .filter(r => {
+          if (r.type === 'sample' && localSampleIds.has(r.id)) return false;
+          if (r.type === 'experiment' && localExperimentIds.has(r.id)) return false;
+          if (r.type === 'project' && localProjectIds.has(r.id)) return false;
+          return true;
+        })
+        .map(r => ({
+          id: `search-${r.type}-${r.id}`,
+          label: r.label,
+          sub: [r.sublabel, r.workspace_name].filter(Boolean).join(' · ') || undefined,
+          kind: (r.type === 'people' ? 'people' : r.type) as PaletteItem['kind'],
+          data: r,
+        }))
+    : [];
 
   const items: PaletteItem[] = [
     ...workspaces.map(w => ({
@@ -125,6 +152,7 @@ export function CommandPalette({
       kind: 'page' as const,
       data: pg,
     })),
+    ...searchItems,
   ].map(item => ({ item, score: fuzzyMatch(query, item.label) }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score)
@@ -145,10 +173,18 @@ export function CommandPalette({
   };
 
   const handleSelect = (item: PaletteItem) => {
+    // Search result items have SearchResult as data
+    const isSearchResult = item.id.startsWith('search-');
+
     switch (item.kind) {
       case 'project': {
-        const p = item.data as Project;
-        onSelectProject(p.id, p.workspace_id);
+        if (isSearchResult) {
+          const r = item.data as SearchResult;
+          void navigate({ to: '/projects/$projectId', params: { projectId: r.id } });
+        } else {
+          const p = item.data as Project;
+          onSelectProject(p.id, p.workspace_id);
+        }
         break;
       }
       case 'workspace': {
@@ -157,18 +193,32 @@ export function CommandPalette({
         break;
       }
       case 'sample': {
-        const s = item.data as Sample;
-        void navigate({ to: '/samples/$sampleId', params: { sampleId: s.id } });
+        if (isSearchResult) {
+          const r = item.data as SearchResult;
+          void navigate({ to: '/samples/$sampleId', params: { sampleId: r.id } });
+        } else {
+          const s = item.data as Sample;
+          void navigate({ to: '/samples/$sampleId', params: { sampleId: s.id } });
+        }
         break;
       }
       case 'experiment': {
-        const exp = item.data as Experiment;
-        void navigate({ to: '/experiments/$experimentId', params: { experimentId: exp.id } });
+        if (isSearchResult) {
+          const r = item.data as SearchResult;
+          void navigate({ to: '/experiments/$experimentId', params: { experimentId: r.id } });
+        } else {
+          const exp = item.data as Experiment;
+          void navigate({ to: '/experiments/$experimentId', params: { experimentId: exp.id } });
+        }
         break;
       }
       case 'page': {
         const pg = item.data as PageListItem;
         void navigate({ to: '/pages/$pageId', params: { pageId: pg.id } });
+        break;
+      }
+      case 'people': {
+        void navigate({ to: '/people' });
         break;
       }
     }
@@ -177,11 +227,12 @@ export function CommandPalette({
 
   // Kind → badge colour config
   const kindStyle: Record<PaletteItem['kind'], { bg: string; color: string; radius: number }> = {
-    workspace: { bg: 'var(--ink)', color: 'var(--paper)', radius: 7 },
-    project: { bg: 'var(--ember-tint)', color: 'var(--ember)', radius: 6 },
-    sample: { bg: 'var(--teal-tint, #e6f4f1)', color: 'var(--teal, #2a7a6a)', radius: 5 },
+    workspace:  { bg: 'var(--ink)', color: 'var(--paper)', radius: 7 },
+    project:    { bg: 'var(--ember-tint)', color: 'var(--ember)', radius: 6 },
+    sample:     { bg: 'var(--teal-tint, #e6f4f1)', color: 'var(--teal, #2a7a6a)', radius: 5 },
     experiment: { bg: 'var(--violet-tint, #ede9f7)', color: 'var(--violet, #5b3fa8)', radius: 5 },
-    page: { bg: 'var(--paper-2)', color: 'var(--muted)', radius: 5 },
+    page:       { bg: 'var(--paper-2)', color: 'var(--muted)', radius: 5 },
+    people:     { bg: 'var(--violet-tint, #ede9f7)', color: 'var(--violet, #5b3fa8)', radius: 99 },
   };
 
   if (!open) return null;

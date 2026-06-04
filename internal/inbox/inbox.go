@@ -20,6 +20,7 @@ import (
 
 	"github.com/colnio/project-management-site/internal/ai"
 	"github.com/colnio/project-management-site/internal/approval"
+	"github.com/colnio/project-management-site/internal/mention"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/project"
 	"github.com/colnio/project-management-site/internal/risk"
@@ -43,8 +44,12 @@ type Service struct {
 	ai        *ai.Service
 	projects  *project.Service
 	approvals *approval.Service
+	mentions  *mention.Service
 	log       *slog.Logger
 }
+
+// SetMentions wires the mention module as an inbox source (personal @-mentions).
+func (s *Service) SetMentions(m *mention.Service) { s.mentions = m }
 
 // NewService constructs a Service.
 func NewService(pool *pgxpool.Pool, orgSvc *org.Service, risks *risk.Service, aiSvc *ai.Service, projects *project.Service, approvals *approval.Service, log *slog.Logger) *Service {
@@ -63,8 +68,18 @@ const inboxCap = 50
 
 // AggregateForWorkspace collects inbox items from all sources for the
 // given workspace and returns them newest-first, capped at inboxCap.
-func (s *Service) AggregateForWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Item, error) {
+func (s *Service) AggregateForWorkspace(ctx context.Context, workspaceID, userID uuid.UUID) ([]Item, error) {
 	var items []Item
+
+	// Source 0: personal @-mentions for this user in this workspace.
+	if s.mentions != nil {
+		mentionItems, err := s.fetchMentions(ctx, workspaceID, userID)
+		if err != nil {
+			s.log.Warn("inbox: fetch mentions failed", "workspace_id", workspaceID, "err", err)
+			return nil, err
+		}
+		items = append(items, mentionItems...)
+	}
 
 	// Source 1: flagged PI risks across projects in this workspace.
 	piItems, err := s.fetchPIFlags(ctx, workspaceID)
@@ -107,6 +122,28 @@ func (s *Service) AggregateForWorkspace(ctx context.Context, workspaceID uuid.UU
 	}
 	if items == nil {
 		items = []Item{}
+	}
+	return items, nil
+}
+
+// ─── Source: personal @-mentions ──────────────────────────────────────────────
+
+func (s *Service) fetchMentions(ctx context.Context, workspaceID, userID uuid.UUID) ([]Item, error) {
+	ws := workspaceID
+	ms, err := s.mentions.ListForUser(ctx, userID, &ws, inboxCap)
+	if err != nil {
+		return nil, fmt.Errorf("inbox: mentions: %w", err)
+	}
+	var items []Item
+	for _, m := range ms {
+		items = append(items, Item{
+			ID:        m.ID,
+			Kind:      "mention",
+			Title:     "You were mentioned",
+			Body:      m.Snippet,
+			Link:      m.Link,
+			CreatedAt: m.CreatedAt,
+		})
 	}
 	return items, nil
 }

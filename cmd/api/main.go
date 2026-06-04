@@ -203,11 +203,13 @@ func run() error {
 	aiSvc.SetRiskService(riskSvc)
 	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projectSvc, approvalSvc, logger)
 	activitySvc := activity.NewService(pool, projectSvc, orgSvc, logger)
+	inboxSvc.SetMentions(mentionSvc)
 	notifySvc.SetInbox(inboxSvc)
 	notifySvc.SetAuth(authSvc)
 	aiSvc.SetPIFlagNotifier(notifySvc)
 	riskSvc.SetPIFlagNotifier(notifySvc)
 	taskSvc.SetAssigneeNotifier(notifySvc)
+	taskSvc.SetMentioner(mentionSvc)
 
 	// Load workflow definitions from the embedded workflows/ directory.
 	workflows, wfErr := ai.LoadWorkflows()

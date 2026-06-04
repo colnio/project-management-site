@@ -102,6 +102,29 @@ func (s *Service) EnqueueTaskAssigned(ctx context.Context, taskID, projectID, as
 	})
 }
 
+// EnqueueMention notifies a user that they were @-mentioned in a task or page.
+// Best-effort; the caller never fails the mutation on error. idempotencyKey
+// should encode the source so repeated edits don't re-notify.
+func (s *Service) EnqueueMention(ctx context.Context, mentionedUserID uuid.UUID, toEmail, actorName, snippet, actionPath, idempotencyKey string) error {
+	uid := mentionedUserID
+	sn := strings.TrimSpace(snippet)
+	if len(sn) > 200 {
+		sn = sn[:200] + "..."
+	}
+	return s.Enqueue(ctx, EnqueueParams{
+		UserID:         &uid,
+		ToEmail:        toEmail,
+		Category:       CategoryMention,
+		TemplateKey:    TemplateMention,
+		IdempotencyKey: idempotencyKey,
+		Payload: map[string]any{
+			"ActorName":  actorName,
+			"Snippet":    sn,
+			"ActionPath": actionPath,
+		},
+	})
+}
+
 // EnqueueAccountApproved sends mandatory account approval email.
 func (s *Service) EnqueueAccountApproved(ctx context.Context, userID uuid.UUID, toEmail string) error {
 	uid := userID
