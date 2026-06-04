@@ -3,6 +3,7 @@ package org
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -47,6 +48,33 @@ func maxRole(a, b Role) Role {
 		return a
 	}
 	return b
+}
+
+// IsLabMember reports whether the principal is an internal lab member: an
+// approved user whose email is on a configured (e.g. NUS) domain. Approval is
+// guaranteed upstream — the auth layer rejects pending/suspended accounts before
+// a session or token is issued — so a domain match is sufficient here.
+//
+// Lab members receive a read (viewer) floor on all workspace-visible content
+// across every workspace (see ResolveAccessForPrincipal / ResolveAccessForProjects);
+// external collaborators (invited with off-domain emails) are unaffected and keep
+// only the access explicitly granted to them. Returns false when no domains are
+// configured, so a blank allowlist never grants blanket read.
+func (s *Service) IsLabMember(p *platform.Principal) bool {
+	if p == nil || p.Email == "" || len(s.cfg.AllowedEmailDomains) == 0 {
+		return false
+	}
+	at := strings.LastIndex(p.Email, "@")
+	if at < 0 {
+		return false
+	}
+	domain := strings.ToLower(p.Email[at+1:])
+	for _, d := range s.cfg.AllowedEmailDomains {
+		if strings.ToLower(strings.TrimSpace(d)) == domain {
+			return true
+		}
+	}
+	return false
 }
 
 // ResolveAccess returns the effective (max) role for a user on a project, given
@@ -182,9 +210,16 @@ func (s *Service) ResolveAccessForProjects(
 		return nil, err
 	}
 
+	labMember := s.IsLabMember(p)
+
 	out := make(map[uuid.UUID]Role, len(inputs))
 	for _, in := range inputs {
 		role := resolveAccessFromParts(overrideExists, hasWS, wsRole, in.Visibility, collabByProject[in.ProjectID])
+		// Lab-member read floor: internal members can read workspace-visible
+		// projects everywhere. Private projects stay restricted to their members.
+		if labMember && !role.CanRead() && in.Visibility == "workspace" {
+			role = RoleViewer
+		}
 		if p.IsPrivileged() && !role.CanWrite() {
 			_ = s.rec.Record(ctx, audit.Entry{
 				Actor:        p.UserID,
@@ -238,6 +273,13 @@ func (s *Service) ResolveAccessForPrincipal(ctx context.Context, p *platform.Pri
 	role, err := s.ResolveAccess(ctx, p.UserID, workspaceID, projectVisibility, projectID)
 	if err != nil {
 		return RoleNone, err
+	}
+
+	// Lab-member read floor: internal members can read every workspace and every
+	// workspace-visible project, even without explicit membership. Private
+	// projects (visibility != "workspace") stay restricted to their members.
+	if !role.CanRead() && (projectID == nil || projectVisibility == "workspace") && s.IsLabMember(p) {
+		role = RoleViewer
 	}
 
 	if p.IsPrivileged() && !role.CanWrite() {

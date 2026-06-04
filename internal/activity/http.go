@@ -53,7 +53,7 @@ func (s *Service) handleListActivity(ctx context.Context, in *listActivityInput)
 	if err != nil {
 		return nil, err
 	}
-	if !isMember && !p.IsPrivileged() {
+	if !isMember && !p.IsPrivileged() && !s.org.IsLabMember(p) {
 		return nil, platform.Forbidden("not a member of this workspace")
 	}
 

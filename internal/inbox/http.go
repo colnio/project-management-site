@@ -51,7 +51,7 @@ func (s *Service) handleListInbox(ctx context.Context, in *listInboxInput) (*lis
 	if err != nil {
 		return nil, err
 	}
-	if !isMember && !p.IsPrivileged() {
+	if !isMember && !p.IsPrivileged() && !s.org.IsLabMember(p) {
 		return nil, platform.Forbidden("not a member of this workspace")
 	}
 

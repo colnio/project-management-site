@@ -136,7 +136,8 @@ func (s *Service) handleListWorkspaces(ctx context.Context, _ *struct{}) (*listW
 		list []*Workspace
 		err  error
 	)
-	if p.IsPrivileged() {
+	if p.IsPrivileged() || s.IsLabMember(p) {
+		// Privileged users and internal lab members can read every workspace.
 		list, err = s.ListAllWorkspaces(ctx)
 	} else {
 		list, err = s.ListWorkspacesForUser(ctx, p.UserID)
@@ -182,7 +183,7 @@ func (s *Service) handleGetWorkspace(ctx context.Context, in *getWorkspaceInput)
 	if err != nil {
 		return nil, err
 	}
-	if !isMember && !p.IsPrivileged() {
+	if !isMember && !p.IsPrivileged() && !s.IsLabMember(p) {
 		return nil, platform.Forbidden("not a member of this workspace")
 	}
 
@@ -217,7 +218,7 @@ func (s *Service) handleListMembers(ctx context.Context, in *listMembersInput) (
 	if err != nil {
 		return nil, err
 	}
-	if !isMember && !p.IsPrivileged() {
+	if !isMember && !p.IsPrivileged() && !s.IsLabMember(p) {
 		return nil, platform.Forbidden("not a member of this workspace")
 	}
 
