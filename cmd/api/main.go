@@ -35,6 +35,7 @@ import (
 	"github.com/colnio/project-management-site/internal/jobs"
 	labmcp "github.com/colnio/project-management-site/internal/mcp"
 	"github.com/colnio/project-management-site/internal/meeting"
+	"github.com/colnio/project-management-site/internal/mention"
 	"github.com/colnio/project-management-site/internal/notify"
 	"github.com/colnio/project-management-site/internal/org"
 	"github.com/colnio/project-management-site/internal/page"
@@ -42,6 +43,7 @@ import (
 	"github.com/colnio/project-management-site/internal/project"
 	"github.com/colnio/project-management-site/internal/risk"
 	"github.com/colnio/project-management-site/internal/sample"
+	"github.com/colnio/project-management-site/internal/search"
 	"github.com/colnio/project-management-site/internal/task"
 )
 
@@ -169,6 +171,13 @@ func run() error {
 
 	notifySvc.SetEnqueuer(notify.NewRiverEnqueuer(riverClient))
 
+	// ── Search + Mention services ─────────────────────────────────────────────
+	// mentionSvc is constructed here so the task orchestrator can later call
+	// taskSvc.SetMentioner(mentionSvc) immediately after the taskSvc line below.
+	mentionSvc := mention.NewService(pool, logger)
+	mentionSvc.SetNotifier(notifySvc)
+	searchSvc := search.NewService(pool, projectSvc)
+
 	riskSvc := risk.NewService(pool, projectSvc, iterationSvc, auditRec, logger)
 	iterationSvc.SetBlockingRiskChecker(riskSvc)
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
@@ -222,6 +231,8 @@ func run() error {
 	calendar.Register(srv.API, calendarSvc)
 	risk.Register(srv.API, riskSvc)
 	task.Register(srv.API, taskSvc)
+	search.Register(srv.API, searchSvc)
+	mention.Register(srv.API, mentionSvc)
 	meeting.Register(srv.API, meetingSvc)
 	approval.Register(srv.API, approvalSvc)
 	inbox.Register(srv.API, inboxSvc)
