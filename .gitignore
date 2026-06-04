@@ -52,3 +52,6 @@ go.work.sum
 
 # Local Claude Code agent state
 .claude/
+
+# Screenshots — never commit unless explicitly told to
+docs/screenshots/
