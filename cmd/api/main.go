@@ -118,6 +118,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("build object store: %w", err)
 	}
+	// Enable the server-side byte-upload path (MCP upload_artifact tool) by giving
+	// the artifact service a byte-capable store, mirroring SetEnqueuer below.
+	artifactSvc.SetObjectStore(objStore)
 
 	riverWorkers := river.NewWorkers()
 	artifact.RegisterWorkers(riverWorkers, artifact.WorkerDeps{

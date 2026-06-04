@@ -3,11 +3,15 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -263,6 +267,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(s.toolCreateApprovalRequest())
 	s.mcp.AddTool(s.toolCreatePage())
 	s.mcp.AddTool(s.toolUpdatePage())
+	s.mcp.AddTool(s.toolUploadArtifact())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -801,6 +806,83 @@ func (s *Server) toolListArtifacts() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 			return toolErr(fmt.Errorf("project_id is required")), nil
 		}
 		body, err := s.get(ctx, "/v1/projects/"+projectID+"/artifacts")
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ─── upload_artifact ──────────────────────────────────────────────────────────
+
+// toolUploadArtifact uploads a file's bytes server-side and returns the created
+// artifact (including its id). Combined with create_page/update_page, this lets
+// an agent embed images into pages: upload the image here, then add a block
+// {"type":"imageEmbed","props":{"artifactId":"<id>"}} to a page. The image
+// renders once the background worker has produced thumbnails.
+func (s *Server) toolUploadArtifact() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("upload_artifact",
+		mcplib.WithDescription("Upload a file (image, PDF, data file) into a project and return the created artifact, including its id. Provide either file_path (a path readable by the server) or data_base64. To embed an uploaded image into a page, add a block {\"type\":\"imageEmbed\",\"props\":{\"artifactId\":\"<artifact id>\"}} via create_page or update_page (use \"pdfEmbed\" for PDFs). The image renders after background processing. Requires editor role on the project."),
+		mcplib.WithString("project_id",
+			mcplib.Description("UUID of the project."),
+			mcplib.Required()),
+		mcplib.WithString("file_path",
+			mcplib.Description("Absolute path to a local file readable by the server. Provide this OR data_base64.")),
+		mcplib.WithString("data_base64",
+			mcplib.Description("Standard base64-encoded file bytes. Provide this OR file_path.")),
+		mcplib.WithString("filename",
+			mcplib.Description("Filename to store. Defaults to the base name of file_path when omitted; required when using data_base64.")),
+		mcplib.WithString("content_type",
+			mcplib.Description("MIME type (e.g. image/png, application/pdf). Inferred from the filename extension when omitted.")),
+		mcplib.WithString("type",
+			mcplib.Description("Optional artifact category: image, pdf, ipynb, or other. Inferred when omitted.")),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		projectID := stringArg(req, "project_id")
+		if projectID == "" {
+			return toolErr(fmt.Errorf("project_id is required")), nil
+		}
+
+		filePath := stringArg(req, "file_path")
+		dataB64 := stringArg(req, "data_base64")
+		if filePath == "" && dataB64 == "" {
+			return toolErr(fmt.Errorf("provide either file_path or data_base64")), nil
+		}
+
+		filename := stringArg(req, "filename")
+		if filePath != "" {
+			raw, err := os.ReadFile(filePath)
+			if err != nil {
+				return toolErr(fmt.Errorf("read file_path: %w", err)), nil
+			}
+			dataB64 = base64.StdEncoding.EncodeToString(raw)
+			if filename == "" {
+				filename = filepath.Base(filePath)
+			}
+		}
+		if filename == "" {
+			return toolErr(fmt.Errorf("filename is required when using data_base64")), nil
+		}
+
+		contentType := stringArg(req, "content_type")
+		if contentType == "" {
+			contentType = mime.TypeByExtension(filepath.Ext(filename))
+		}
+		if contentType == "" {
+			return toolErr(fmt.Errorf("content_type could not be inferred from filename; provide content_type explicitly")), nil
+		}
+
+		payload := map[string]any{
+			"filename":     filename,
+			"content_type": contentType,
+			"data_base64":  dataB64,
+		}
+		if v := stringArg(req, "type"); v != "" {
+			payload["type"] = v
+		}
+
+		body, err := s.do(ctx, http.MethodPost, "/v1/projects/"+projectID+"/artifacts/upload", payload)
 		if err != nil {
 			return toolErr(err), nil
 		}

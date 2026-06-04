@@ -82,6 +82,7 @@ All tools run under the caller's own PAT scopes — no scope elevation occurs in
 | Tool | Description | Required args |
 |---|---|---|
 | `list_artifacts` | List artifacts (uploaded files) in a project. | `project_id` |
+| `upload_artifact` | Upload a file (image, PDF, data file) into a project and return the artifact (incl. `id`). Provide `file_path` (server-readable) or `data_base64`. To embed an image in a page, add a block `{"type":"imageEmbed","props":{"artifactId":"<id>"}}` via `create_page`/`update_page` (use `pdfEmbed` for PDFs). | `project_id`, (`file_path` or `data_base64`) |
 | `list_events` | List calendar events in a project. | `project_id` |
 
 ## Auth bridging

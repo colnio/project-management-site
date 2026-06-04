@@ -2,6 +2,7 @@ package artifact
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -22,6 +23,18 @@ func Register(api huma.API, svc *Service) {
 		Description: "Registers a new artifact record and returns a presigned S3 PUT URL. Upload the file directly to the URL, then call the complete endpoint. Requires viewer role on the project (project auth is implicit via the service).",
 		Tags:        []string{"artifacts"},
 	}, svc.handleCreateArtifact)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "artifact-upload",
+		Method:      http.MethodPost,
+		Path:        "/v1/projects/{id}/artifacts/upload",
+		Summary:     "Upload an artifact's bytes server-side in one call",
+		Description: "Creates an artifact, stores the supplied base64-encoded bytes directly, and finalizes it (sets the download URL and enqueues thumbnail/render processing). Unlike the presigned-PUT flow this needs no client S3 round-trip, so non-browser clients (the MCP server) can attach files and embed images. Requires editor role on the project.",
+		Tags:        []string{"artifacts"},
+		// Base64 inflates bytes ~33%; allow a 100 MiB artifact (~137 MiB encoded)
+		// plus JSON overhead. Huma's default of 1 MiB would reset large uploads.
+		MaxBodyBytes: 150 << 20,
+	}, svc.handleUploadArtifact)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "artifact-list",
@@ -148,6 +161,54 @@ func (s *Service) handleCreateArtifact(ctx context.Context, in *createArtifactIn
 		"Content-Type": in.Body.ContentType,
 	}
 	return out, nil
+}
+
+// ─── Upload artifact (server-side bytes) ──────────────────────────────────────
+
+type uploadArtifactInput struct {
+	ID   string `path:"id"`
+	Body struct {
+		Filename    string `json:"filename" required:"true" minLength:"1"`
+		ContentType string `json:"content_type" required:"true" minLength:"1"`
+		Type        string `json:"type,omitempty" enum:"pdf,ipynb,image,other"`
+		DataBase64  string `json:"data_base64" required:"true" minLength:"1" doc:"Standard base64-encoded file bytes."`
+	}
+}
+
+type uploadArtifactOutput struct {
+	Status int `json:"-"`
+	Body   *Artifact
+}
+
+func (s *Service) handleUploadArtifact(ctx context.Context, in *uploadArtifactInput) (*uploadArtifactOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteArtifacts); err != nil {
+		return nil, err
+	}
+
+	projectID, err := uuid.Parse(in.ID)
+	if err != nil {
+		return nil, platform.BadRequest("artifact.invalid_project_id", "invalid project ID")
+	}
+
+	data, err := base64.StdEncoding.DecodeString(in.Body.DataBase64)
+	if err != nil {
+		return nil, platform.BadRequest("artifact.invalid_base64", "data_base64 is not valid standard base64")
+	}
+	if int64(len(data)) > MaxArtifactBytes {
+		return nil, platform.BadRequest("artifact.size_too_large", "decoded data exceeds maximum size")
+	}
+
+	art, err := s.UploadArtifact(ctx, projectID, in.Body.Filename, in.Body.ContentType, in.Body.Type, data)
+	if err != nil {
+		return nil, err
+	}
+
+	s.SignOriginalURL(ctx, art)
+	return &uploadArtifactOutput{Status: http.StatusCreated, Body: art}, nil
 }
 
 // ─── List artifacts ───────────────────────────────────────────────────────────

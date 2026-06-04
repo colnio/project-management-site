@@ -194,6 +194,29 @@ func fakeRESTBackend(t *testing.T) *httptest.Server {
 		_ = json.NewEncoder(w).Encode(map[string]string{"id": "pg-1", "title": "Notes"})
 	})
 
+	// upload artifact (server-side bytes). Echoes back the decoded size so the
+	// test can assert the bytes were forwarded base64-decoded by the endpoint
+	// contract. Registered before the list route's prefix to take precedence.
+	mux.HandleFunc("/v1/projects/proj-1/artifacts/upload", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Filename    string `json:"filename"`
+			ContentType string `json:"content_type"`
+			Type        string `json:"type"`
+			DataBase64  string `json:"data_base64"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":           "art-1",
+			"project_id":   "proj-1",
+			"filename":     body.Filename,
+			"content_type": body.ContentType,
+			"type":         body.Type,
+			"data_b64_len": len(body.DataBase64),
+		})
+	})
+
 	// list artifacts in project
 	mux.HandleFunc("/v1/projects/proj-1/artifacts", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -305,6 +328,92 @@ func TestToolListSamples(t *testing.T) {
 	text := result.Content[0].(mcplib.TextContent).Text
 	if !strings.Contains(text, "EL-001") {
 		t.Errorf("expected EL-001 in result, got: %s", text)
+	}
+}
+
+// TestToolUploadArtifactBase64 verifies the upload_artifact tool forwards
+// base64 data to the server-side upload endpoint and returns the artifact.
+func TestToolUploadArtifactBase64(t *testing.T) {
+	fake := fakeRESTBackend(t)
+	defer fake.Close()
+
+	srv := labmcp.NewServer(fake.URL, newTestLogger())
+
+	result, err := srv.DoCallTool(
+		context.Background(),
+		"upload_artifact",
+		map[string]any{
+			"project_id":   "proj-1",
+			"filename":     "figure.png",
+			"content_type": "image/png",
+			"data_base64":  "aGVsbG8=", // "hello"
+		},
+		"pat_test",
+	)
+	if err != nil {
+		t.Fatalf("DoCallTool error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool returned error: %+v", result)
+	}
+	text := result.Content[0].(mcplib.TextContent).Text
+	if !strings.Contains(text, "art-1") {
+		t.Errorf("expected artifact id art-1 in result, got: %s", text)
+	}
+	if !strings.Contains(text, "figure.png") {
+		t.Errorf("expected filename forwarded, got: %s", text)
+	}
+}
+
+// TestToolUploadArtifactInfersContentType verifies content_type is inferred from
+// the filename extension when omitted.
+func TestToolUploadArtifactInfersContentType(t *testing.T) {
+	fake := fakeRESTBackend(t)
+	defer fake.Close()
+
+	srv := labmcp.NewServer(fake.URL, newTestLogger())
+
+	result, err := srv.DoCallTool(
+		context.Background(),
+		"upload_artifact",
+		map[string]any{
+			"project_id":  "proj-1",
+			"filename":    "scan.png",
+			"data_base64": "aGVsbG8=",
+		},
+		"pat_test",
+	)
+	if err != nil {
+		t.Fatalf("DoCallTool error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool returned error: %+v", result)
+	}
+	text := result.Content[0].(mcplib.TextContent).Text
+	if !strings.Contains(text, "image/png") {
+		t.Errorf("expected inferred image/png content type, got: %s", text)
+	}
+}
+
+// TestToolUploadArtifactRequiresSource verifies an error when neither file_path
+// nor data_base64 is provided.
+func TestToolUploadArtifactRequiresSource(t *testing.T) {
+	fake := fakeRESTBackend(t)
+	defer fake.Close()
+
+	srv := labmcp.NewServer(fake.URL, newTestLogger())
+
+	result, err := srv.DoCallTool(
+		context.Background(),
+		"upload_artifact",
+		map[string]any{"project_id": "proj-1", "filename": "x.png"},
+		"pat_test",
+	)
+	if err != nil {
+		t.Fatalf("DoCallTool error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected an error when no file_path/data_base64 provided")
 	}
 }
 

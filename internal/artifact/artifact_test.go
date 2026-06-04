@@ -557,9 +557,88 @@ func TestDeleteArtifact(t *testing.T) {
 	}
 }
 
+// ─── UploadArtifact (server-side bytes) ───────────────────────────────────────
+
+func TestUploadArtifact_StoresBytesAndCompletes(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "uploader@example.com", "Uploader")
+	proj := seedProject(t, env, owner.ID)
+
+	store := newMemStore()
+	env.svc.SetObjectStore(store)
+
+	ctxWithP := platform.WithPrincipal(ctx, principal(owner))
+
+	data := []byte("\x89PNG\r\n\x1a\n-not-a-real-png-but-bytes")
+	art, err := env.svc.UploadArtifact(ctxWithP, proj.ID, "figure.png", "image/png", "", data)
+	if err != nil {
+		t.Fatalf("UploadArtifact: %v", err)
+	}
+	if art.Type != "image" {
+		t.Errorf("expected inferred type image, got %s", art.Type)
+	}
+	if art.SizeBytes != int64(len(data)) {
+		t.Errorf("expected size %d, got %d", len(data), art.SizeBytes)
+	}
+	// Bytes landed in the originals bucket under the artifact's storage key.
+	stored, err := store.Get(ctx, env.svc.BucketName(), art.StorageKey)
+	if err != nil {
+		t.Fatalf("expected object stored at %s: %v", art.StorageKey, err)
+	}
+	if string(stored) != string(data) {
+		t.Error("stored bytes do not match uploaded data")
+	}
+	// CompleteUpload ran: original_url is set and the audit event recorded.
+	if art.OriginalURL == "" {
+		t.Error("expected original_url to be set after upload")
+	}
+	if !env.rec.hasAction("artifact.upload_complete") {
+		t.Error("expected artifact.upload_complete audit entry")
+	}
+}
+
+func TestUploadArtifact_ViewerForbidden(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "owner2@example.com", "Owner2")
+	proj := seedProject(t, env, owner.ID)
+	viewer := env.users.seed(t, "viewer2@example.com", "Viewer2")
+
+	env.svc.SetObjectStore(newMemStore())
+	ctxViewer := platform.WithPrincipal(ctx, principal(viewer))
+
+	_, err := env.svc.UploadArtifact(ctxViewer, proj.ID, "x.png", "image/png", "", []byte("data"))
+	if err == nil {
+		t.Fatal("expected a non-editor upload to be rejected")
+	}
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // createArtifact is a convenience wrapper around the service method exposed for tests.
 func createArtifact(ctx context.Context, svc *artifact.Service, projectID uuid.UUID, filename, contentType string, sizeBytes int64) (*artifact.Artifact, string, error) {
 	return svc.CreateArtifact(ctx, projectID, filename, contentType, "", sizeBytes)
+}
+
+// memStore is an in-memory artifact.ObjectStore for exercising the server-side
+// UploadArtifact path without a real MinIO.
+type memStore struct {
+	objects map[string][]byte
+}
+
+func newMemStore() *memStore { return &memStore{objects: map[string][]byte{}} }
+
+func (m *memStore) Put(_ context.Context, bucket, key string, body []byte, _ string) error {
+	m.objects[bucket+"/"+key] = append([]byte(nil), body...)
+	return nil
+}
+
+func (m *memStore) Get(_ context.Context, bucket, key string) ([]byte, error) {
+	if b, ok := m.objects[bucket+"/"+key]; ok {
+		return b, nil
+	}
+	return nil, io.EOF
 }

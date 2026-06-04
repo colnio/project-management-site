@@ -86,13 +86,20 @@ type Service struct {
 	bucket          string
 	bucketRendered  string
 	log             *slog.Logger
-	enqueuer        Enqueuer // optional; nil means skip enqueueing (keeps old tests green)
+	enqueuer        Enqueuer    // optional; nil means skip enqueueing (keeps old tests green)
+	objStore        ObjectStore // optional; required only for server-side UploadArtifact
 }
 
 // SetEnqueuer wires a background-job enqueuer into the service after construction.
 // This is called from cmd/api after both the artifact service and River client
 // are built, avoiding circular construction dependencies.
 func (s *Service) SetEnqueuer(e Enqueuer) { s.enqueuer = e }
+
+// SetObjectStore wires a byte-capable ObjectStore into the service after
+// construction. It is required only for the server-side UploadArtifact path
+// (used by the MCP upload_artifact tool); the presigned-PUT flow does not need
+// it. Wired from cmd/api after NewS3Store, mirroring SetEnqueuer.
+func (s *Service) SetObjectStore(st ObjectStore) { s.objStore = st }
 
 // NewService constructs a Service and builds an S3/MinIO presign client.
 // The presign client works offline — presigning is pure HMAC, no network call.
@@ -185,44 +192,10 @@ func (s *Service) CreateArtifact(ctx context.Context, projectID uuid.UUID, filen
 		return nil, "", err
 	}
 
-	safeName, err := sanitizeFilename(filename)
+	// insertArtifactRow validates filename/content-type/size and inserts the row.
+	art, storageKey, err := s.insertArtifactRow(ctx, projectID, filename, contentType, artType, sizeBytes, p.UserID)
 	if err != nil {
 		return nil, "", err
-	}
-	filename = safeName
-	if err := validateContentType(contentType); err != nil {
-		return nil, "", err
-	}
-	if sizeBytes <= 0 {
-		return nil, "", platform.BadRequest("artifact.invalid_size", "size_bytes must be positive")
-	}
-	if sizeBytes > MaxArtifactBytes {
-		return nil, "", platform.BadRequest("artifact.size_too_large", fmt.Sprintf("size_bytes exceeds maximum of %d", MaxArtifactBytes))
-	}
-
-	if artType == "" {
-		artType = inferType(contentType, filename)
-	}
-
-	artID := uuid.New()
-	storageKey := fmt.Sprintf("projects/%s/artifacts/%s/%s", projectID, artID, filename)
-
-	var art Artifact
-	err = s.pool.QueryRow(ctx, `
-		INSERT INTO artifacts
-		    (id, project_id, type, filename, content_type, size_bytes, storage_key, uploaded_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		RETURNING id, project_id, type, filename, content_type, size_bytes,
-		          storage_key, original_url, rendered_url, thumbnail_url,
-		          metadata, processing_status, uploaded_by, uploaded_at`,
-		artID, projectID, artType, filename, contentType, sizeBytes, storageKey, p.UserID,
-	).Scan(
-		&art.ID, &art.ProjectID, &art.Type, &art.Filename, &art.ContentType, &art.SizeBytes,
-		&art.StorageKey, &art.OriginalURL, &art.RenderedURL, &art.ThumbnailURL,
-		&art.Metadata, &art.ProcessingStatus, &art.UploadedBy, &art.UploadedAt,
-	)
-	if err != nil {
-		return nil, "", fmt.Errorf("artifact: insert: %w", err)
 	}
 
 	// Enforce declared size via presigned Content-Length (S3 rejects mismatched PUT bodies).
@@ -245,7 +218,88 @@ func (s *Service) CreateArtifact(ctx context.Context, projectID uuid.UUID, filen
 		ResourceID:   art.ID.String(),
 	})
 
-	return &art, req.URL, nil
+	return art, req.URL, nil
+}
+
+// insertArtifactRow validates inputs and inserts the artifact metadata row,
+// returning the new artifact and its derived storage key. It is shared by the
+// presigned-PUT path (CreateArtifact) and the server-side byte-upload path
+// (UploadArtifact). It does NOT authorize — callers must do that first.
+func (s *Service) insertArtifactRow(ctx context.Context, projectID uuid.UUID, filename, contentType, artType string, sizeBytes int64, uploadedBy uuid.UUID) (*Artifact, string, error) {
+	safeName, err := sanitizeFilename(filename)
+	if err != nil {
+		return nil, "", err
+	}
+	filename = safeName
+	if err := validateContentType(contentType); err != nil {
+		return nil, "", err
+	}
+	if sizeBytes <= 0 {
+		return nil, "", platform.BadRequest("artifact.invalid_size", "size_bytes must be positive")
+	}
+	if sizeBytes > MaxArtifactBytes {
+		return nil, "", platform.BadRequest("artifact.size_too_large", fmt.Sprintf("size_bytes exceeds maximum of %d", MaxArtifactBytes))
+	}
+	if artType == "" {
+		artType = inferType(contentType, filename)
+	}
+
+	artID := uuid.New()
+	storageKey := fmt.Sprintf("projects/%s/artifacts/%s/%s", projectID, artID, filename)
+
+	var art Artifact
+	err = s.pool.QueryRow(ctx, `
+		INSERT INTO artifacts
+		    (id, project_id, type, filename, content_type, size_bytes, storage_key, uploaded_by)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		RETURNING id, project_id, type, filename, content_type, size_bytes,
+		          storage_key, original_url, rendered_url, thumbnail_url,
+		          metadata, processing_status, uploaded_by, uploaded_at`,
+		artID, projectID, artType, filename, contentType, sizeBytes, storageKey, uploadedBy,
+	).Scan(
+		&art.ID, &art.ProjectID, &art.Type, &art.Filename, &art.ContentType, &art.SizeBytes,
+		&art.StorageKey, &art.OriginalURL, &art.RenderedURL, &art.ThumbnailURL,
+		&art.Metadata, &art.ProcessingStatus, &art.UploadedBy, &art.UploadedAt,
+	)
+	if err != nil {
+		return nil, "", fmt.Errorf("artifact: insert: %w", err)
+	}
+	return &art, storageKey, nil
+}
+
+// UploadArtifact creates an artifact and uploads its bytes server-side in one
+// call, then finalizes it (sets original_url and enqueues the thumbnail/render
+// worker). Unlike CreateArtifact it needs no client round-trip to S3, which is
+// what lets the MCP server (and any non-browser caller) attach files and embed
+// images. Requires an ObjectStore to be wired via SetObjectStore. artType may be
+// empty (inferred from contentType/filename).
+func (s *Service) UploadArtifact(ctx context.Context, projectID uuid.UUID, filename, contentType, artType string, data []byte) (*Artifact, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	if s.objStore == nil {
+		return nil, fmt.Errorf("artifact: object store not configured for server-side upload")
+	}
+	if _, _, err := s.projects.Authorize(ctx, p, projectID, org.RoleEditor); err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, platform.BadRequest("artifact.empty_body", "uploaded data is empty")
+	}
+
+	art, storageKey, err := s.insertArtifactRow(ctx, projectID, filename, contentType, artType, int64(len(data)), p.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.objStore.Put(ctx, s.bucket, storageKey, data, contentType); err != nil {
+		return nil, fmt.Errorf("artifact: put object: %w", err)
+	}
+
+	// CompleteUpload re-authorizes, HEAD-checks the object we just wrote, sets
+	// original_url, records the audit event, and enqueues the processing worker.
+	return s.CompleteUpload(ctx, art.ID)
 }
 
 // presignedOriginalURL returns a short-lived presigned GET URL for an artifact's
