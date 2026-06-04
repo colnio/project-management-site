@@ -5,7 +5,26 @@
  * - On second 401, clears auth state (caller should redirect to /login)
  */
 
-let accessToken: string | null = null;
+// The access token is kept in memory and mirrored to sessionStorage so a full
+// page reload (or client navigation that remounts the app) can reuse a still-
+// valid token instead of forcing a refresh on every load. Refreshing on every
+// load is what made sessions fragile: the backend rotates the refresh token on
+// each refresh, so frequent/concurrent refreshes raced and revoked each other,
+// bouncing the user to /login. Reusing the stored token until it actually 401s
+// (then refreshing once) avoids that. sessionStorage (not localStorage) scopes
+// it to the tab and clears on close; it is no more exposed than the in-memory
+// copy already is.
+const ACCESS_TOKEN_KEY = 'gl_access_token';
+
+function loadStoredToken(): string | null {
+  try {
+    return sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let accessToken: string | null = loadStoredToken();
 let refreshingPromise: Promise<string | null> | null = null;
 
 // Auth endpoints that should never trigger the 401→refresh→retry loop.
@@ -35,6 +54,12 @@ export function configureClient(callbacks: AuthCallbacks) {
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+  try {
+    if (token) sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+    else sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+  } catch {
+    // sessionStorage unavailable (e.g. private mode) — in-memory still works.
+  }
 }
 
 export function getAccessToken(): string | null {

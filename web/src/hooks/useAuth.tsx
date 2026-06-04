@@ -7,7 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import { configureClient, setAccessToken, getAccessToken, forceAuthExit } from '@/api/client';
+import { configureClient, setAccessToken, getAccessToken, forceAuthExit, ApiError } from '@/api/client';
 import { api } from '@/api/client';
 import type { User, LoginOutput, RefreshOutput, RegisterOutput } from '@/api/types';
 import { applyAppearanceForUser } from '@/hooks/appearancePrefs';
@@ -104,9 +104,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [attemptRefresh, handleUnauthorized]);
 
-  // On mount, try to restore session from cookie
+  // On mount, restore the session. If this tab already has an access token
+  // (mirrored in sessionStorage), reuse it: validate via /me, and let the API
+  // client transparently refresh once if it has expired. Only when there is no
+  // stored token do we refresh up front. This avoids refreshing — and thus
+  // rotating the refresh token — on every page load, which previously raced and
+  // bounced long sessions to /login.
   useEffect(() => {
-    attemptRefresh();
+    if (getAccessToken()) {
+      api.get<User>('/v1/me')
+        .then(me => {
+          setUser(me);
+          applyAppearanceForUser(me.id);
+          setStatus('authenticated');
+        })
+        .catch(err => {
+          // A non-401 failure (e.g. network) shouldn't strand us in 'loading';
+          // fall back to a cookie refresh. 401s are already handled by the
+          // client (it refreshed+retried, or redirected via onUnauthorized).
+          if (!(err instanceof ApiError) || err.status !== 401) {
+            void attemptRefresh();
+          }
+        });
+    } else {
+      void attemptRefresh();
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const login = useCallback(async (email: string, password: string) => {

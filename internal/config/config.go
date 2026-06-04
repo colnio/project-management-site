@@ -95,7 +95,7 @@ func Load() (*Config, error) {
 		JWTSigningKey:     getenv("JWT_SIGNING_KEY", defaultJWTSigningKey),
 		InviteSignKey:     getenv("INVITE_SIGN_KEY", defaultInviteSignKey),
 		DigestSignKey:     getenv("DIGEST_SIGN_KEY", defaultDigestSignKey),
-		AccessTokenTTL:    getdur("ACCESS_TOKEN_TTL", 15*time.Minute),
+		AccessTokenTTL:    getdur("ACCESS_TOKEN_TTL", 60*time.Minute),
 		RefreshTokenTTL:   getdur("REFRESH_TOKEN_TTL", 720*time.Hour),
 		CookieDomain:      getenv("COOKIE_DOMAIN", "localhost"),
 		CookieSecure:      getbool("COOKIE_SECURE", false),
