@@ -1,5 +1,5 @@
 /**
- * HomePage — dashboard: greeting, project grid, PI-review panel, activity feed.
+ * HomePage — dashboard: greeting, project grid, PI-review panel, activity dashboard.
  */
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -15,6 +15,7 @@ import type { Project } from '@/api/types';
 import type { InboxItem } from '@/hooks/useWorkspaceQueries';
 import { safeAppPath } from '@/lib/safeAppPath';
 import { ApiError } from '@/api/client';
+import { ActivityDashboard } from '@/components/activity/ActivityDashboard';
 
 /** Returns true when the react-query error is an HTTP 403 Forbidden. */
 function isForbidden(error: unknown): boolean {
@@ -298,171 +299,6 @@ function RiskApprovalPanel({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-// ─── Activity Feed ────────────────────────────────────────────────────────────
-
-const KIND_ICON: Record<string, string> = {
-  pi_flag: '⚑',
-  ai_proposal: '✦',
-  action_item: '◎',
-  comment: '◷',
-  system: '◈',
-  mention: '@',
-};
-
-const KIND_COLOR: Record<string, string> = {
-  pi_flag: 'var(--bad)',
-  ai_proposal: 'var(--ember)',
-  action_item: 'var(--info)',
-  comment: 'var(--muted)',
-  system: 'var(--muted-2)',
-  mention: 'var(--ember)',
-};
-
-function ActivityFeed({ workspaceId }: { workspaceId: string }) {
-  const { data: inbox = [], isLoading, isError, error } = useInbox(workspaceId);
-
-  // Show non-pi_flag items as activity
-  const feedItems = inbox
-    .filter((item: InboxItem) => item.kind !== 'pi_flag')
-    .slice(0, 10);
-
-  if (isLoading) {
-    return (
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)', padding: '12px 0' }}>
-        Loading…
-      </div>
-    );
-  }
-
-  if (isError) {
-    if (isForbidden(error)) {
-      return (
-        <EmptyState message="No lab activity yet." />
-      );
-    }
-    return (
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--muted-2)', padding: '10px 0' }}>
-        Activity feed unavailable.
-      </div>
-    );
-  }
-
-  if (feedItems.length === 0) {
-    return (
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted-2)', padding: '12px 0' }}>
-        No recent activity.
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {feedItems.map((item: InboxItem, idx: number) => {
-        const icon = KIND_ICON[item.kind] ?? '·';
-        const color = KIND_COLOR[item.kind] ?? 'var(--muted)';
-        const isLast = idx === feedItems.length - 1;
-
-        return (
-          <div
-            key={item.id}
-            style={{
-              display: 'flex',
-              gap: 12,
-              alignItems: 'flex-start',
-              paddingBottom: isLast ? 0 : 12,
-              marginBottom: isLast ? 0 : 12,
-              borderBottom: isLast ? 'none' : '1px solid var(--line)',
-            }}
-          >
-            {/* Icon + timeline stem */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 20 }}>
-              <div
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: '50%',
-                  background: `${color}18`,
-                  border: `1.5px solid ${color}`,
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 9,
-                  color,
-                  flexShrink: 0,
-                }}
-              >
-                {icon}
-              </div>
-              {!isLast && (
-                <div
-                  style={{
-                    width: 1,
-                    flex: 1,
-                    background: 'var(--line)',
-                    marginTop: 4,
-                    minHeight: 12,
-                  }}
-                />
-              )}
-            </div>
-
-            {/* Content */}
-            <div style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: 'var(--ink)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {item.title}
-              </div>
-              {item.body && (
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--muted)',
-                    marginTop: 2,
-                    lineHeight: 1.4,
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {item.body}
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--mono)',
-                    fontSize: 9.5,
-                    color,
-                    background: `${color}14`,
-                    padding: '0 5px',
-                    borderRadius: 3,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  {item.kind.replace('_', ' ')}
-                </span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--muted-2)' }}>
-                  {relativeTime(item.created_at)}
-                </span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ─── Dashboard panel wrapper ──────────────────────────────────────────────────
 
 function DashPanel({
@@ -634,16 +470,8 @@ export function HomePage() {
           <LoadingState message="Loading workspace…" />
         )}
 
-        {/* ── Bottom two-col dashboard ──────────────────────────────────── */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 18,
-            marginTop: 28,
-          }}
-        >
-          {/* PI Review panel */}
+        {/* ── PI Review panel (full-width) ──────────────────────────────── */}
+        <div style={{ marginTop: 28 }}>
           <DashPanel title="PI Review — Flagged Risks">
             {workspaceId ? (
               <RiskApprovalPanel workspaceId={workspaceId} />
@@ -651,16 +479,10 @@ export function HomePage() {
               <LoadingState message="Loading…" />
             )}
           </DashPanel>
-
-          {/* Activity feed */}
-          <DashPanel title="Lab Activity">
-            {workspaceId ? (
-              <ActivityFeed workspaceId={workspaceId} />
-            ) : (
-              <LoadingState message="Loading…" />
-            )}
-          </DashPanel>
         </div>
+
+        {/* ── Activity dashboard (full-width, all workspaces) ───────────── */}
+        <ActivityDashboard />
       </div>
     </AppShell>
   );

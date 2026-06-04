@@ -1234,6 +1234,7 @@ function ArtifactsTab({ projectId }: { projectId: string }) {
 
 interface ProjectDetailSearch {
   tab?: Tab;
+  task?: string;
 }
 
 const TAB_IDS = new Set<Tab>(TABS.map(t => t.id));
@@ -1321,7 +1322,7 @@ function ProjectDetailPageInner() {
             {currentTab === 'samples' && <SamplesTab projectId={projectId} />}
             {currentTab === 'experiments' && <ExperimentsTab projectId={projectId} />}
             {currentTab === 'iterations' && <IterationsTab projectId={projectId} />}
-            {currentTab === 'tasks' && <TasksTab projectId={projectId} />}
+            {currentTab === 'tasks' && <TasksTab projectId={projectId} initialTaskId={search.task} />}
             {currentTab === 'artifacts' && <ArtifactsTab projectId={projectId} />}
             {currentTab === 'timeline' && (
               <ProjectTimeline

@@ -39,7 +39,8 @@ const (
 	ScopeReadAI  = "read:ai"
 	ScopeWriteAI = "write:ai"
 
-	ScopeReadInbox  = "read:inbox"
+	ScopeReadInbox    = "read:inbox"
+	ScopeReadActivity = "read:activity"
 	ScopeReadNotify = "read:notify"
 	ScopeWriteNotify = "write:notify"
 	ScopeReadAudit = "read:audit"
@@ -69,7 +70,7 @@ var allScopes = []string{
 	ScopeReadMeetings, ScopeWriteMeetings,
 	ScopeReadCalendar, ScopeWriteCalendar,
 	ScopeReadAI, ScopeWriteAI,
-	ScopeReadInbox, ScopeReadNotify, ScopeWriteNotify,
+	ScopeReadInbox, ScopeReadActivity, ScopeReadNotify, ScopeWriteNotify,
 	ScopeReadAudit,
 	ScopeReadApprovals, ScopeWriteApprovals,
 	ScopeAdminOrg,

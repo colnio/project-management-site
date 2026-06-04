@@ -18,6 +18,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/colnio/project-management-site/internal/activity"
 	"github.com/colnio/project-management-site/internal/admin"
 	"github.com/colnio/project-management-site/internal/ai"
 	"github.com/colnio/project-management-site/internal/appearance"
@@ -40,8 +41,8 @@ import (
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
 	"github.com/colnio/project-management-site/internal/risk"
-	"github.com/colnio/project-management-site/internal/task"
 	"github.com/colnio/project-management-site/internal/sample"
+	"github.com/colnio/project-management-site/internal/task"
 )
 
 func main() {
@@ -192,6 +193,7 @@ func run() error {
 	aiSvc := ai.NewService(pool, cfg, aiClient, authSvc, orgSvc, projectSvc, auditRec, logger)
 	aiSvc.SetRiskService(riskSvc)
 	inboxSvc := inbox.NewService(pool, orgSvc, riskSvc, aiSvc, projectSvc, approvalSvc, logger)
+	activitySvc := activity.NewService(pool, projectSvc, orgSvc, logger)
 	notifySvc.SetInbox(inboxSvc)
 	notifySvc.SetAuth(authSvc)
 	aiSvc.SetPIFlagNotifier(notifySvc)
@@ -223,6 +225,7 @@ func run() error {
 	meeting.Register(srv.API, meetingSvc)
 	approval.Register(srv.API, approvalSvc)
 	inbox.Register(srv.API, inboxSvc)
+	activity.Register(srv.API, activitySvc)
 	notify.Register(srv.API, notifySvc)
 	notify.RegisterPublic(srv.Router, notifySvc)
 	appearanceSvc := appearance.NewService(pool, auditRec)

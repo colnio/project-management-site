@@ -3,7 +3,7 @@
  * Holds view toggle (Board/List), filter bar, and "+ New task" button.
  * Props: { projectId, iterationId? }
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProjectTasks, useIterationTasks, type Task } from '@/hooks/useTaskQueries';
 import { useProject, useWorkspaceMembers } from '@/hooks/useQueries';
 import { LoadingState, ErrorState } from '@/components/LoadingState';
@@ -28,15 +28,23 @@ const STATUS_LABEL: Record<string, string> = {
 interface TasksTabProps {
   projectId: string;
   iterationId?: string;
+  initialTaskId?: string;
 }
 
-export function TasksTab({ projectId, iterationId }: TasksTabProps) {
+export function TasksTab({ projectId, iterationId, initialTaskId }: TasksTabProps) {
   const [view, setView] = useState<View>('board');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [searchQ, setSearchQ] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+
+  // Open task drawer when navigated via deep-link (?task=<id>)
+  useEffect(() => {
+    if (initialTaskId) {
+      setSelectedTaskId(initialTaskId);
+    }
+  }, [initialTaskId]);
 
   // Load project to get workspaceId
   const { data: project } = useProject(projectId);
