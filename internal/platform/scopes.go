@@ -21,6 +21,9 @@ const (
 	ScopeReadRisks  = "read:risks"
 	ScopeWriteRisks = "write:risks"
 
+	ScopeReadTasks  = "read:tasks"
+	ScopeWriteTasks = "write:tasks"
+
 	ScopeReadArtifacts  = "read:artifacts"
 	ScopeWriteArtifacts = "write:artifacts"
 
@@ -60,6 +63,7 @@ var allScopes = []string{
 	ScopeReadExperiments, ScopeWriteExperiments,
 	ScopeReadIterations, ScopeWriteIterations,
 	ScopeReadRisks, ScopeWriteRisks,
+	ScopeReadTasks, ScopeWriteTasks,
 	ScopeReadArtifacts, ScopeWriteArtifacts,
 	ScopeReadPages, ScopeWritePages,
 	ScopeReadMeetings, ScopeWriteMeetings,

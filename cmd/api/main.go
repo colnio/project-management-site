@@ -40,6 +40,7 @@ import (
 	"github.com/colnio/project-management-site/internal/platform"
 	"github.com/colnio/project-management-site/internal/project"
 	"github.com/colnio/project-management-site/internal/risk"
+	"github.com/colnio/project-management-site/internal/task"
 	"github.com/colnio/project-management-site/internal/sample"
 )
 
@@ -170,6 +171,7 @@ func run() error {
 	riskSvc := risk.NewService(pool, projectSvc, iterationSvc, auditRec, logger)
 	iterationSvc.SetBlockingRiskChecker(riskSvc)
 	calendarSvc := calendar.NewService(pool, projectSvc, auditRec, logger)
+	taskSvc := task.NewService(pool, projectSvc, iterationSvc, calendarSvc, auditRec, logger)
 	meetingSvc := meeting.NewService(pool, orgSvc, projectSvc, auditRec, logger)
 	approvalSvc := approval.NewService(pool, projectSvc, orgSvc, auditRec, cfg, logger)
 	orgSvc.SetInviteNotifier(notifySvc)
@@ -194,6 +196,7 @@ func run() error {
 	notifySvc.SetAuth(authSvc)
 	aiSvc.SetPIFlagNotifier(notifySvc)
 	riskSvc.SetPIFlagNotifier(notifySvc)
+	taskSvc.SetAssigneeNotifier(notifySvc)
 
 	// Load workflow definitions from the embedded workflows/ directory.
 	workflows, wfErr := ai.LoadWorkflows()
@@ -216,6 +219,7 @@ func run() error {
 	artifact.Register(srv.API, artifactSvc)
 	calendar.Register(srv.API, calendarSvc)
 	risk.Register(srv.API, riskSvc)
+	task.Register(srv.API, taskSvc)
 	meeting.Register(srv.API, meetingSvc)
 	approval.Register(srv.API, approvalSvc)
 	inbox.Register(srv.API, inboxSvc)

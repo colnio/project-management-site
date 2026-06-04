@@ -11,6 +11,7 @@ const (
 	CategoryAccount     = "account"
 	CategorySecurity    = "security"
 	CategoryAdminBroadcast = "admin_broadcast"
+	CategoryTask        = "task"
 )
 
 // Template keys (email_outbox.template_key).
@@ -23,6 +24,7 @@ const (
 	TemplateAccountSuspended         = "account_suspended"
 	TemplateDailyDigest              = "daily_digest"
 	TemplateAdminBroadcast           = "admin_broadcast"
+	TemplateTaskAssigned             = "task_assigned"
 )
 
 // mandatoryCategories cannot be disabled via the preferences API.
@@ -40,6 +42,7 @@ var defaultEnabled = map[string]bool{
 	CategoryMention:    true,
 	CategoryMeeting:    true,
 	CategoryDigest:     true,
+	CategoryTask:       true,
 }
 
 // AllPreferenceCategories lists categories exposed in the settings UI.
@@ -51,6 +54,7 @@ func AllPreferenceCategories() []prefDef {
 		{Key: CategoryMention, Label: "Mentions", Description: "Notify when you are mentioned"},
 		{Key: CategoryMeeting, Label: "Meeting reminders", Description: "Notify before scheduled meetings"},
 		{Key: CategoryDigest, Label: "Daily digest", Description: "Daily summary of inbox items"},
+		{Key: CategoryTask, Label: "Task assignments", Description: "Notify when you are assigned a task"},
 	}
 }
 

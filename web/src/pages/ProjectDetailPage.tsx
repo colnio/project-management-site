@@ -37,8 +37,10 @@ import { experimentDisplayTags } from '@/api/types';
 import { memberLabel } from '@/lib/userDisplay';
 import { fmtDate, fmtRelative } from '@/lib/formatDate';
 import { useResolvedProjectRole } from '@/hooks/useProjectAccess';
+import { TasksTab } from '@/components/tasks/TasksTab';
+import { useProjectTasks } from '@/hooks/useTaskQueries';
 
-type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
+type Tab = 'overview' | 'samples' | 'experiments' | 'iterations' | 'tasks' | 'artifacts' | 'pages' | 'timeline' | 'ai' | 'workflows' | 'calendar';
 
 // ─── Tab Bar ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +53,7 @@ interface TabBarProps {
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'iterations', label: 'Iterations' },
+  { id: 'tasks', label: 'Tasks' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'samples', label: 'Samples' },
@@ -1244,6 +1247,7 @@ function ProjectDetailPageInner() {
   const { data: experiments = [] } = useProjectExperiments(projectId);
   const { data: iterations = [] } = useProjectIterations(projectId);
   const { data: artifacts = [] } = useProjectArtifacts(projectId);
+  const { data: tasks = [] } = useProjectTasks(projectId);
   const { toggle } = useAIPanel();
   const toggleAI = useCallback(
     () => toggle({ projectId, workspaceId: project?.workspace_id }),
@@ -1272,6 +1276,7 @@ function ProjectDetailPageInner() {
     experiments: experiments.length || undefined,
     iterations: iterations.length || undefined,
     artifacts: artifacts.length || undefined,
+    tasks: tasks.length || undefined,
   };
 
   const topBarActions = (
@@ -1316,6 +1321,7 @@ function ProjectDetailPageInner() {
             {currentTab === 'samples' && <SamplesTab projectId={projectId} />}
             {currentTab === 'experiments' && <ExperimentsTab projectId={projectId} />}
             {currentTab === 'iterations' && <IterationsTab projectId={projectId} />}
+            {currentTab === 'tasks' && <TasksTab projectId={projectId} />}
             {currentTab === 'artifacts' && <ArtifactsTab projectId={projectId} />}
             {currentTab === 'timeline' && (
               <ProjectTimeline

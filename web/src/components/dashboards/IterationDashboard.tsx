@@ -15,6 +15,7 @@ import {
 } from '@/hooks/useQueries';
 import { ArtEmbed } from '@/components/embeds/ArtEmbeds';
 import type { IterationSample } from '@/hooks/useQueries';
+import { TasksTab } from '@/components/tasks/TasksTab';
 
 // ─── Artifact embeds preview ──────────────────────────────────────────────────
 
@@ -121,6 +122,14 @@ export function IterationDashboard({
 
       {/* Risk Register */}
       <RiskRegister projectId={iteration.project_id} iterationId={iterationId} />
+
+      {/* Tasks */}
+      <div style={{ marginBottom: 32 }}>
+        <div className="section-h" style={{ marginBottom: 12 }}>
+          <h2>Tasks</h2>
+        </div>
+        <TasksTab projectId={iteration.project_id} iterationId={iterationId} />
+      </div>
 
       {/* Artifact embeds */}
       <IterationArtifactsPreview projectId={iteration.project_id} />

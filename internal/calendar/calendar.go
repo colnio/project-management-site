@@ -265,6 +265,50 @@ func (s *Service) DeleteEvent(ctx context.Context, id uuid.UUID, actorID uuid.UU
 	return nil
 }
 
+// ─── Task deadline events ─────────────────────────────────────────────────────
+
+// UpsertTaskEvent creates or updates the single 'deadline' calendar event linked
+// to a task. It is idempotent on task_id (one event per task), so repeated calls
+// as a task's estimated-finish / planned-start date changes keep exactly one
+// event in sync. Caller must already be authorized (the task module gates this
+// via project.Authorize before mutating the task).
+func (s *Service) UpsertTaskEvent(
+	ctx context.Context,
+	taskID, projectID, createdBy uuid.UUID,
+	title string,
+	when time.Time,
+) (*Event, error) {
+	var e Event
+	err := s.pool.QueryRow(ctx,
+		`INSERT INTO project_events
+		   (project_id, task_id, kind, title, description, start_at, end_at, all_day, recurrence_rule, created_by)
+		 VALUES ($1, $2, 'deadline', $3, '', $4, NULL, false, '', $5)
+		 ON CONFLICT (task_id) WHERE task_id IS NOT NULL
+		 DO UPDATE SET title = EXCLUDED.title, start_at = EXCLUDED.start_at, updated_at = now()
+		 RETURNING id, project_id, iteration_id, sample_id, experiment_id,
+		           kind, title, description, start_at, end_at, all_day, recurrence_rule,
+		           created_by, created_at, updated_at`,
+		projectID, taskID, title, when, createdBy,
+	).Scan(
+		&e.ID, &e.ProjectID, &e.IterationID, &e.SampleID, &e.ExperimentID,
+		&e.Kind, &e.Title, &e.Description, &e.StartAt, &e.EndAt, &e.AllDay, &e.RecurrenceRule,
+		&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("calendar: upsert task event: %w", err)
+	}
+	return &e, nil
+}
+
+// DeleteTaskEvents removes any calendar events linked to a task (when the task's
+// dates are cleared, it is completed/cancelled, or deleted).
+func (s *Service) DeleteTaskEvents(ctx context.Context, taskID uuid.UUID) error {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM project_events WHERE task_id = $1`, taskID); err != nil {
+		return fmt.Errorf("calendar: delete task events: %w", err)
+	}
+	return nil
+}
+
 // ─── Subscription domain methods ──────────────────────────────────────────────
 
 // GetOrCreateSubscription lazily creates a subscription for the caller if one

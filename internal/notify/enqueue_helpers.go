@@ -82,6 +82,26 @@ func (s *Service) EnqueuePIFlagReview(ctx context.Context, idempotencyKey string
 	})
 }
 
+// EnqueueTaskAssigned notifies a user that a task has been assigned to them
+// (on take or reassign). Best-effort; the caller never fails the mutation on
+// error. idempotencyKey should encode task + assignee so a reassign to the same
+// person isn't re-sent.
+func (s *Service) EnqueueTaskAssigned(ctx context.Context, taskID, projectID, assigneeUserID uuid.UUID, toEmail, projectName, taskTitle, actionPath, idempotencyKey string) error {
+	uid := assigneeUserID
+	return s.Enqueue(ctx, EnqueueParams{
+		UserID:         &uid,
+		ToEmail:        toEmail,
+		Category:       CategoryTask,
+		TemplateKey:    TemplateTaskAssigned,
+		IdempotencyKey: idempotencyKey,
+		Payload: map[string]any{
+			"ProjectName": projectName,
+			"TaskTitle":   taskTitle,
+			"ActionPath":  actionPath,
+		},
+	})
+}
+
 // EnqueueAccountApproved sends mandatory account approval email.
 func (s *Service) EnqueueAccountApproved(ctx context.Context, userID uuid.UUID, toEmail string) error {
 	uid := userID

@@ -1,0 +1,11 @@
+Task assigned to you — {{.ProjectName}}
+---
+A task has been assigned to you.
+
+Project: {{.ProjectName}}
+{{if .TaskTitle}}Task: {{.TaskTitle}}
+{{end}}
+Open the project:
+{{.ActionURL}}
+
+Manage notification preferences: {{.PrefsURL}}
