@@ -280,7 +280,7 @@ func TestMarkDone_SucceedsWithReference(t *testing.T) {
 	}
 
 	sampleID := uuid.New()
-	_, err = env.taskSvc.AddReference(ctx, task.ID, "sample", sampleID, owner.ID)
+	_, err = env.taskSvc.AddReference(ctx, task.ID, "sample", sampleID, owner.ID, "")
 	if err != nil {
 		t.Fatalf("AddReference: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestReopenTask_RequiresComment(t *testing.T) {
 		t.Fatalf("TakeTask: %v", err)
 	}
 	sampleID := uuid.New()
-	if _, err = env.taskSvc.AddReference(ctx, task.ID, "sample", sampleID, owner.ID); err != nil {
+	if _, err = env.taskSvc.AddReference(ctx, task.ID, "sample", sampleID, owner.ID, ""); err != nil {
 		t.Fatalf("AddReference: %v", err)
 	}
 	task, err = env.taskSvc.MarkDone(ctx, task.ID, owner.ID)
@@ -549,7 +549,7 @@ func TestCalendarSync_TakeUpsertsAndDoneClears(t *testing.T) {
 
 	// MarkDone should clear the calendar event.
 	sampleID := uuid.New()
-	if _, err = env.taskSvc.AddReference(ctx, task.ID, "sample", sampleID, owner.ID); err != nil {
+	if _, err = env.taskSvc.AddReference(ctx, task.ID, "sample", sampleID, owner.ID, ""); err != nil {
 		t.Fatalf("AddReference: %v", err)
 	}
 	_, err = env.taskSvc.MarkDone(ctx, task.ID, owner.ID)
@@ -620,5 +620,192 @@ func TestDeleteTask_RemovesCalendarAndCascades(t *testing.T) {
 	em, ok := err.(*platform.ErrorModel)
 	if !ok || em.GetStatus() != 404 {
 		t.Errorf("expected 404 not_found, got %v", err)
+	}
+}
+
+// ─── fakeMentioner ───────────────────────────────────────────────────────────
+
+// fakeMentioner captures calls to Create so tests can assert mention behaviour
+// without the real mention.Service or a database mentions table.
+type fakeMentioner struct {
+	calls []mentionCreateCall
+}
+
+type mentionCreateCall struct {
+	actorID         uuid.UUID
+	mentionedUserID uuid.UUID
+	sourceType      string
+	sourceID        uuid.UUID
+}
+
+func (f *fakeMentioner) Create(
+	_ context.Context,
+	actorID, mentionedUserID uuid.UUID,
+	sourceType string,
+	sourceID uuid.UUID,
+	_, _ *uuid.UUID,
+	_, _ string,
+) error {
+	f.calls = append(f.calls, mentionCreateCall{
+		actorID:         actorID,
+		mentionedUserID: mentionedUserID,
+		sourceType:      sourceType,
+		sourceID:        sourceID,
+	})
+	return nil
+}
+
+// ─── New test cases ───────────────────────────────────────────────────────────
+
+// TestAddReference_UserAndProjectTypesWithLabel verifies that user and project
+// reference types are accepted and that the label is stored and returned by
+// ListReferences.
+func TestAddReference_UserAndProjectTypesWithLabel(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "ref-label-owner@example.com", "Ref Label Owner")
+	proj := seedProject(t, env, owner.ID)
+
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Ref Label Task", "", nil, owner.ID)
+	if err != nil {
+		t.Fatalf("createTask: %v", err)
+	}
+
+	// user reference with a label.
+	targetUserID := uuid.New()
+	ref, err := env.taskSvc.AddReference(ctx, task.ID, "user", targetUserID, owner.ID, "Alice")
+	if err != nil {
+		t.Fatalf("AddReference user: %v", err)
+	}
+	if ref.Label != "Alice" {
+		t.Errorf("user ref label = %q, want 'Alice'", ref.Label)
+	}
+	if ref.RefType != "user" {
+		t.Errorf("user ref type = %q, want 'user'", ref.RefType)
+	}
+
+	// project reference with a label.
+	targetProjID := uuid.New()
+	pref, err := env.taskSvc.AddReference(ctx, task.ID, "project", targetProjID, owner.ID, "Proj")
+	if err != nil {
+		t.Fatalf("AddReference project: %v", err)
+	}
+	if pref.Label != "Proj" {
+		t.Errorf("project ref label = %q, want 'Proj'", pref.Label)
+	}
+
+	// ListReferences should return both.
+	refs, err := env.taskSvc.ListReferences(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("ListReferences: %v", err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("ListReferences count = %d, want 2", len(refs))
+	}
+	labelsByType := make(map[string]string)
+	for _, r := range refs {
+		labelsByType[r.RefType] = r.Label
+	}
+	if labelsByType["user"] != "Alice" {
+		t.Errorf("user ref label in list = %q, want 'Alice'", labelsByType["user"])
+	}
+	if labelsByType["project"] != "Proj" {
+		t.Errorf("project ref label in list = %q, want 'Proj'", labelsByType["project"])
+	}
+}
+
+// TestAddReference_UserFiresMention verifies that adding a user reference calls
+// the fake Mentioner with sourceType="task" and the correct IDs.
+func TestAddReference_UserFiresMention(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "mention-fire-owner@example.com", "Mention Fire Owner")
+	proj := seedProject(t, env, owner.ID)
+
+	fm := &fakeMentioner{}
+	env.taskSvc.SetMentioner(fm)
+
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Mention Task", "", nil, owner.ID)
+	if err != nil {
+		t.Fatalf("createTask: %v", err)
+	}
+
+	targetUserID := uuid.New()
+	_, err = env.taskSvc.AddReference(ctx, task.ID, "user", targetUserID, owner.ID, "Alice")
+	if err != nil {
+		t.Fatalf("AddReference user: %v", err)
+	}
+
+	if len(fm.calls) != 1 {
+		t.Fatalf("mentioner called %d times, want 1", len(fm.calls))
+	}
+	c := fm.calls[0]
+	if c.sourceType != "task" {
+		t.Errorf("mention sourceType = %q, want 'task'", c.sourceType)
+	}
+	if c.sourceID != task.ID {
+		t.Errorf("mention sourceID = %s, want %s", c.sourceID, task.ID)
+	}
+	if c.mentionedUserID != targetUserID {
+		t.Errorf("mention mentionedUserID = %s, want %s", c.mentionedUserID, targetUserID)
+	}
+	if c.actorID != owner.ID {
+		t.Errorf("mention actorID = %s, want %s", c.actorID, owner.ID)
+	}
+}
+
+// TestMarkDone_PersonRefDoesNotSatisfyGate verifies that a task with only
+// "user" references cannot be marked done (person refs don't count toward the
+// close gate), but adding a "sample" reference then allows MarkDone.
+func TestMarkDone_PersonRefDoesNotSatisfyGate(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+
+	owner := env.users.seed(t, "gate-owner@example.com", "Gate Owner")
+	proj := seedProject(t, env, owner.ID)
+
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Gate Task", "", nil, owner.ID)
+	if err != nil {
+		t.Fatalf("createTask: %v", err)
+	}
+
+	estimate := time.Now().Add(24 * time.Hour)
+	task, err = env.taskSvc.TakeTask(ctx, task.ID, owner.ID, estimate)
+	if err != nil {
+		t.Fatalf("TakeTask: %v", err)
+	}
+
+	// Add only a "user" reference — should NOT satisfy the gate.
+	userRefID := uuid.New()
+	if _, err = env.taskSvc.AddReference(ctx, task.ID, "user", userRefID, owner.ID, "Alice"); err != nil {
+		t.Fatalf("AddReference user: %v", err)
+	}
+
+	_, err = env.taskSvc.MarkDone(ctx, task.ID, owner.ID)
+	assertPlatformError(t, err, "task.references_required")
+
+	// Status must still be in_progress.
+	reloaded, err := env.taskSvc.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+	if reloaded.Status != "in_progress" {
+		t.Errorf("status after failed MarkDone = %q, want in_progress", reloaded.Status)
+	}
+
+	// Now add a "sample" reference → MarkDone should succeed.
+	sampleRefID := uuid.New()
+	if _, err = env.taskSvc.AddReference(ctx, task.ID, "sample", sampleRefID, owner.ID, ""); err != nil {
+		t.Fatalf("AddReference sample: %v", err)
+	}
+
+	done, err := env.taskSvc.MarkDone(ctx, task.ID, owner.ID)
+	if err != nil {
+		t.Fatalf("MarkDone after sample ref: %v", err)
+	}
+	if done.Status != "done" {
+		t.Errorf("status = %q, want done", done.Status)
 	}
 }
