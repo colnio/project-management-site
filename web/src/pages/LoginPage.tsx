@@ -1,15 +1,25 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link } from '@tanstack/react-router';
 import { useAuth } from '@/hooks/useAuth';
 import { ApiError } from '@/api/client';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, status } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Redirect once auth state has flipped to authenticated. Driving this from an
+  // effect (rather than navigating inline in handleSubmit) ensures it runs
+  // after React commits the render that refreshes the router's auth guard —
+  // navigating synchronously inside the handler raced the guard, which still
+  // saw the stale (unauthenticated) snapshot and bounced back to /login.
+  // This also redirects an already-authenticated user who lands on /login.
+  useEffect(() => {
+    if (status === 'authenticated') void navigate({ to: '/' });
+  }, [status, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -17,7 +27,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      await navigate({ to: '/' });
+      // Navigation happens in the effect above once status === 'authenticated'.
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message || 'Invalid credentials');

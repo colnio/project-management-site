@@ -112,6 +112,12 @@ func Load() (*Config, error) {
 	if err := c.validateProduction(); err != nil {
 		return nil, err
 	}
+	// In production keep access tokens alive long enough that a single racing
+	// refresh can't bounce an active user mid-session. Floor at 24h regardless
+	// of the configured ACCESS_TOKEN_TTL. Dev keeps the shorter default.
+	if c.IsProduction() && c.AccessTokenTTL < 24*time.Hour {
+		c.AccessTokenTTL = 24 * time.Hour
+	}
 	return c, nil
 }
 

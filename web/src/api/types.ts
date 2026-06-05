@@ -46,6 +46,19 @@ export interface RegisterOutput {
   message: string;
 }
 
+/** Shape returned by GET /v1/admin/feedback */
+export interface FeedbackEntry {
+  id: string;
+  user_id: string;
+  submitter_name: string;
+  submitter_email: string;
+  category: 'bug' | 'idea' | 'other';
+  message: string;
+  status: 'new' | 'acknowledged';
+  created_at: string;
+  acknowledged_at?: string;
+}
+
 /** Shape returned by GET /v1/admin/users */
 export interface AdminUserView {
   id: string;

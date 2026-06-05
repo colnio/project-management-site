@@ -17,7 +17,8 @@ import {
   useDeleteAdminUser,
   useCreateBroadcast,
 } from '@/hooks/useAdminQueries';
-import type { AdminUserView } from '@/api/types';
+import type { AdminUserView, FeedbackEntry } from '@/api/types';
+import { useFeedbackList, useAcknowledgeFeedback } from '@/hooks/useFeedbackQueries';
 import { useAuth } from '@/hooks/useAuth';
 import { isPrivileged } from '@/api/types';
 import { fmtDate } from '@/lib/formatDate';
@@ -600,6 +601,99 @@ function BroadcastSection({ workspaceId }: { workspaceId: string | undefined }) 
   );
 }
 
+// ─── Feedback section ─────────────────────────────────────────────────────────
+
+const FEEDBACK_CATEGORY_LABELS: Record<string, string> = {
+  bug: 'Bug',
+  idea: 'Idea',
+  other: 'Other',
+};
+
+function feedbackCategoryPill(category: string): React.CSSProperties {
+  const base: React.CSSProperties = {
+    borderRadius: 99, padding: '1px 8px', fontFamily: 'var(--mono)', fontSize: 10.5,
+    textTransform: 'uppercase', letterSpacing: '0.04em',
+  };
+  if (category === 'bug') return { ...base, background: 'var(--pill-blocked-bg, #fce8e4)', color: 'var(--bad, #b94e3c)', border: '1px solid var(--pill-blocked-bd, #f0b8b0)' };
+  if (category === 'idea') return { ...base, background: 'var(--pill-planned-bg, #fff8e1)', color: 'var(--warn, #b45309)', border: '1px solid #f3d78a' };
+  return { ...base, background: 'var(--paper-2)', color: 'var(--ink-2)', border: '1px solid var(--line)' };
+}
+
+function FeedbackSection() {
+  const [showAcknowledged, setShowAcknowledged] = useState(false);
+  const { data: entries = [], isLoading, isError } = useFeedbackList(showAcknowledged);
+  const acknowledge = useAcknowledgeFeedback();
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-2)', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={showAcknowledged}
+            onChange={e => setShowAcknowledged(e.target.checked)}
+          />
+          Show acknowledged
+        </label>
+      </div>
+
+      {isLoading ? (
+        <LoadingState message="Loading feedback…" />
+      ) : isError ? (
+        <ErrorState message="Failed to load feedback." />
+      ) : entries.length === 0 ? (
+        <EmptyState message={showAcknowledged ? 'No feedback yet.' : 'No new feedback.'} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {(entries as FeedbackEntry[]).map(f => (
+            <div
+              key={f.id}
+              style={{
+                border: '1px solid var(--line)',
+                borderRadius: 8,
+                padding: '12px 14px',
+                background: f.status === 'acknowledged' ? 'var(--paper-2)' : 'var(--surface)',
+                opacity: f.status === 'acknowledged' ? 0.75 : 1,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={feedbackCategoryPill(f.category)}>
+                  {FEEDBACK_CATEGORY_LABELS[f.category] ?? f.category}
+                </span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-2)' }}>
+                  {f.submitter_name || f.submitter_email || 'Unknown'}
+                </span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>
+                  {fmtDate(f.created_at)}
+                </span>
+                <div style={{ marginLeft: 'auto' }}>
+                  {f.status === 'acknowledged' ? (
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--good, #2e7d32)' }}>
+                      ✓ Acknowledged
+                    </span>
+                  ) : (
+                    <button
+                      className="top-btn"
+                      style={{ fontSize: 12, padding: '4px 10px' }}
+                      onClick={() => acknowledge.mutate(f.id)}
+                      disabled={acknowledge.isPending}
+                    >
+                      Acknowledge
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--ink)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                {f.message}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function AdminPage() {
@@ -652,6 +746,10 @@ export function AdminPage() {
             <MembersSection workspaceId={workspaceId} />
           </SectionCard>
         )}
+
+        <SectionCard title="Feedback">
+          <FeedbackSection />
+        </SectionCard>
 
         <SectionCard title="User Management">
           <UsersSection currentUserId={user?.id} />

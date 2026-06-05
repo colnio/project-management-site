@@ -30,6 +30,7 @@ import (
 	"github.com/colnio/project-management-site/internal/config"
 	"github.com/colnio/project-management-site/internal/db"
 	"github.com/colnio/project-management-site/internal/experiment"
+	"github.com/colnio/project-management-site/internal/feedback"
 	"github.com/colnio/project-management-site/internal/inbox"
 	"github.com/colnio/project-management-site/internal/iteration"
 	"github.com/colnio/project-management-site/internal/jobs"
@@ -223,8 +224,10 @@ func run() error {
 
 	adminSvc := admin.NewService(authSvc, auditRec)
 	adminSvc.SetAccountNotifier(notifySvc)
+	feedbackSvc := feedback.NewService(pool, auditRec, logger)
 	auth.Register(srv.API, authSvc)
 	admin.Register(srv.API, adminSvc)
+	feedback.Register(srv.API, feedbackSvc)
 	audit.Register(srv.API, audit.NewService(auditRec))
 	org.Register(srv.API, orgSvc)
 	project.Register(srv.API, projectSvc)

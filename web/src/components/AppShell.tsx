@@ -6,6 +6,7 @@ import { useInbox } from '@/hooks/useWorkspaceQueries';
 import { useProjectPages } from '@/hooks/usePageQueries';
 import { Avatar } from './Avatar';
 import { CommandPalette } from './CommandPalette';
+import { FeedbackDialog } from './FeedbackDialog';
 import { ThemeToggle } from './ThemeToggle';
 import type { Workspace, Project } from '@/api/types';
 import { isPrivileged } from '@/api/types';
@@ -142,6 +143,15 @@ function AdminIcon({ size = 13 }: { size?: number }) {
   );
 }
 
+function FeedbackIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <path d="M2 3H14V11H8.5L5.5 13.5V11H2V3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M5 6H11M5 8.5H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function NotesIcon({ size = 13 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
@@ -226,6 +236,7 @@ function Sidebar({
   );
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [wsSwitcherOpen, setWsSwitcherOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
     if (activeProjectId) {
@@ -445,6 +456,17 @@ function Sidebar({
           </span>
           Calendar
         </Link>
+        <button
+          type="button"
+          className="side-item"
+          onClick={() => setFeedbackOpen(true)}
+          style={{ cursor: 'pointer', border: 'none', background: 'none', font: 'inherit', textAlign: 'left', width: '100%' }}
+        >
+          <span className="ic">
+            <FeedbackIcon size={13} />
+          </span>
+          Feedback
+        </button>
         {isPrivileged(user) && (
           <Link
             to="/admin"
@@ -556,6 +578,8 @@ function Sidebar({
           </button>
         </div>
       </div>
+
+      {feedbackOpen && <FeedbackDialog onClose={() => setFeedbackOpen(false)} />}
     </aside>
   );
 }
