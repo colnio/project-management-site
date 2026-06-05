@@ -176,7 +176,7 @@ func (s *Service) handleListMeetings(ctx context.Context, in *listMeetingsInput)
 		return nil, platform.BadRequest("workspace.invalid_id", "invalid workspace ID")
 	}
 
-	if err := s.checkWorkspaceMember(ctx, p, wsID); err != nil {
+	if err := s.checkWorkspaceRead(ctx, p, wsID); err != nil {
 		return nil, err
 	}
 
@@ -219,7 +219,7 @@ func (s *Service) handleGetMeeting(ctx context.Context, in *getMeetingInput) (*g
 		return nil, err
 	}
 
-	if err := s.checkWorkspaceMember(ctx, p, m.WorkspaceID); err != nil {
+	if err := s.checkWorkspaceRead(ctx, p, m.WorkspaceID); err != nil {
 		return nil, err
 	}
 

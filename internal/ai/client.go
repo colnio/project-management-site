@@ -58,11 +58,15 @@ type FunctionCall struct {
 	Arguments string `json:"arguments"`
 }
 
-// Usage is token usage from the model response.
+// Usage is token usage from the model response. EstimatedCost is the USD cost
+// the provider (DeepInfra) reports in the `usage` object; it is 0 for providers
+// that don't return it (e.g. local Ollama), in which case callers fall back to
+// a token-rate estimate.
 type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens     int     `json:"prompt_tokens"`
+	CompletionTokens int     `json:"completion_tokens"`
+	TotalTokens      int     `json:"total_tokens"`
+	EstimatedCost    float64 `json:"estimated_cost"`
 }
 
 // ChatRequest is an OpenAI-compatible chat completions request.

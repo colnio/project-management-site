@@ -111,6 +111,22 @@ func (s *Service) checkWorkspaceMember(ctx context.Context, p *platform.Principa
 	return nil
 }
 
+// checkWorkspaceRead returns a Forbidden error unless the principal may read the
+// workspace's meetings. Read access is broader than write: in addition to
+// explicit members and system admins, lab-domain users may view meetings — the
+// same read floor the workspace list, get, and member-list endpoints apply
+// (see org.Service.IsLabMember). Writes still go through checkWorkspaceMember.
+func (s *Service) checkWorkspaceRead(ctx context.Context, p *platform.Principal, workspaceID uuid.UUID) error {
+	_, isMember, err := s.org.WorkspaceRole(ctx, workspaceID, p.UserID)
+	if err != nil {
+		return err
+	}
+	if !isMember && !p.IsPrivileged() && !s.org.IsLabMember(p) {
+		return platform.Forbidden("not a member of this workspace")
+	}
+	return nil
+}
+
 // ─── GetMeeting ──────────────────────────────────────────────────────────────
 
 // GetMeeting loads a meeting by id.

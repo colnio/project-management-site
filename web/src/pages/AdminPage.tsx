@@ -6,7 +6,12 @@ import { useState, useMemo } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
 import { Avatar } from '@/components/Avatar';
-import { useWorkspaceMembers, useCurrentWorkspace } from '@/hooks/useQueries';
+import {
+  useWorkspaceMembers,
+  useCurrentWorkspace,
+  useAddWorkspaceMember,
+  useRemoveWorkspaceMember,
+} from '@/hooks/useQueries';
 import { useAIUsage, useWorkflows } from '@/hooks/useAIQueries';
 import { useAuditLog } from '@/hooks/useWorkspaceQueries';
 import type { AuditEntry } from '@/hooks/useWorkspaceQueries';
@@ -125,37 +130,132 @@ function AIOverviewSection({ workspaceId }: { workspaceId: string }) {
 
 // ─── Members table ────────────────────────────────────────────────────────────
 
+// Add-member form: pick an existing approved user + role, POST to the
+// workspace members endpoint. The same user can be added to multiple
+// workspaces by switching the active workspace and repeating.
+function AddMemberForm({ workspaceId, memberUserIds }: { workspaceId: string; memberUserIds: Set<string> }) {
+  const { data: users = [] } = useAdminUsers();
+  const addMember = useAddWorkspaceMember(workspaceId);
+  const [userId, setUserId] = useState('');
+  const [role, setRole] = useState<'owner' | 'admin' | 'member'>('member');
+
+  // Only offer approved users who aren't already members of this workspace.
+  const candidates = users.filter(u => u.status === 'approved' && !memberUserIds.has(u.id));
+  const selected = candidates.find(u => u.id === userId);
+
+  const submit = () => {
+    if (!selected) return;
+    addMember.mutate(
+      { email: selected.email, role },
+      { onSuccess: () => setUserId('') },
+    );
+  };
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <select
+          value={userId}
+          onChange={e => setUserId(e.target.value)}
+          style={{ flex: '1 1 240px', minWidth: 200, padding: '6px 8px', fontSize: 13 }}
+        >
+          <option value="">Select a user to add…</option>
+          {candidates.map(u => (
+            <option key={u.id} value={u.id}>
+              {(u.display_name || u.email)}{u.display_name ? ` · ${u.email}` : ''}
+            </option>
+          ))}
+        </select>
+        <select
+          value={role}
+          onChange={e => setRole(e.target.value as 'owner' | 'admin' | 'member')}
+          style={{ padding: '6px 8px', fontSize: 13 }}
+        >
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+          <option value="owner">Owner</option>
+        </select>
+        <button
+          className="top-btn"
+          onClick={submit}
+          disabled={!selected || addMember.isPending}
+          style={{ fontSize: 12, padding: '6px 14px' }}
+        >
+          {addMember.isPending ? 'Adding…' : 'Add member'}
+        </button>
+      </div>
+      {addMember.isError && (
+        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--bad)' }}>
+          {(addMember.error as Error)?.message || 'Failed to add member.'}
+        </div>
+      )}
+      {candidates.length === 0 && (
+        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--muted-2)' }}>
+          No approved users available to add. Users must register and be approved first.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MembersSection({ workspaceId }: { workspaceId: string }) {
   const { data: members = [], isLoading, isError } = useWorkspaceMembers(workspaceId);
+  const removeMember = useRemoveWorkspaceMember(workspaceId);
 
-  if (isLoading) return <LoadingState message="Loading members…" />;
-  if (isError) return <ErrorState message="Failed to load members." />;
-  if (members.length === 0) return <EmptyState message="No members." />;
+  const ownerCount = members.filter(m => m.role?.toLowerCase() === 'owner').length;
+  const memberUserIds = new Set(members.map(m => m.user_id));
+  const cols = '36px 1fr 120px 140px 32px';
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 140px', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--line)', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        <span />
-        <span>Member</span>
-        <span>Workspace Role</span>
-        <span>Joined</span>
-      </div>
-      {members.map(m => {
-        const dn = m.display_name || m.email;
-        return (
-          <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 120px 140px', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
-            <Avatar name={dn} size={28} />
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>{dn}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>{m.email}</div>
-            </div>
-            <span className="pill">{m.role}</span>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>
-              {fmtDate(m.created_at)}
-            </span>
+      <AddMemberForm workspaceId={workspaceId} memberUserIds={memberUserIds} />
+
+      {isLoading && <LoadingState message="Loading members…" />}
+      {isError && <ErrorState message="Failed to load members." />}
+      {!isLoading && !isError && members.length === 0 && <EmptyState message="No members." />}
+
+      {!isLoading && !isError && members.length > 0 && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 10, padding: '6px 0', borderBottom: '1px solid var(--line)', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <span />
+            <span>Member</span>
+            <span>Workspace Role</span>
+            <span>Joined</span>
+            <span />
           </div>
-        );
-      })}
+          {members.map(m => {
+            const dn = m.display_name || m.email;
+            // Block removing the sole owner (backend enforces this too).
+            const isLastOwner = m.role?.toLowerCase() === 'owner' && ownerCount <= 1;
+            return (
+              <div key={m.id} style={{ display: 'grid', gridTemplateColumns: cols, gap: 10, padding: '10px 0', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
+                <Avatar name={dn} size={28} />
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>{dn}</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>{m.email}</div>
+                </div>
+                <span className="pill">{m.role}</span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>
+                  {fmtDate(m.created_at)}
+                </span>
+                <button
+                  className="top-btn"
+                  title={isLastOwner ? 'Cannot remove the only owner' : 'Remove member'}
+                  disabled={isLastOwner || removeMember.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Remove ${dn} from this workspace?`)) {
+                      removeMember.mutate(m.user_id);
+                    }
+                  }}
+                  style={{ fontSize: 13, padding: '2px 8px', color: 'var(--bad)', opacity: isLastOwner ? 0.4 : 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

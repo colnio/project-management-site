@@ -303,8 +303,13 @@ const (
 )
 
 func recordUsage(ctx context.Context, pool *pgxpool.Pool, workspaceID, projectID, userID uuid.UUID, feature, model string, usage Usage) error {
-	total := usage.PromptTokens + usage.CompletionTokens
-	cost := float64(total) / 1000.0 * defaultPricePer1k
+	// Prefer the provider-reported cost (DeepInfra returns it in usage); fall
+	// back to a token-rate estimate for providers that don't (e.g. local Ollama).
+	cost := usage.EstimatedCost
+	if cost <= 0 {
+		total := usage.PromptTokens + usage.CompletionTokens
+		cost = float64(total) / 1000.0 * defaultPricePer1k
+	}
 	_, err := pool.Exec(ctx,
 		`INSERT INTO ai_usage_records (workspace_id, project_id, user_id, feature, model, prompt_tokens, completion_tokens, usd_cost)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,

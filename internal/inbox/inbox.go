@@ -129,8 +129,12 @@ func (s *Service) AggregateForWorkspace(ctx context.Context, workspaceID, userID
 // ─── Source: personal @-mentions ──────────────────────────────────────────────
 
 func (s *Service) fetchMentions(ctx context.Context, workspaceID, userID uuid.UUID) ([]Item, error) {
-	ws := workspaceID
-	ms, err := s.mentions.ListForUser(ctx, userID, &ws, inboxCap)
+	// Mentions are a personal notification: a user should see every @-mention
+	// addressed to them in their inbox, regardless of which workspace is
+	// currently selected (mentions can be cross-workspace). Pass nil to fetch
+	// across all workspaces rather than scoping to workspaceID.
+	_ = workspaceID
+	ms, err := s.mentions.ListForUser(ctx, userID, nil, inboxCap)
 	if err != nil {
 		return nil, fmt.Errorf("inbox: mentions: %w", err)
 	}

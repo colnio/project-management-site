@@ -63,6 +63,32 @@ export function useWorkspaceMembers(workspaceId: string | undefined) {
   });
 }
 
+// Add an existing user to a workspace (or update their role). The user must
+// already exist; the backend returns an error otherwise. Caller must be a
+// workspace owner/admin or a privileged (admin/PI) user.
+export function useAddWorkspaceMember(workspaceId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { email: string; role: 'owner' | 'admin' | 'member' }) =>
+      api.post<Membership>(`/v1/workspaces/${workspaceId}/members`, vars),
+    onSuccess: () => {
+      if (workspaceId) qc.invalidateQueries({ queryKey: keys.workspaceMembers(workspaceId) });
+    },
+  });
+}
+
+// Remove a member from a workspace.
+export function useRemoveWorkspaceMember(workspaceId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      api.delete<{ ok: boolean }>(`/v1/workspaces/${workspaceId}/members/${userId}`),
+    onSuccess: () => {
+      if (workspaceId) qc.invalidateQueries({ queryKey: keys.workspaceMembers(workspaceId) });
+    },
+  });
+}
+
 export function useCreateWorkspace() {
   const qc = useQueryClient();
   return useMutation({

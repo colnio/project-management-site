@@ -190,7 +190,7 @@ func TestAggregateForWorkspace_PIFlag(t *testing.T) {
 		t.Fatalf("seed flagged risk: %v", err)
 	}
 
-	items, err := env.inboxSvc.AggregateForWorkspace(ctx, ws.ID)
+	items, err := env.inboxSvc.AggregateForWorkspace(ctx, ws.ID, owner.ID)
 	if err != nil {
 		t.Fatalf("AggregateForWorkspace: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestAggregateForWorkspace_PropagatesError(t *testing.T) {
 
 	wsID := uuid.New() // doesn't need to exist — the query will fail first
 
-	_, err := env.inboxSvc.AggregateForWorkspace(ctx, wsID)
+	_, err := env.inboxSvc.AggregateForWorkspace(ctx, wsID, uuid.New())
 	if err == nil {
 		// If the context is already cancelled, DB operations should fail.
 		// Some implementations may handle this gracefully; log rather than fatal.
@@ -254,7 +254,7 @@ func TestAggregateForWorkspace_AuditItems(t *testing.T) {
 		t.Fatalf("seed audit_log: %v", err)
 	}
 
-	items, err := env.inboxSvc.AggregateForWorkspace(ctx, ws.ID)
+	items, err := env.inboxSvc.AggregateForWorkspace(ctx, ws.ID, owner.ID)
 	if err != nil {
 		t.Fatalf("AggregateForWorkspace: %v", err)
 	}
@@ -284,8 +284,9 @@ func TestAggregateForWorkspace_EmptyWorkspace(t *testing.T) {
 	ctx := context.Background()
 
 	ws, _ := seedWorkspaceAndProject(t, env, "owner-empty@example.com")
+	owner := env.users.byEmail["owner-empty@example.com"]
 
-	items, err := env.inboxSvc.AggregateForWorkspace(ctx, ws.ID)
+	items, err := env.inboxSvc.AggregateForWorkspace(ctx, ws.ID, owner.ID)
 	if err != nil {
 		t.Fatalf("AggregateForWorkspace: %v", err)
 	}
