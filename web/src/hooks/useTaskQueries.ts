@@ -16,6 +16,7 @@ export interface Task {
   description?: string;
   status: 'backlog' | 'todo' | 'in_progress' | 'done' | 'cancelled';
   assignee_user_id?: string;
+  actual_executor_id?: string;
   planned_start_at?: string;
   estimated_finish_at?: string;
   started_at?: string;
@@ -175,7 +176,12 @@ export function useCreateTask(projectId: string) {
       title: string;
       description?: string;
       iteration_id?: string;
+      assignee_user_id?: string;
+      actual_executor_id?: string;
       planned_start_at?: string;
+      estimated_finish_at?: string;
+      started_at?: string;
+      finished_at?: string;
     }) => api.post<Task>(`/v1/projects/${projectId}/tasks`, body),
     onSuccess: (task) => {
       invalidateTasks(qc, projectId, task.iteration_id);

@@ -195,7 +195,7 @@ func TestCreateTask_DefaultsAndProgress(t *testing.T) {
 	owner := env.users.seed(t, "owner-create@example.com", "Owner Create")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "My Task", "some description", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "My Task", "some description", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestMarkDone_BlockedWithoutReferences(t *testing.T) {
 	owner := env.users.seed(t, "owner-noref@example.com", "Owner NoRef")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Needs Reference", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Needs Reference", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -268,7 +268,7 @@ func TestMarkDone_SucceedsWithReference(t *testing.T) {
 	owner := env.users.seed(t, "owner-done@example.com", "Owner Done")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Will Finish", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Will Finish", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestCancelTask_RequiresReason(t *testing.T) {
 	owner := env.users.seed(t, "owner-cancel@example.com", "Owner Cancel")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Cancelable", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Cancelable", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -339,7 +339,7 @@ func TestDelayTask_RequiresLaterDateAndReason(t *testing.T) {
 	owner := env.users.seed(t, "owner-delay@example.com", "Owner Delay")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Delayable", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Delayable", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -388,7 +388,7 @@ func TestReopenTask_RequiresComment(t *testing.T) {
 	owner := env.users.seed(t, "owner-reopen@example.com", "Owner Reopen")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Reopenable", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Reopenable", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -437,7 +437,7 @@ func TestProgressHistory_TakeThenCancel(t *testing.T) {
 	owner := env.users.seed(t, "owner-history@example.com", "Owner History")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "History Task", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "History Task", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -494,7 +494,7 @@ func TestCalendarSync_TakeUpsertsAndDoneClears(t *testing.T) {
 	owner := env.users.seed(t, "owner-cal@example.com", "Owner Cal")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Calendar Task", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Calendar Task", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestDeleteTask_RemovesCalendarAndCascades(t *testing.T) {
 	owner := env.users.seed(t, "owner-delete@example.com", "Owner Delete")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Deletable Task", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Deletable Task", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -667,7 +667,7 @@ func TestAddReference_UserAndProjectTypesWithLabel(t *testing.T) {
 	owner := env.users.seed(t, "ref-label-owner@example.com", "Ref Label Owner")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Ref Label Task", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Ref Label Task", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -727,7 +727,7 @@ func TestAddReference_UserFiresMention(t *testing.T) {
 	fm := &fakeMentioner{}
 	env.taskSvc.SetMentioner(fm)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Mention Task", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Mention Task", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}
@@ -766,7 +766,7 @@ func TestMarkDone_PersonRefDoesNotSatisfyGate(t *testing.T) {
 	owner := env.users.seed(t, "gate-owner@example.com", "Gate Owner")
 	proj := seedProject(t, env, owner.ID)
 
-	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Gate Task", "", nil, owner.ID)
+	task, err := env.taskSvc.createTask(ctx, proj.ID, nil, "Gate Task", "", nil, nil, nil, nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("createTask: %v", err)
 	}

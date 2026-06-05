@@ -162,6 +162,17 @@ function NotesIcon({ size = 13 }: { size?: number }) {
   );
 }
 
+function WikiIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M2 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M8 2C8 2 5.5 4.5 5.5 8C5.5 11.5 8 14 8 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M8 2C8 2 10.5 4.5 10.5 8C10.5 11.5 8 14 8 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ─── ProjectNotesTree ─────────────────────────────────────────────────────────
 // One instance per expanded project. Calls useProjectPages once (no hook-in-loop).
 
@@ -455,6 +466,16 @@ function Sidebar({
             <CalendarIcon size={13} />
           </span>
           Calendar
+        </Link>
+        <Link
+          to="/wiki"
+          className="side-item"
+          activeProps={{ className: 'side-item active' }}
+        >
+          <span className="ic">
+            <WikiIcon size={13} />
+          </span>
+          Wiki
         </Link>
         <button
           type="button"

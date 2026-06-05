@@ -34,6 +34,7 @@ type Task struct {
 	Description       string     `json:"description"`
 	Status            string     `json:"status"`
 	AssigneeUserID    *uuid.UUID `json:"assignee_user_id,omitempty"`
+	ActualExecutorID  *uuid.UUID `json:"actual_executor_id,omitempty"`
 	PlannedStartAt    *time.Time `json:"planned_start_at,omitempty"`
 	EstimatedFinishAt *time.Time `json:"estimated_finish_at,omitempty"`
 	StartedAt         *time.Time `json:"started_at,omitempty"`
@@ -126,14 +127,14 @@ func (s *Service) SetMentioner(m Mentioner) {
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
 
 const taskCols = `id, project_id, iteration_id, seq, title, description, status,
-	assignee_user_id, planned_start_at, estimated_finish_at, started_at, finished_at,
+	assignee_user_id, actual_executor_id, planned_start_at, estimated_finish_at, started_at, finished_at,
 	created_by, created_at, updated_at`
 
 func scanTask(row pgx.Row) (*Task, error) {
 	var t Task
 	err := row.Scan(
 		&t.ID, &t.ProjectID, &t.IterationID, &t.Seq, &t.Title, &t.Description, &t.Status,
-		&t.AssigneeUserID, &t.PlannedStartAt, &t.EstimatedFinishAt, &t.StartedAt, &t.FinishedAt,
+		&t.AssigneeUserID, &t.ActualExecutorID, &t.PlannedStartAt, &t.EstimatedFinishAt, &t.StartedAt, &t.FinishedAt,
 		&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -200,7 +201,12 @@ func (s *Service) createTask(
 	projectID uuid.UUID,
 	iterationID *uuid.UUID,
 	title, description string,
+	assigneeUserID *uuid.UUID,
+	actualExecutorID *uuid.UUID,
 	plannedStartAt *time.Time,
+	estimatedFinishAt *time.Time,
+	startedAt *time.Time,
+	finishedAt *time.Time,
 	createdBy uuid.UUID,
 ) (*Task, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -211,12 +217,18 @@ func (s *Service) createTask(
 
 	row := tx.QueryRow(ctx,
 		`INSERT INTO tasks
-		   (project_id, iteration_id, seq, title, description, planned_start_at, created_by)
+		   (project_id, iteration_id, seq, title, description,
+		    assignee_user_id, actual_executor_id,
+		    planned_start_at, estimated_finish_at, started_at, finished_at,
+		    created_by)
 		 VALUES ($1, $2,
 		         COALESCE((SELECT MAX(seq) FROM tasks WHERE project_id = $1), 0) + 1,
-		         $3, $4, $5, $6)
+		         $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 RETURNING `+taskCols,
-		projectID, iterationID, title, description, plannedStartAt, createdBy,
+		projectID, iterationID, title, description,
+		assigneeUserID, actualExecutorID,
+		plannedStartAt, estimatedFinishAt, startedAt, finishedAt,
+		createdBy,
 	)
 	t, err := scanTask(row)
 	if err != nil {
@@ -241,10 +253,10 @@ func (s *Service) createTask(
 // ─── listByProject ───────────────────────────────────────────────────────────
 
 type listFilters struct {
-	status     *string
-	assigneeID *uuid.UUID
+	status      *string
+	assigneeID  *uuid.UUID
 	iterationID *uuid.UUID
-	q          string
+	q           string
 }
 
 func (s *Service) listByProject(ctx context.Context, projectID uuid.UUID, f listFilters) ([]*Task, error) {

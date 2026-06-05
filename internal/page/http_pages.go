@@ -114,7 +114,7 @@ func (s *Service) handleCreatePage(ctx context.Context, in *createPageInput) (*c
 		return nil, platform.BadRequest("page.invalid_blocks", "blocks must be a JSON array")
 	}
 
-	pg, _, blocks, err := s.createPage(ctx, projectID, in.Body.ParentType, parentID, in.Body.Slot, in.Body.Blocks, p.UserID)
+	pg, _, blocks, err := s.createPage(ctx, &projectID, in.Body.ParentType, parentID, in.Body.Slot, in.Body.Blocks, p.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ type getPageOutput struct {
 	ETag string `header:"ETag"`
 	Body struct {
 		ID                uuid.UUID       `json:"id"`
-		ProjectID         uuid.UUID       `json:"project_id"`
+		ProjectID         *uuid.UUID      `json:"project_id,omitempty"`
 		ParentType        string          `json:"parent_type"`
 		ParentID          uuid.UUID       `json:"parent_id"`
 		Slot              string          `json:"slot"`

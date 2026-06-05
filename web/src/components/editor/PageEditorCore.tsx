@@ -592,15 +592,33 @@ export function PageEditorCore({
   const createArtifact = useCreateArtifact(effectiveProjectIdForUpload);
   const completeArtifact = useCompleteArtifact();
 
-  const imageFileRef = useRef<HTMLInputElement>(null);
-  const pdfFileRef   = useRef<HTMLInputElement>(null);
-  const htmlFileRef  = useRef<HTMLInputElement>(null);
+  const imageFileRef      = useRef<HTMLInputElement>(null);
+  const pdfFileRef        = useRef<HTMLInputElement>(null);
+  const htmlFileRef       = useRef<HTMLInputElement>(null);
+  const fileAttachRef     = useRef<HTMLInputElement>(null);
+
+  // Infer artifact type + embed block type from a File for paste/drop routing
+  const inferFileRoute = useCallback((file: File): {
+    artType: 'image' | 'pdf' | 'other';
+    blockType: 'imageEmbed' | 'pdfEmbed' | 'htmlEmbed' | 'artifactRef';
+  } => {
+    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      return { artType: 'pdf', blockType: 'pdfEmbed' };
+    }
+    if (file.type.startsWith('image/')) {
+      return { artType: 'image', blockType: 'imageEmbed' };
+    }
+    if (file.type === 'text/html' || file.name.endsWith('.html') || file.name.endsWith('.htm')) {
+      return { artType: 'other', blockType: 'htmlEmbed' };
+    }
+    return { artType: 'other', blockType: 'artifactRef' };
+  }, []);
 
   const runEmbedUpload = useCallback(
     async (
       file: File,
       artType: 'image' | 'pdf' | 'other',
-      blockType: 'imageEmbed' | 'pdfEmbed' | 'htmlEmbed'
+      blockType: 'imageEmbed' | 'pdfEmbed' | 'htmlEmbed' | 'artifactRef'
     ) => {
       if (!effectiveProjectIdForUpload) {
         alert('Cannot upload: project ID is not yet available. Please try again in a moment.');
@@ -616,11 +634,27 @@ export function PageEditorCore({
         await uploadToPresignedUrl(res.upload_url, file, res.headers ?? {});
         await completeArtifact.mutateAsync(res.artifact.id);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {
-          type: blockType,
-          props: { artifactId: res.artifact.id },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any);
+        const ed = editor as unknown as Parameters<typeof insertOrUpdateBlock>[0];
+        if (blockType === 'artifactRef') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          insertOrUpdateBlock(ed, {
+            type: 'artifactRef',
+            props: {
+              refId:       res.artifact.id,
+              filename:    res.artifact.filename ?? file.name,
+              contentType: res.artifact.content_type ?? (file.type || 'application/octet-stream'),
+              artType:     res.artifact.type ?? artType,
+            },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any);
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          insertOrUpdateBlock(ed, {
+            type: blockType,
+            props: { artifactId: res.artifact.id },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any);
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Upload failed';
         console.error('Embed upload failed:', msg);
@@ -737,6 +771,14 @@ export function PageEditorCore({
         icon: <span style={{ fontSize: 14 }}>🌐</span>,
         subtext: 'Upload and embed an HTML file (sandboxed)',
         onItemClick: () => htmlFileRef.current?.click(),
+      },
+      {
+        title: 'File attachment',
+        aliases: ['file', 'attach', 'upload file', 'attachment'],
+        group: 'Attachments',
+        icon: <span style={{ fontSize: 14 }}>📎</span>,
+        subtext: 'Upload any file as a downloadable attachment card',
+        onItemClick: () => fileAttachRef.current?.click(),
       },
     ],
     []
@@ -1020,6 +1062,16 @@ export function PageEditorCore({
           e.target.value = '';
         }}
       />
+      <input
+        ref={fileAttachRef}
+        type="file"
+        style={{ display: 'none' }}
+        onChange={e => {
+          const file = e.target.files?.[0];
+          if (file) void runEmbedUpload(file, 'other', 'artifactRef');
+          e.target.value = '';
+        }}
+      />
 
       {/* Cross-workspace confirm dialog */}
       {pendingInsert && (
@@ -1038,23 +1090,51 @@ export function PageEditorCore({
 
       {/* Editor area */}
       <EditorBoundary fallback={<ReadonlyPageFallback page={pageData} />}>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <BlockNoteView
-          editor={editor as any}
-          onChange={onEditorChange}
-          slashMenu={false}
-          style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}
+        <div
+          onPaste={e => {
+            if (!effectiveProjectIdForUpload) return;
+            const files = e.clipboardData?.files;
+            if (!files || files.length === 0) return;
+            e.preventDefault();
+            Array.from(files).forEach(file => {
+              const { artType, blockType } = inferFileRoute(file);
+              void runEmbedUpload(file, artType, blockType);
+            });
+          }}
+          onDragOver={e => {
+            if (!effectiveProjectIdForUpload) return;
+            const types = e.dataTransfer?.types ?? [];
+            if (types.includes('Files')) e.preventDefault();
+          }}
+          onDrop={e => {
+            if (!effectiveProjectIdForUpload) return;
+            const files = e.dataTransfer?.files;
+            if (!files || files.length === 0) return;
+            e.preventDefault();
+            Array.from(files).forEach(file => {
+              const { artType, blockType } = inferFileRoute(file);
+              void runEmbedUpload(file, artType, blockType);
+            });
+          }}
         >
-          <SuggestionMenuController
-            triggerCharacter="/"
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            getItems={async (query: string) => filterSuggestionItems(getCustomItems(editor), query)}
-          />
-          <SuggestionMenuController
-            triggerCharacter="@"
-            getItems={getMentionItems}
-          />
-        </BlockNoteView>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <BlockNoteView
+            editor={editor as any}
+            onChange={onEditorChange}
+            slashMenu={false}
+            style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}
+          >
+            <SuggestionMenuController
+              triggerCharacter="/"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              getItems={async (query: string) => filterSuggestionItems(getCustomItems(editor), query)}
+            />
+            <SuggestionMenuController
+              triggerCharacter="@"
+              getItems={getMentionItems}
+            />
+          </BlockNoteView>
+        </div>
       </EditorBoundary>
     </>
   );

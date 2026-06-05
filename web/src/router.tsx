@@ -23,6 +23,7 @@ import { PeoplePage } from './pages/PeoplePage';
 import { MeetingsPage } from './pages/MeetingsPage';
 import { MeetingDetailPage } from './pages/MeetingDetailPage';
 import { AdminPage } from './pages/AdminPage';
+import { WikiPage } from './pages/WikiPage';
 
 // Token accessor injected at auth setup — used by guards
 let isAuthenticated: () => boolean = () => false;
@@ -195,6 +196,18 @@ const pageEditorRoute = createRoute({
   component: PageEditorPage,
 });
 
+const wikiRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/wiki',
+  component: WikiPage,
+});
+
+const wikiPageRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/wiki/$pageId',
+  component: WikiPage,
+});
+
 const calendarRoute = createRoute({
   getParentRoute: () => authGuardRoute,
   path: '/calendar',
@@ -261,6 +274,8 @@ const routeTree = rootRoute.addChildren([
     meetingDetailRoute,
     adminRoute,
     profileSetupRoute,
+    wikiRoute,
+    wikiPageRoute,
   ]),
 ]);
 

@@ -222,6 +222,7 @@ export function TasksTab({ projectId, iterationId, initialTaskId }: TasksTabProp
         <NewTaskDialog
           projectId={projectId}
           iterationId={iterationId}
+          workspaceId={project?.workspace_id}
           onClose={() => setNewTaskOpen(false)}
         />
       )}

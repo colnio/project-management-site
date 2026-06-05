@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	crypto_sha256 "crypto/sha256"
 	"fmt"
 	"log/slog"
 	"os"
@@ -56,6 +57,9 @@ func run() error {
 
 	if err := seedDemo(ctx, pool, logger); err != nil {
 		return fmt.Errorf("seedDemo: %w", err)
+	}
+	if err := seedWiki(ctx, pool, logger); err != nil {
+		return fmt.Errorf("seedWiki: %w", err)
 	}
 	return nil
 }
@@ -495,4 +499,112 @@ func seedDemo(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) erro
 		"meetings", 1,
 	)
 	return nil
+}
+
+// seedWiki inserts an initial "Site Guide" wiki page if one does not already
+// exist (idempotent: guarded by checking for any existing wiki page with this title).
+func seedWiki(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
+	// Idempotency: skip if a wiki page titled "Site Guide" already exists.
+	var existing string
+	err := pool.QueryRow(ctx, `
+		SELECT p.id FROM pages p
+		LEFT JOIN page_revisions r ON r.id = p.current_revision_id
+		WHERE p.parent_type = 'wiki'
+		  AND r.markdown_export LIKE 'Site Guide%'
+		LIMIT 1`).Scan(&existing)
+	if err == nil {
+		logger.Info("wiki already seeded", "page_id", existing)
+		return nil
+	}
+	if err != pgx.ErrNoRows {
+		return fmt.Errorf("check wiki: %w", err)
+	}
+
+	var devUserID string
+	if err := pool.QueryRow(ctx,
+		`SELECT id FROM users WHERE email = 'dev@graphene-lab.org'`).Scan(&devUserID); err != nil {
+		return fmt.Errorf("look up dev user for wiki seed: %w", err)
+	}
+
+	const siteGuideBlocks = `[
+  {"id":"h1","type":"heading","props":{"level":1},"content":[{"type":"text","text":"Site Guide","styles":{}}],"children":[]},
+  {"id":"p1","type":"paragraph","props":{},"content":[{"type":"text","text":"Welcome to the Graphene Lab project management platform. This wiki is a shared space for lab-wide documentation — anyone can create or edit pages.","styles":{}}],"children":[]},
+  {"id":"h2","type":"heading","props":{"level":2},"content":[{"type":"text","text":"Main Features","styles":{}}],"children":[]},
+  {"id":"b1","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Projects — the top-level unit of work. Each project has members, visibility settings, and contains all other resources.","styles":{}}],"children":[]},
+  {"id":"b2","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Iterations — time-boxed experimental runs within a project; track growth parameters, status, and notes.","styles":{}}],"children":[]},
+  {"id":"b3","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Samples — physical specimens (CVD substrates, devices, etc.) linked to iterations; record characterisation data.","styles":{}}],"children":[]},
+  {"id":"b4","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Experiments — structured trials on samples with hypothesis, protocol, and outcome fields.","styles":{}}],"children":[]},
+  {"id":"b5","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Tasks — lightweight action items assignable to team members; visible across the project.","styles":{}}],"children":[]},
+  {"id":"b6","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Pages / Notes — rich BlockNote documents attached to any entity (project, iteration, sample, or experiment). Full revision history with diff and restore.","styles":{}}],"children":[]},
+  {"id":"b7","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Artifacts — file uploads (images, notebooks, PDFs) with metadata; stored in MinIO, accessible via presigned URLs.","styles":{}}],"children":[]},
+  {"id":"b8","type":"bulletListItem","props":{},"content":[{"type":"text","text":"AI Risk Assessment — LLM-assisted identification and mitigation of experimental risks; PI-review workflow with approval/rejection.","styles":{}}],"children":[]},
+  {"id":"b9","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Approvals — structured review flow for AI-generated content; reviewers approve or reject with comments from the Inbox.","styles":{}}],"children":[]},
+  {"id":"b10","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Inbox — notification centre for mentions, approvals, PI flags, and action items.","styles":{}}],"children":[]},
+  {"id":"b11","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Meetings — schedule and record lab meetings with agenda, notes, decisions, and action items.","styles":{}}],"children":[]},
+  {"id":"b12","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Calendar — unified view of meetings and experiment schedules.","styles":{}}],"children":[]},
+  {"id":"b13","type":"bulletListItem","props":{},"content":[{"type":"text","text":"Wiki — this space. Site-global collaborative pages for lab procedures, onboarding guides, and reference material.","styles":{}}],"children":[]},
+  {"id":"p2","type":"paragraph","props":{},"content":[{"type":"text","text":"Use the sidebar to navigate. Press ⌘K to open the command palette for fast navigation and search.","styles":{}}],"children":[]}
+]`
+
+	// Compute content-addressable hash.
+	blobHash := sha256sum([]byte(siteGuideBlocks))
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("wiki seed begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Upsert blob.
+	_, err = tx.Exec(ctx,
+		`INSERT INTO page_blobs (hash, blocks, size_bytes) VALUES ($1, $2, $3) ON CONFLICT (hash) DO NOTHING`,
+		blobHash, siteGuideBlocks, len(siteGuideBlocks))
+	if err != nil {
+		return fmt.Errorf("wiki seed blob: %w", err)
+	}
+
+	// Insert page (project_id=NULL, parent_type='wiki', parent_id=sentinel zeros).
+	const sentinel = "00000000-0000-0000-0000-000000000000"
+	var pageID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO pages (project_id, parent_type, parent_id, slot)
+		VALUES (NULL, 'wiki', $1, '')
+		RETURNING id`, sentinel).Scan(&pageID)
+	if err != nil {
+		return fmt.Errorf("wiki seed page: %w", err)
+	}
+
+	// Insert initial revision.
+	const markdownExport = "Site Guide"
+	var revID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO page_revisions
+		    (page_id, blob_hash, markdown_export, source, status, author, retention_class)
+		VALUES ($1, $2, $3, 'human', 'current', $4, 'keep_forever')
+		RETURNING id`, pageID, blobHash, markdownExport, devUserID).Scan(&revID)
+	if err != nil {
+		return fmt.Errorf("wiki seed revision: %w", err)
+	}
+
+	// Point page to revision.
+	_, err = tx.Exec(ctx,
+		`UPDATE pages SET current_revision_id = $1, updated_at = now() WHERE id = $2`,
+		revID, pageID)
+	if err != nil {
+		return fmt.Errorf("wiki seed update page: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("wiki seed commit: %w", err)
+	}
+
+	logger.Info("wiki seeded", "page_id", pageID, "title", "Site Guide")
+	return nil
+}
+
+// sha256sum returns the hex-encoded SHA-256 digest of data.
+// Used by seedWiki to compute the content-addressable blob hash.
+func sha256sum(data []byte) string {
+	h := crypto_sha256.Sum256(data)
+	return fmt.Sprintf("%x", h)
 }

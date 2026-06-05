@@ -4,7 +4,8 @@
  */
 import { useState } from 'react';
 import { useCreateTask } from '@/hooks/useTaskQueries';
-import { useProjectIterations } from '@/hooks/useQueries';
+import { useProjectIterations, useWorkspaceMembers } from '@/hooks/useQueries';
+import { memberLabel } from '@/lib/userDisplay';
 
 function Backdrop({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
@@ -103,18 +104,28 @@ const dateInputStyle: React.CSSProperties = {
 interface NewTaskDialogProps {
   projectId: string;
   iterationId?: string;
+  workspaceId?: string;
   onClose: () => void;
 }
 
-export function NewTaskDialog({ projectId, iterationId, onClose }: NewTaskDialogProps) {
+export function NewTaskDialog({ projectId, iterationId, workspaceId, onClose }: NewTaskDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedIterationId, setSelectedIterationId] = useState(iterationId ?? '');
+  const [assigneeId, setAssigneeId] = useState('');
+  const [actualExecutorId, setActualExecutorId] = useState('');
   const [plannedStart, setPlannedStart] = useState('');
+  const [plannedEnd, setPlannedEnd] = useState('');
+  const [actualStart, setActualStart] = useState('');
+  const [actualEnd, setActualEnd] = useState('');
 
   const { data: iterations = [] } = useProjectIterations(projectId);
+  const { data: members = [] } = useWorkspaceMembers(workspaceId);
   const createTask = useCreateTask(projectId);
   const errMsg = createTask.isError ? (createTask.error as Error).message : null;
+
+  const toRFC3339 = (dateStr: string) =>
+    dateStr ? new Date(dateStr).toISOString() : undefined;
 
   const handleSubmit = () => {
     if (!title.trim()) return;
@@ -122,7 +133,12 @@ export function NewTaskDialog({ projectId, iterationId, onClose }: NewTaskDialog
       title: title.trim(),
       description: description.trim() || undefined,
       iteration_id: selectedIterationId || undefined,
-      planned_start_at: plannedStart ? new Date(plannedStart).toISOString() : undefined,
+      assignee_user_id: assigneeId || undefined,
+      actual_executor_id: actualExecutorId || undefined,
+      planned_start_at: toRFC3339(plannedStart),
+      estimated_finish_at: toRFC3339(plannedEnd),
+      started_at: toRFC3339(actualStart),
+      finished_at: toRFC3339(actualEnd),
     };
     createTask.mutate(body, { onSuccess: onClose });
   };
@@ -199,6 +215,42 @@ export function NewTaskDialog({ projectId, iterationId, onClose }: NewTaskDialog
           </select>
         </div>
 
+        {/* Executor (planned assignee) */}
+        <div>
+          <FieldLabel>Executor (planned)</FieldLabel>
+          <select
+            style={selectStyle}
+            value={assigneeId}
+            onChange={e => setAssigneeId(e.target.value)}
+            disabled={createTask.isPending}
+          >
+            <option value="">— none —</option>
+            {members.map(m => (
+              <option key={m.user_id} value={m.user_id}>
+                {memberLabel(m)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Actual executor */}
+        <div>
+          <FieldLabel>Actual executor</FieldLabel>
+          <select
+            style={selectStyle}
+            value={actualExecutorId}
+            onChange={e => setActualExecutorId(e.target.value)}
+            disabled={createTask.isPending}
+          >
+            <option value="">— none —</option>
+            {members.map(m => (
+              <option key={m.user_id} value={m.user_id}>
+                {memberLabel(m)}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Planned start */}
         <div>
           <FieldLabel>Planned start</FieldLabel>
@@ -207,6 +259,42 @@ export function NewTaskDialog({ projectId, iterationId, onClose }: NewTaskDialog
             style={dateInputStyle}
             value={plannedStart}
             onChange={e => setPlannedStart(e.target.value)}
+            disabled={createTask.isPending}
+          />
+        </div>
+
+        {/* Planned end */}
+        <div>
+          <FieldLabel>Planned end</FieldLabel>
+          <input
+            type="date"
+            style={dateInputStyle}
+            value={plannedEnd}
+            onChange={e => setPlannedEnd(e.target.value)}
+            disabled={createTask.isPending}
+          />
+        </div>
+
+        {/* Actual start */}
+        <div>
+          <FieldLabel>Actual start</FieldLabel>
+          <input
+            type="date"
+            style={dateInputStyle}
+            value={actualStart}
+            onChange={e => setActualStart(e.target.value)}
+            disabled={createTask.isPending}
+          />
+        </div>
+
+        {/* Actual end */}
+        <div>
+          <FieldLabel>Actual end</FieldLabel>
+          <input
+            type="date"
+            style={dateInputStyle}
+            value={actualEnd}
+            onChange={e => setActualEnd(e.target.value)}
             disabled={createTask.isPending}
           />
         </div>

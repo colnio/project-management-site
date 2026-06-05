@@ -30,9 +30,10 @@ import (
 
 // Page is the top-level content container. It holds a pointer to the current
 // revision; the actual block data lives in page_blobs via page_revisions.
+// ProjectID is nil for wiki pages (site-global, not scoped to any project).
 type Page struct {
 	ID                uuid.UUID  `json:"id"`
-	ProjectID         uuid.UUID  `json:"project_id"`
+	ProjectID         *uuid.UUID `json:"project_id,omitempty"`
 	ParentType        string     `json:"parent_type"`
 	ParentID          uuid.UUID  `json:"parent_id"`
 	Slot              string     `json:"slot"`
@@ -40,6 +41,9 @@ type Page struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
+
+// WikiSentinelParentID is the fixed parent_id used for all wiki pages.
+var WikiSentinelParentID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
 // Revision is an immutable snapshot of a page's block content at a point in
 // time. Status flows: current → superseded (on next write), candidate →
@@ -101,6 +105,12 @@ func (s *Service) GetPage(ctx context.Context, id uuid.UUID) (*Page, error) {
 		return nil, fmt.Errorf("page: get page: %w", err)
 	}
 	return &pg, nil
+}
+
+// IsWikiPage reports whether a page belongs to the site-global wiki
+// (i.e. its project_id is NULL / parent_type is 'wiki').
+func IsWikiPage(pg *Page) bool {
+	return pg.ParentType == "wiki" || pg.ProjectID == nil
 }
 
 // GCAutoSaves deletes old auto_save revisions per page, keeping the newest 20
@@ -175,12 +185,18 @@ func (s *Service) GCAutoSaves(ctx context.Context) (deleted int, err error) {
 // ─── Authorization helper ─────────────────────────────────────────────────────
 
 // authPage loads a page and authorises the principal against its project.
+// Wiki pages (parent_type='wiki' or project_id=NULL) skip project-role auth —
+// any authenticated user may read and write them.
 func (s *Service) authPage(ctx context.Context, p *platform.Principal, pageID uuid.UUID, need org.Role) (*Page, error) {
 	pg, err := s.GetPage(ctx, pageID)
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := s.projects.Authorize(ctx, p, pg.ProjectID, need); err != nil {
+	if IsWikiPage(pg) {
+		// Wiki pages: authenticated user only, no project role check.
+		return pg, nil
+	}
+	if _, _, err := s.projects.Authorize(ctx, p, *pg.ProjectID, need); err != nil {
 		return nil, err
 	}
 	return pg, nil
@@ -301,9 +317,10 @@ func markdownFromBlocks(blocks json.RawMessage) string {
 
 // createPage inserts the page row and its first revision. Called by the HTTP
 // handler after auth.
+// projectID may be nil for wiki pages (project_id=NULL in the database).
 func (s *Service) createPage(
 	ctx context.Context,
-	projectID uuid.UUID,
+	projectID *uuid.UUID,
 	parentType string,
 	parentID uuid.UUID,
 	slot string,
@@ -327,6 +344,7 @@ func (s *Service) createPage(
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Insert page (current_revision_id NULL initially to avoid circular FK).
+	// project_id may be NULL for wiki pages.
 	var pg Page
 	err = tx.QueryRow(ctx,
 		`INSERT INTO pages (project_id, parent_type, parent_id, slot)
@@ -583,9 +601,10 @@ func (s *Service) handleRestoreInternal(ctx context.Context, p *platform.Princip
 
 // PageListItem is a lightweight summary of a page, including a derived title
 // from the current revision's markdown_export.
+// ProjectID is nil for wiki pages (site-global, not scoped to any project).
 type PageListItem struct {
 	ID                uuid.UUID  `json:"id"`
-	ProjectID         uuid.UUID  `json:"project_id"`
+	ProjectID         *uuid.UUID `json:"project_id,omitempty"`
 	ParentType        string     `json:"parent_type"`
 	ParentID          uuid.UUID  `json:"parent_id"`
 	Slot              string     `json:"slot"`
@@ -667,6 +686,45 @@ func (s *Service) listPagesByProject(
 	}
 	if rows.Err() != nil {
 		return nil, fmt.Errorf("page: list pages rows: %w", rows.Err())
+	}
+	if items == nil {
+		items = []PageListItem{}
+	}
+	return items, nil
+}
+
+// listWikiPages returns PageListItems for all wiki pages
+// (parent_type='wiki'), ordered by updated_at DESC.
+func (s *Service) listWikiPages(ctx context.Context) ([]PageListItem, error) {
+	q := `SELECT p.id, p.project_id, p.parent_type, p.parent_id, p.slot,
+	             p.current_revision_id, p.updated_at,
+	             COALESCE(r.markdown_export, '')
+	      FROM pages p
+	      LEFT JOIN page_revisions r ON r.id = p.current_revision_id
+	      WHERE p.parent_type = 'wiki'
+	      ORDER BY p.updated_at DESC`
+
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("page: list wiki pages: %w", err)
+	}
+	defer rows.Close()
+
+	var items []PageListItem
+	for rows.Next() {
+		var item PageListItem
+		var md string
+		if err := rows.Scan(
+			&item.ID, &item.ProjectID, &item.ParentType, &item.ParentID, &item.Slot,
+			&item.CurrentRevisionID, &item.UpdatedAt, &md,
+		); err != nil {
+			return nil, fmt.Errorf("page: list wiki pages scan: %w", err)
+		}
+		item.Title = deriveTitle(md)
+		items = append(items, item)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("page: list wiki pages rows: %w", rows.Err())
 	}
 	if items == nil {
 		items = []PageListItem{}

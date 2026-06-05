@@ -113,6 +113,25 @@ func Register(api huma.API, svc *Service) {
 		Tags:        []string{"pages"},
 	}, svc.handleRejectCandidate)
 
+	// Wiki (site-global pages, no project scope).
+	huma.Register(api, huma.Operation{
+		OperationID: "wiki-page-list",
+		Method:      http.MethodGet,
+		Path:        "/v1/wiki/pages",
+		Summary:     "List wiki pages",
+		Description: "Returns a list of all site-global wiki pages ordered by updated_at descending. Any authenticated user may read.",
+		Tags:        []string{"wiki"},
+	}, svc.handleListWikiPages)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "wiki-page-create",
+		Method:      http.MethodPost,
+		Path:        "/v1/wiki/pages",
+		Summary:     "Create a wiki page",
+		Description: "Creates a new site-global wiki page. Any authenticated user may create. Provide an optional title and/or blocks; if blocks are omitted a heading+paragraph stub is generated.",
+		Tags:        []string{"wiki"},
+	}, svc.handleCreateWikiPage)
+
 	// Presence.
 	huma.Register(api, huma.Operation{
 		OperationID: "page-presence-heartbeat",

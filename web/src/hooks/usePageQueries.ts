@@ -54,6 +54,7 @@ export const pageKeys = {
   parentPages: (parentType: string, parentId: string) =>
     ['pages', 'parent', parentType, parentId] as const,
   projectPages: (projectId: string) => ['projects', projectId, 'pages'] as const,
+  wikiPages: () => ['wiki', 'pages'] as const,
 };
 
 // ─── Raw fetch helpers that expose ETag ──────────────────────────────────────
@@ -225,6 +226,32 @@ export function useHeartbeat() {
         method: 'POST',
         body: JSON.stringify({ client_id: clientId }),
       }),
+  });
+}
+
+// ─── Wiki hooks ───────────────────────────────────────────────────────────────
+
+/** Fetch all site-global wiki pages, ordered by most-recently updated. */
+export function useWikiPages() {
+  return useQuery({
+    queryKey: pageKeys.wikiPages(),
+    queryFn: () =>
+      apiFetch<{ items: PageListItem[] | null }>('/v1/wiki/pages').then(r => r.items ?? []),
+  });
+}
+
+/** Create a new site-global wiki page. Invalidates the wiki pages list. */
+export function useCreateWikiPage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { title: string; blocks?: unknown }) =>
+      apiFetch<{ page: { id: string }; blocks: unknown }>('/v1/wiki/pages', {
+        method: 'POST',
+        body: JSON.stringify({ title: args.title, blocks: args.blocks }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: pageKeys.wikiPages() });
+    },
   });
 }
 

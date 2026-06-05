@@ -34,7 +34,7 @@ func ExportCreatePage(
 	blocks json.RawMessage,
 	authorID uuid.UUID,
 ) (*Page, *Revision, json.RawMessage, error) {
-	return s.createPage(ctx, projectID, parentType, parentID, "", blocks, authorID)
+	return s.createPage(ctx, &projectID, parentType, parentID, "", blocks, authorID)
 }
 
 // ExportUpdatePage performs the If-Match check and calls updatePage.
@@ -62,7 +62,7 @@ func ExportUpdatePageWithPrincipal(
 	p *platform.Principal,
 	ifMatch string,
 ) (*Revision, json.RawMessage, error) {
-	if _, _, err := s.projects.Authorize(ctx, p, pg.ProjectID, org.RoleEditor); err != nil {
+	if _, _, err := s.projects.Authorize(ctx, p, *pg.ProjectID, org.RoleEditor); err != nil {
 		return nil, nil, err
 	}
 	return s.updatePage(ctx, pg, blocks, source, candidate, p.UserID, ifMatch)

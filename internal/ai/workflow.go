@@ -210,35 +210,12 @@ func buildFallbackOutput(stepResults map[string]any) map[string]any {
 	}
 }
 
-// buildMarkdownBlocks converts markdown text to a simple block array for the page API.
+// buildMarkdownBlocks converts markdown text to a BlockNote-native block array
+// for the page API. It delegates to markdownToBlockNoteBlocks which uses goldmark
+// (with GFM table support) to produce correct camelCase block types with inline
+// content arrays.
 func buildMarkdownBlocks(md string) []map[string]any {
-	lines := strings.Split(md, "\n")
-	var blocks []map[string]any
-	for _, line := range lines {
-		line = strings.TrimRight(line, " \t")
-		blockType := "paragraph"
-		if strings.HasPrefix(line, "# ") {
-			blockType = "heading_1"
-			line = strings.TrimPrefix(line, "# ")
-		} else if strings.HasPrefix(line, "## ") {
-			blockType = "heading_2"
-			line = strings.TrimPrefix(line, "## ")
-		} else if strings.HasPrefix(line, "### ") {
-			blockType = "heading_3"
-			line = strings.TrimPrefix(line, "### ")
-		} else if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
-			blockType = "bulleted_list_item"
-			line = line[2:]
-		}
-		blocks = append(blocks, map[string]any{
-			"type": blockType,
-			"text": line,
-		})
-	}
-	if len(blocks) == 0 {
-		blocks = []map[string]any{{"type": "paragraph", "text": md}}
-	}
-	return blocks
+	return markdownToBlockNoteBlocks(md)
 }
 
 func truncate(s string, n int) string {
