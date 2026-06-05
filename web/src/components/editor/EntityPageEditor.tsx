@@ -173,6 +173,7 @@ export function EntityPageEditor({ parentType, parentId, projectId, slot }: Enti
         }}
       >
         <PageEditorCore
+          key={resolvedPageId}
           pageId={resolvedPageId}
           projectId={projectId}
           showToolbar={true}

@@ -41,7 +41,16 @@ export interface ArtImageProps {
 export function ArtImage({ artifact, caption, magnification, scaleBar }: ArtImageProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
-  const src = artifact.rendered_url || artifact.thumbnail_url || null;
+  // Prefer the full-resolution original for browser-renderable image formats
+  // (matches the Artifacts tab viewer). Non-web formats the browser can't
+  // display inline (e.g. TIFF) fall back to the worker-generated thumbnail.
+  const webImage = /^image\/(png|jpe?g|gif|webp|avif|svg\+xml)$/i.test(artifact.content_type ?? '');
+  const src =
+    (webImage ? artifact.original_url : '') ||
+    artifact.rendered_url ||
+    artifact.thumbnail_url ||
+    artifact.original_url ||
+    null;
   const meta = metaRecord(artifact);
 
   // Fall back to metadata fields if props not supplied

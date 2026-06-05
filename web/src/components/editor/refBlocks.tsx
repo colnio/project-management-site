@@ -526,7 +526,7 @@ export const imageEmbed = createReactBlockSpec(
         <div contentEditable={false} style={{ userSelect: 'none', margin: '4px 0' }}>
           {!artifactId || isLoading ? (
             <EmbedPlaceholder label={isLoading ? 'Loading image…' : 'No artifact ID'} />
-          ) : !artifact?.rendered_url && !artifact?.thumbnail_url ? (
+          ) : !artifact?.original_url && !artifact?.rendered_url && !artifact?.thumbnail_url ? (
             <EmbedPlaceholder label="Image processing…" />
           ) : (
             <ArtImage artifact={artifact} />

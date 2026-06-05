@@ -232,6 +232,7 @@ export function WikiPage() {
               }}
             >
               <PageEditorCore
+                key={selectedPageId}
                 pageId={selectedPageId}
                 showToolbar={false}
                 onSaveStatus={setSaveStatus}

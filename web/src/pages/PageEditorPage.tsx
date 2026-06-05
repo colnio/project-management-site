@@ -139,6 +139,7 @@ export function PageEditorPage() {
 
         {/* Core editor — no toolbar (toolbar lives in the AppShell top-bar) */}
         <PageEditorCore
+          key={pageId}
           pageId={pageId}
           showToolbar={false}
           onSaveStatus={setSaveStatus}

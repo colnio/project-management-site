@@ -542,6 +542,16 @@ export function PageEditorCore({
     return () => window.removeEventListener('blur', handleBlur);
   }, [isDirty, save]);
 
+  // Flush a pending save when this editor unmounts (e.g. navigating to another
+  // page, which remounts via key={pageId}). window 'blur' does not fire on SPA
+  // navigation, so without this an in-progress edit would be lost on switch.
+  // Refs keep the unmount-only effect from re-subscribing on every keystroke.
+  const isDirtyRef = useRef(isDirty);
+  const saveRef = useRef(save);
+  useEffect(() => { isDirtyRef.current = isDirty; }, [isDirty]);
+  useEffect(() => { saveRef.current = save; }, [save]);
+  useEffect(() => () => { if (isDirtyRef.current) void saveRef.current('auto_save'); }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); void save('human'); }
