@@ -198,7 +198,7 @@ func (s *Service) finalizeRiskAssessment(
 			{Role: "user", Content: raFormatterPrompt(transcript)},
 		},
 		Temperature: 0.1,
-		MaxTokens:   4096,
+		MaxTokens:   16384,
 	})
 	if err != nil {
 		s.log.Warn("ai: ra finalize: formatter call failed", "err", err)
