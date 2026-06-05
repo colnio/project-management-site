@@ -81,6 +81,22 @@ export function useCreateArtifact(projectId: string) {
   });
 }
 
+/**
+ * Create a GLOBAL artifact (project_id NULL) for the site-global wiki, which
+ * has no host project. Same request/response shape as useCreateArtifact; the
+ * presigned-PUT + complete flow is identical.
+ */
+export function useCreateWikiArtifact() {
+  return useMutation({
+    mutationFn: (body: {
+      filename: string;
+      content_type: string;
+      size_bytes: number;
+      type?: 'pdf' | 'ipynb' | 'image' | 'other';
+    }) => api.post<CreateArtifactOutput>(`/v1/wiki/artifacts`, body),
+  });
+}
+
 export function useCompleteArtifact() {
   const qc = useQueryClient();
   return useMutation({

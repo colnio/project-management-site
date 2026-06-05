@@ -43,7 +43,7 @@ import { useProjectSamples, useProjectExperiments, useProjectArtifacts, useProje
 import type { Sample, Experiment, Artifact } from '@/api/types';
 import { searchMentions, useCreateMention, type SearchResult } from '@/hooks/useMentionSearch';
 import { CrossWorkspaceConfirm } from '@/components/CrossWorkspaceConfirm';
-import { useCreateArtifact, useCompleteArtifact, uploadToPresignedUrl } from '@/hooks/useArtifactQueries';
+import { useCreateArtifact, useCreateWikiArtifact, useCompleteArtifact, uploadToPresignedUrl } from '@/hooks/useArtifactQueries';
 
 import '@blocknote/mantine/style.css';
 import {
@@ -478,8 +478,13 @@ export function PageEditorCore({
       const blocks = normalizeBlocks(pageData.blocks);
       if (blocks.length > 0) {
         loadingRef.current = true;
-        editor.replaceBlocks(editor.document, blocks as Parameters<typeof editor.replaceBlocks>[1]);
-        queueMicrotask(() => { loadingRef.current = false; });
+        // Defer to a microtask: replaceBlocks calls flushSync internally, which
+        // React rejects if invoked while a render is in progress (warns on the
+        // initial mount / keyed remount). Running it after the commit avoids that.
+        queueMicrotask(() => {
+          editor.replaceBlocks(editor.document, blocks as Parameters<typeof editor.replaceBlocks>[1]);
+          loadingRef.current = false;
+        });
       }
     } catch { /* ignore */ }
   }, [pageData, editor]);
@@ -599,7 +604,10 @@ export function PageEditorCore({
   // ─── Attachment upload (imageEmbed / pdfEmbed / htmlEmbed) ───────────────────
 
   const effectiveProjectIdForUpload = propProjectId ?? pageData?.project_id ?? '';
+  // Wiki pages have no host project; their uploads go to global artifacts.
+  const isWikiPage = pageData?.parent_type === 'wiki';
   const createArtifact = useCreateArtifact(effectiveProjectIdForUpload);
+  const createWikiArtifact = useCreateWikiArtifact();
   const completeArtifact = useCompleteArtifact();
 
   const imageFileRef      = useRef<HTMLInputElement>(null);
@@ -630,12 +638,13 @@ export function PageEditorCore({
       artType: 'image' | 'pdf' | 'other',
       blockType: 'imageEmbed' | 'pdfEmbed' | 'htmlEmbed' | 'artifactRef'
     ) => {
-      if (!effectiveProjectIdForUpload) {
+      if (!effectiveProjectIdForUpload && !isWikiPage) {
         alert('Cannot upload: project ID is not yet available. Please try again in a moment.');
         return;
       }
       try {
-        const res = await createArtifact.mutateAsync({
+        const createFn = isWikiPage ? createWikiArtifact : createArtifact;
+        const res = await createFn.mutateAsync({
           filename:     file.name,
           content_type: file.type || 'application/octet-stream',
           size_bytes:   file.size,
@@ -679,7 +688,7 @@ export function PageEditorCore({
         alert(`Upload failed: ${msg}`);
       }
     },
-    [createArtifact, completeArtifact, editor, effectiveProjectIdForUpload]
+    [createArtifact, createWikiArtifact, isWikiPage, completeArtifact, editor, effectiveProjectIdForUpload]
   );
 
   // ─── Ref insertion ────────────────────────────────────────────────────────────

@@ -45,6 +45,16 @@ func Register(api huma.API, svc *Service) {
 		Tags:        []string{"artifacts"},
 	}, svc.handleListArtifacts)
 
+	// Wiki (global) artifact endpoint.
+	huma.Register(api, huma.Operation{
+		OperationID: "wiki-artifact-create",
+		Method:      http.MethodPost,
+		Path:        "/v1/wiki/artifacts",
+		Summary:     "Create a global wiki artifact and get a presigned upload URL",
+		Description: "Registers a new site-global artifact (not tied to any project) and returns a presigned S3 PUT URL. Upload the file directly to the URL, then call POST /v1/artifacts/{id}/complete. Any authenticated user with write:artifacts scope may use this endpoint.",
+		Tags:        []string{"artifacts", "wiki"},
+	}, svc.handleCreateWikiArtifact)
+
 	// Single artifact endpoints.
 	huma.Register(api, huma.Operation{
 		OperationID: "artifact-get",
@@ -149,6 +159,43 @@ func (s *Service) handleCreateArtifact(ctx context.Context, in *createArtifactIn
 	}
 
 	art, uploadURL, err := s.CreateArtifact(ctx, projectID, in.Body.Filename, in.Body.ContentType, in.Body.Type, in.Body.SizeBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &createArtifactOutput{Status: http.StatusCreated}
+	out.Body.Artifact = art
+	out.Body.UploadURL = uploadURL
+	out.Body.Method = "PUT"
+	out.Body.Headers = map[string]string{
+		"Content-Type": in.Body.ContentType,
+	}
+	return out, nil
+}
+
+// ─── Create wiki (global) artifact ────────────────────────────────────────────
+
+// createWikiArtifactInput shares the same body shape as createArtifactInput but
+// has no path parameter (the artifact is not tied to any project).
+type createWikiArtifactInput struct {
+	Body struct {
+		Filename    string `json:"filename" required:"true" minLength:"1"`
+		ContentType string `json:"content_type" required:"true" minLength:"1"`
+		SizeBytes   int64  `json:"size_bytes"`
+		Type        string `json:"type,omitempty" enum:"pdf,ipynb,image,other"`
+	}
+}
+
+func (s *Service) handleCreateWikiArtifact(ctx context.Context, in *createWikiArtifactInput) (*createArtifactOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteArtifacts); err != nil {
+		return nil, err
+	}
+
+	art, uploadURL, err := s.CreateGlobalArtifact(ctx, in.Body.Filename, in.Body.ContentType, in.Body.Type, in.Body.SizeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -279,9 +326,13 @@ func (s *Service) handleGetArtifact(ctx context.Context, in *getArtifactInput) (
 		return nil, err
 	}
 
-	if _, _, err := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleViewer); err != nil {
-		return nil, err
+	if art.ProjectID != nil {
+		if _, _, err := s.projects.Authorize(ctx, p, *art.ProjectID, org.RoleViewer); err != nil {
+			return nil, err
+		}
 	}
+	// Global (wiki) artifacts: any authenticated user with read:artifacts scope
+	// may access them (scope is already checked above).
 
 	s.SignOriginalURL(ctx, art)
 	return &getArtifactOutput{Body: art}, nil

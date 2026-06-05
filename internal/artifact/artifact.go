@@ -30,9 +30,10 @@ import (
 
 // Artifact is the domain struct for a stored file. ProcessingStatus is managed
 // by a Track-D background worker; the upload handshake leaves it 'pending'.
+// ProjectID is nil for site-global (wiki) artifacts.
 type Artifact struct {
 	ID               uuid.UUID       `json:"id"`
-	ProjectID        uuid.UUID       `json:"project_id"`
+	ProjectID        *uuid.UUID      `json:"project_id,omitempty"`
 	Type             string          `json:"type"`
 	Filename         string          `json:"filename"`
 	ContentType      string          `json:"content_type"`
@@ -49,22 +50,22 @@ type Artifact struct {
 
 // SampleArtifact is the join record linking an artifact to a sample.
 type SampleArtifact struct {
-	ID         uuid.UUID  `json:"id"`
-	SampleID   uuid.UUID  `json:"sample_id"`
-	ArtifactID uuid.UUID  `json:"artifact_id"`
-	Role       *string    `json:"role,omitempty"`
-	AttachedBy uuid.UUID  `json:"attached_by"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID         uuid.UUID `json:"id"`
+	SampleID   uuid.UUID `json:"sample_id"`
+	ArtifactID uuid.UUID `json:"artifact_id"`
+	Role       *string   `json:"role,omitempty"`
+	AttachedBy uuid.UUID `json:"attached_by"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // ExperimentArtifact is the join record linking an artifact to an experiment.
 type ExperimentArtifact struct {
-	ID           uuid.UUID  `json:"id"`
-	ExperimentID uuid.UUID  `json:"experiment_id"`
-	ArtifactID   uuid.UUID  `json:"artifact_id"`
-	Role         *string    `json:"role,omitempty"`
-	AttachedBy   uuid.UUID  `json:"attached_by"`
-	CreatedAt    time.Time  `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	ExperimentID uuid.UUID `json:"experiment_id"`
+	ArtifactID   uuid.UUID `json:"artifact_id"`
+	Role         *string   `json:"role,omitempty"`
+	AttachedBy   uuid.UUID `json:"attached_by"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Service is the artifact module's domain service.
@@ -74,20 +75,20 @@ type ExperimentArtifact struct {
 const originalURLTTL = 60 * time.Minute
 
 type Service struct {
-	pool        *pgxpool.Pool
-	projects    *project.Service
-	samples     *sample.Service
-	experiments *experiment.Service
-	cfg         *config.Config
-	rec         audit.Recorder
-	presign         *s3.PresignClient
-	headChecker     objectHeadChecker
-	objectDeleter   objectDeleter
-	bucket          string
-	bucketRendered  string
-	log             *slog.Logger
-	enqueuer        Enqueuer    // optional; nil means skip enqueueing (keeps old tests green)
-	objStore        ObjectStore // optional; required only for server-side UploadArtifact
+	pool           *pgxpool.Pool
+	projects       *project.Service
+	samples        *sample.Service
+	experiments    *experiment.Service
+	cfg            *config.Config
+	rec            audit.Recorder
+	presign        *s3.PresignClient
+	headChecker    objectHeadChecker
+	objectDeleter  objectDeleter
+	bucket         string
+	bucketRendered string
+	log            *slog.Logger
+	enqueuer       Enqueuer    // optional; nil means skip enqueueing (keeps old tests green)
+	objStore       ObjectStore // optional; required only for server-side UploadArtifact
 }
 
 // SetEnqueuer wires a background-job enqueuer into the service after construction.
@@ -193,7 +194,7 @@ func (s *Service) CreateArtifact(ctx context.Context, projectID uuid.UUID, filen
 	}
 
 	// insertArtifactRow validates filename/content-type/size and inserts the row.
-	art, storageKey, err := s.insertArtifactRow(ctx, projectID, filename, contentType, artType, sizeBytes, p.UserID)
+	art, storageKey, err := s.insertArtifactRow(ctx, &projectID, filename, contentType, artType, sizeBytes, p.UserID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -223,9 +224,13 @@ func (s *Service) CreateArtifact(ctx context.Context, projectID uuid.UUID, filen
 
 // insertArtifactRow validates inputs and inserts the artifact metadata row,
 // returning the new artifact and its derived storage key. It is shared by the
-// presigned-PUT path (CreateArtifact) and the server-side byte-upload path
-// (UploadArtifact). It does NOT authorize — callers must do that first.
-func (s *Service) insertArtifactRow(ctx context.Context, projectID uuid.UUID, filename, contentType, artType string, sizeBytes int64, uploadedBy uuid.UUID) (*Artifact, string, error) {
+// presigned-PUT path (CreateArtifact/CreateGlobalArtifact) and the server-side
+// byte-upload path (UploadArtifact). It does NOT authorize — callers must do
+// that first.
+//
+// projectID may be nil for site-global (wiki) artifacts; the storage key is
+// then "wiki/artifacts/<id>/<filename>" instead of the project-scoped path.
+func (s *Service) insertArtifactRow(ctx context.Context, projectID *uuid.UUID, filename, contentType, artType string, sizeBytes int64, uploadedBy uuid.UUID) (*Artifact, string, error) {
 	safeName, err := sanitizeFilename(filename)
 	if err != nil {
 		return nil, "", err
@@ -245,7 +250,12 @@ func (s *Service) insertArtifactRow(ctx context.Context, projectID uuid.UUID, fi
 	}
 
 	artID := uuid.New()
-	storageKey := fmt.Sprintf("projects/%s/artifacts/%s/%s", projectID, artID, filename)
+	var storageKey string
+	if projectID == nil {
+		storageKey = fmt.Sprintf("wiki/artifacts/%s/%s", artID, filename)
+	} else {
+		storageKey = fmt.Sprintf("projects/%s/artifacts/%s/%s", *projectID, artID, filename)
+	}
 
 	var art Artifact
 	err = s.pool.QueryRow(ctx, `
@@ -265,6 +275,44 @@ func (s *Service) insertArtifactRow(ctx context.Context, projectID uuid.UUID, fi
 		return nil, "", fmt.Errorf("artifact: insert: %w", err)
 	}
 	return &art, storageKey, nil
+}
+
+// CreateGlobalArtifact creates a site-global (wiki) artifact row and returns
+// the artifact plus a presigned PUT URL. No project authorization is required —
+// the caller must already have verified the principal is authenticated and holds
+// platform.ScopeWriteArtifacts. artType may be empty; if so it is inferred from
+// contentType and filename.
+func (s *Service) CreateGlobalArtifact(ctx context.Context, filename, contentType, artType string, sizeBytes int64) (*Artifact, string, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, "", platform.Unauthorized("not authenticated")
+	}
+
+	art, storageKey, err := s.insertArtifactRow(ctx, nil, filename, contentType, artType, sizeBytes, p.UserID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	cl := sizeBytes
+	req, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket:        &s.bucket,
+		Key:           &storageKey,
+		ContentType:   &contentType,
+		ContentLength: &cl,
+	}, s3.WithPresignExpires(15*time.Minute))
+	if err != nil {
+		return nil, "", fmt.Errorf("artifact: presign put: %w", err)
+	}
+
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        p.UserID,
+		ViaTokenID:   p.ViaTokenID,
+		Action:       "artifact.create",
+		ResourceType: "artifact",
+		ResourceID:   art.ID.String(),
+	})
+
+	return art, req.URL, nil
 }
 
 // UploadArtifact creates an artifact and uploads its bytes server-side in one
@@ -288,7 +336,7 @@ func (s *Service) UploadArtifact(ctx context.Context, projectID uuid.UUID, filen
 		return nil, platform.BadRequest("artifact.empty_body", "uploaded data is empty")
 	}
 
-	art, storageKey, err := s.insertArtifactRow(ctx, projectID, filename, contentType, artType, int64(len(data)), p.UserID)
+	art, storageKey, err := s.insertArtifactRow(ctx, &projectID, filename, contentType, artType, int64(len(data)), p.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -352,15 +400,18 @@ func (s *Service) CompleteUpload(ctx context.Context, id uuid.UUID) (*Artifact, 
 		return nil, err
 	}
 
-	if _, _, err := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleEditor); err != nil {
-		return nil, err
-	}
-
-	if art.UploadedBy != p.UserID {
-		if _, _, ownerErr := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleOwner); ownerErr != nil {
-			return nil, platform.Forbidden("only the uploader or project owner may complete this upload")
+	if art.ProjectID != nil {
+		if _, _, err := s.projects.Authorize(ctx, p, *art.ProjectID, org.RoleEditor); err != nil {
+			return nil, err
+		}
+		if art.UploadedBy != p.UserID {
+			if _, _, ownerErr := s.projects.Authorize(ctx, p, *art.ProjectID, org.RoleOwner); ownerErr != nil {
+				return nil, platform.Forbidden("only the uploader or project owner may complete this upload")
+			}
 		}
 	}
+	// Global (wiki) artifacts: any authenticated user may complete their own
+	// upload. No project authorization needed.
 
 	if s.headChecker != nil {
 		if err := s.headChecker.ObjectExists(ctx, s.bucket, art.StorageKey); err != nil {
@@ -419,9 +470,13 @@ func (s *Service) DeleteArtifact(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	if _, _, err := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleEditor); err != nil {
-		return err
+	if art.ProjectID != nil {
+		if _, _, err := s.projects.Authorize(ctx, p, *art.ProjectID, org.RoleEditor); err != nil {
+			return err
+		}
 	}
+	// Global (wiki) artifacts: any authenticated user may delete. (Scope is
+	// already checked by handleDeleteArtifact.)
 
 	_, err = s.pool.Exec(ctx, `DELETE FROM artifacts WHERE id = $1`, id)
 	if err != nil {
@@ -460,7 +515,10 @@ func (s *Service) AttachToSample(ctx context.Context, sampleID, artifactID uuid.
 		return nil, err
 	}
 
-	if _, _, err := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleEditor); err != nil {
+	if art.ProjectID == nil {
+		return nil, platform.BadRequest("artifact.global_attach", "cannot attach a global artifact to a sample")
+	}
+	if _, _, err := s.projects.Authorize(ctx, p, *art.ProjectID, org.RoleEditor); err != nil {
 		return nil, err
 	}
 
@@ -469,7 +527,7 @@ func (s *Service) AttachToSample(ctx context.Context, sampleID, artifactID uuid.
 	if err != nil {
 		return nil, err
 	}
-	if sm.ProjectID != art.ProjectID {
+	if sm.ProjectID != *art.ProjectID {
 		return nil, platform.BadRequest("artifact.project_mismatch", "sample does not belong to artifact's project")
 	}
 
@@ -533,8 +591,10 @@ func (s *Service) ListSampleArtifacts(ctx context.Context, sampleID uuid.UUID) (
 		); err != nil {
 			return nil, fmt.Errorf("artifact: scan: %w", err)
 		}
-		if _, _, authErr := s.projects.Authorize(ctx, p, a.ProjectID, org.RoleViewer); authErr != nil {
-			continue
+		if a.ProjectID != nil {
+			if _, _, authErr := s.projects.Authorize(ctx, p, *a.ProjectID, org.RoleViewer); authErr != nil {
+				continue
+			}
 		}
 		result = append(result, &a)
 	}
@@ -553,7 +613,10 @@ func (s *Service) AttachToExperiment(ctx context.Context, experimentID, artifact
 		return nil, err
 	}
 
-	if _, _, err := s.projects.Authorize(ctx, p, art.ProjectID, org.RoleEditor); err != nil {
+	if art.ProjectID == nil {
+		return nil, platform.BadRequest("artifact.global_attach", "cannot attach a global artifact to an experiment")
+	}
+	if _, _, err := s.projects.Authorize(ctx, p, *art.ProjectID, org.RoleEditor); err != nil {
 		return nil, err
 	}
 
@@ -562,7 +625,7 @@ func (s *Service) AttachToExperiment(ctx context.Context, experimentID, artifact
 	if err != nil {
 		return nil, err
 	}
-	if exp.ProjectID != art.ProjectID {
+	if exp.ProjectID != *art.ProjectID {
 		return nil, platform.BadRequest("artifact.project_mismatch", "experiment does not belong to artifact's project")
 	}
 
@@ -626,8 +689,10 @@ func (s *Service) ListExperimentArtifacts(ctx context.Context, experimentID uuid
 		); err != nil {
 			return nil, fmt.Errorf("artifact: scan: %w", err)
 		}
-		if _, _, authErr := s.projects.Authorize(ctx, p, a.ProjectID, org.RoleViewer); authErr != nil {
-			continue
+		if a.ProjectID != nil {
+			if _, _, authErr := s.projects.Authorize(ctx, p, *a.ProjectID, org.RoleViewer); authErr != nil {
+				continue
+			}
 		}
 		result = append(result, &a)
 	}
