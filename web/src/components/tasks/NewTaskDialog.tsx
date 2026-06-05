@@ -113,11 +113,8 @@ export function NewTaskDialog({ projectId, iterationId, workspaceId, onClose }: 
   const [description, setDescription] = useState('');
   const [selectedIterationId, setSelectedIterationId] = useState(iterationId ?? '');
   const [assigneeId, setAssigneeId] = useState('');
-  const [actualExecutorId, setActualExecutorId] = useState('');
   const [plannedStart, setPlannedStart] = useState('');
   const [plannedEnd, setPlannedEnd] = useState('');
-  const [actualStart, setActualStart] = useState('');
-  const [actualEnd, setActualEnd] = useState('');
 
   const { data: iterations = [] } = useProjectIterations(projectId);
   const { data: members = [] } = useWorkspaceMembers(workspaceId);
@@ -134,11 +131,8 @@ export function NewTaskDialog({ projectId, iterationId, workspaceId, onClose }: 
       description: description.trim() || undefined,
       iteration_id: selectedIterationId || undefined,
       assignee_user_id: assigneeId || undefined,
-      actual_executor_id: actualExecutorId || undefined,
       planned_start_at: toRFC3339(plannedStart),
       estimated_finish_at: toRFC3339(plannedEnd),
-      started_at: toRFC3339(actualStart),
-      finished_at: toRFC3339(actualEnd),
     };
     createTask.mutate(body, { onSuccess: onClose });
   };
@@ -233,24 +227,6 @@ export function NewTaskDialog({ projectId, iterationId, workspaceId, onClose }: 
           </select>
         </div>
 
-        {/* Actual executor */}
-        <div>
-          <FieldLabel>Actual executor</FieldLabel>
-          <select
-            style={selectStyle}
-            value={actualExecutorId}
-            onChange={e => setActualExecutorId(e.target.value)}
-            disabled={createTask.isPending}
-          >
-            <option value="">— none —</option>
-            {members.map(m => (
-              <option key={m.user_id} value={m.user_id}>
-                {memberLabel(m)}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Planned start */}
         <div>
           <FieldLabel>Planned start</FieldLabel>
@@ -271,30 +247,6 @@ export function NewTaskDialog({ projectId, iterationId, workspaceId, onClose }: 
             style={dateInputStyle}
             value={plannedEnd}
             onChange={e => setPlannedEnd(e.target.value)}
-            disabled={createTask.isPending}
-          />
-        </div>
-
-        {/* Actual start */}
-        <div>
-          <FieldLabel>Actual start</FieldLabel>
-          <input
-            type="date"
-            style={dateInputStyle}
-            value={actualStart}
-            onChange={e => setActualStart(e.target.value)}
-            disabled={createTask.isPending}
-          />
-        </div>
-
-        {/* Actual end */}
-        <div>
-          <FieldLabel>Actual end</FieldLabel>
-          <input
-            type="date"
-            style={dateInputStyle}
-            value={actualEnd}
-            onChange={e => setActualEnd(e.target.value)}
             disabled={createTask.isPending}
           />
         </div>

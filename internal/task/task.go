@@ -202,11 +202,8 @@ func (s *Service) createTask(
 	iterationID *uuid.UUID,
 	title, description string,
 	assigneeUserID *uuid.UUID,
-	actualExecutorID *uuid.UUID,
 	plannedStartAt *time.Time,
 	estimatedFinishAt *time.Time,
-	startedAt *time.Time,
-	finishedAt *time.Time,
 	createdBy uuid.UUID,
 ) (*Task, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -215,19 +212,19 @@ func (s *Service) createTask(
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
+	// actual_executor_id, started_at and finished_at are intentionally not set
+	// here — they are inferred from the lifecycle (take / mark-done).
 	row := tx.QueryRow(ctx,
 		`INSERT INTO tasks
 		   (project_id, iteration_id, seq, title, description,
-		    assignee_user_id, actual_executor_id,
-		    planned_start_at, estimated_finish_at, started_at, finished_at,
+		    assignee_user_id, planned_start_at, estimated_finish_at,
 		    created_by)
 		 VALUES ($1, $2,
 		         COALESCE((SELECT MAX(seq) FROM tasks WHERE project_id = $1), 0) + 1,
-		         $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		         $3, $4, $5, $6, $7, $8)
 		 RETURNING `+taskCols,
 		projectID, iterationID, title, description,
-		assigneeUserID, actualExecutorID,
-		plannedStartAt, estimatedFinishAt, startedAt, finishedAt,
+		assigneeUserID, plannedStartAt, estimatedFinishAt,
 		createdBy,
 	)
 	t, err := scanTask(row)
@@ -393,8 +390,8 @@ func (s *Service) TakeTask(ctx context.Context, taskID, actorID uuid.UUID, estim
 	toStatus := "in_progress"
 	row := tx.QueryRow(ctx,
 		`UPDATE tasks
-		 SET status = 'in_progress', assignee_user_id = $2, estimated_finish_at = $3,
-		     started_at = now(), updated_at = now()
+		 SET status = 'in_progress', assignee_user_id = $2, actual_executor_id = $2,
+		     estimated_finish_at = $3, started_at = now(), updated_at = now()
 		 WHERE id = $1
 		 RETURNING `+taskCols,
 		taskID, actorID, estimatedFinishAt,
@@ -557,7 +554,7 @@ func (s *Service) ReopenTask(ctx context.Context, taskID uuid.UUID, target strin
 		// target == "todo"
 		row = tx.QueryRow(ctx,
 			`UPDATE tasks
-			 SET status = 'todo', assignee_user_id = NULL,
+			 SET status = 'todo', assignee_user_id = NULL, actual_executor_id = NULL,
 			     started_at = NULL, finished_at = NULL, estimated_finish_at = NULL,
 			     updated_at = now()
 			 WHERE id = $1 RETURNING `+taskCols,

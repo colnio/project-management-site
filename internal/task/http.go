@@ -174,11 +174,12 @@ type createTaskInput struct {
 		Description       string `json:"description,omitempty"`
 		IterationID       string `json:"iteration_id,omitempty"`
 		AssigneeUserID    string `json:"assignee_user_id,omitempty"`
-		ActualExecutorID  string `json:"actual_executor_id,omitempty"`
 		PlannedStartAt    string `json:"planned_start_at,omitempty"`
 		EstimatedFinishAt string `json:"estimated_finish_at,omitempty"`
-		StartedAt         string `json:"started_at,omitempty"`
-		FinishedAt        string `json:"finished_at,omitempty"`
+		// Note: actual executor / actual start / actual end are NOT settable at
+		// creation. They are observed facts inferred from the lifecycle:
+		// actual executor + actual start are set when the task is taken, actual
+		// end when it is marked done (and stays empty if the task is cancelled).
 	}
 }
 
@@ -230,15 +231,6 @@ func (s *Service) handleCreateTask(ctx context.Context, in *createTaskInput) (*c
 		assigneeUserID = &parsed
 	}
 
-	var actualExecutorID *uuid.UUID
-	if in.Body.ActualExecutorID != "" {
-		parsed, err := uuid.Parse(in.Body.ActualExecutorID)
-		if err != nil {
-			return nil, platform.BadRequest("task.invalid_actual_executor_id", "actual_executor_id must be a valid UUID")
-		}
-		actualExecutorID = &parsed
-	}
-
 	var plannedStartAt *time.Time
 	if in.Body.PlannedStartAt != "" {
 		t, err := time.Parse(time.RFC3339, in.Body.PlannedStartAt)
@@ -257,28 +249,9 @@ func (s *Service) handleCreateTask(ctx context.Context, in *createTaskInput) (*c
 		estimatedFinishAt = &t
 	}
 
-	var startedAt *time.Time
-	if in.Body.StartedAt != "" {
-		t, err := time.Parse(time.RFC3339, in.Body.StartedAt)
-		if err != nil {
-			return nil, platform.BadRequest("task.invalid_started_at", "started_at must be RFC3339")
-		}
-		startedAt = &t
-	}
-
-	var finishedAt *time.Time
-	if in.Body.FinishedAt != "" {
-		t, err := time.Parse(time.RFC3339, in.Body.FinishedAt)
-		if err != nil {
-			return nil, platform.BadRequest("task.invalid_finished_at", "finished_at must be RFC3339")
-		}
-		finishedAt = &t
-	}
-
 	task, err := s.createTask(ctx, projectID, iterationID,
 		in.Body.Title, in.Body.Description,
-		assigneeUserID, actualExecutorID,
-		plannedStartAt, estimatedFinishAt, startedAt, finishedAt,
+		assigneeUserID, plannedStartAt, estimatedFinishAt,
 		p.UserID)
 	if err != nil {
 		return nil, err
