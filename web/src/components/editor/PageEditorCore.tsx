@@ -635,25 +635,33 @@ export function PageEditorCore({
         await completeArtifact.mutateAsync(res.artifact.id);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ed = editor as unknown as Parameters<typeof insertOrUpdateBlock>[0];
-        if (blockType === 'artifactRef') {
+        const block =
+          blockType === 'artifactRef'
+            ? {
+                type: 'artifactRef',
+                props: {
+                  refId:       res.artifact.id,
+                  filename:    res.artifact.filename ?? file.name,
+                  contentType: res.artifact.content_type ?? (file.type || 'application/octet-stream'),
+                  artType:     res.artifact.type ?? artType,
+                },
+              }
+            : { type: blockType, props: { artifactId: res.artifact.id } };
+        try {
+          // Slash-menu path: a valid text cursor exists, so this updates the
+          // empty current block or inserts after it.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          insertOrUpdateBlock(ed, {
-            type: 'artifactRef',
-            props: {
-              refId:       res.artifact.id,
-              filename:    res.artifact.filename ?? file.name,
-              contentType: res.artifact.content_type ?? (file.type || 'application/octet-stream'),
-              artType:     res.artifact.type ?? artType,
-            },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any);
-        } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          insertOrUpdateBlock(ed, {
-            type: blockType,
-            props: { artifactId: res.artifact.id },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any);
+          insertOrUpdateBlock(ed, block as any);
+        } catch {
+          // Paste/drop don't move BlockNote's text cursor, so the slash-menu
+          // helper throws ("Slash Menu open in a block that doesn't contain
+          // content"). Fall back to appending at the end of the document.
+          const doc = editor.document;
+          const ref = doc[doc.length - 1];
+          if (ref) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            editor.insertBlocks([block as any], ref, 'after');
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Upload failed';
