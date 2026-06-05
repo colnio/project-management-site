@@ -47,6 +47,12 @@ const ALLOWED_TOOLS: { key: string; label: string; description: string }[] = [
   { key: 'update_iteration_status', label: 'Update iteration status', description: 'Change iteration status (planned/active/done)' },
   { key: 'create_reminder', label: 'Create reminder', description: 'Schedule reminders and events' },
   { key: 'flag_for_review', label: 'Flag for review', description: 'Flag samples/experiments for PI review' },
+  { key: 'create_task', label: 'Create task', description: 'Create new tasks in the project' },
+  { key: 'take_task', label: 'Take task', description: 'Mark a task in-progress (records actual start and executor)' },
+  { key: 'mark_task_done', label: 'Mark task done', description: 'Mark a task as completed (records actual end)' },
+  { key: 'cancel_task', label: 'Cancel task', description: 'Cancel a task with a reason' },
+  { key: 'add_task_reference', label: 'Add task reference', description: 'Link a task to a sample, experiment, page, user, or project' },
+  { key: 'create_wiki_page', label: 'Create wiki page', description: 'Create a new site-global wiki page' },
 ];
 
 const MODE_PERMISSIVENESS: Record<AutonomyConfig['mode'], number> = {

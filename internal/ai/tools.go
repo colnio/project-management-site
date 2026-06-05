@@ -141,6 +141,9 @@ func allTools(projectID, workspaceID string, restHdrs ...restCallWithHeadersFn) 
 		listApprovalsTool(projectID),
 		listExperimentTagsTool(projectID),
 		listSampleTagsTool(projectID),
+		listTasksTool(projectID),
+		readTaskTool(),
+		listWikiPagesTool(),
 		// ─── write tools ─────────────────────────────────────────────────────
 		draftPageTool(projectID),
 		updateIterationStatusTool(),
@@ -161,6 +164,12 @@ func allTools(projectID, workspaceID string, restHdrs ...restCallWithHeadersFn) 
 		saveRiskAssessmentTool(projectID),
 		createApprovalRequestTool(projectID),
 		updatePageTool(rhFn),
+		createTaskTool(projectID),
+		takeTaskTool(),
+		markTaskDoneTool(),
+		cancelTaskTool(),
+		addTaskReferenceTool(),
+		createWikiPageTool(),
 	}
 }
 
@@ -394,7 +403,7 @@ func readPageTool() toolDef {
 			Type: "function",
 			Function: FunctionDef{
 				Name:        "read_page",
-				Description: "Get a page (structured document) by ID, including its current content blocks.",
+				Description: "Get a page (structured document) by ID, including its current content blocks. Also works on wiki page IDs returned by list_wiki_pages.",
 				Parameters:  json.RawMessage(`{"type":"object","properties":{"page_id":{"type":"string","description":"UUID of the page"}},"required":["page_id"]}`),
 			},
 		},
@@ -1884,7 +1893,7 @@ func saveRiskAssessmentTool(injectProjectID string) toolDef {
 		Tool: Tool{
 			Type: "function",
 			Function: FunctionDef{
-				Name: "save_risk_assessment",
+				Name:        "save_risk_assessment",
 				Description: "Finalize the Risk Assessment (Phase 6 only). Creates the RA report page AND writes every failure mode into the risk register in one call. Call this exactly once, at Phase 6, after the researcher types 'report'. Do not call create_risk/draft_page separately.",
 				Parameters: json.RawMessage(`{
 "type":"object",
@@ -2046,6 +2055,427 @@ func createApprovalRequestTool(injectProjectID string) toolDef {
 	}
 }
 
+// ─── Task tools ──────────────────────────────────────────────────────────────
+
+func listTasksTool(injectProjectID string) toolDef {
+	return toolDef{
+		IsWrite: false,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        "list_tasks",
+				Description: "List all tasks in the current project, including status, planned/actual executor, planned and actual dates, and iteration.",
+				Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			data, status, err := rest("GET", "/v1/projects/"+injectProjectID+"/tasks", nil)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("list_tasks: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
+func readTaskTool() toolDef {
+	return toolDef{
+		IsWrite: false,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        "read_task",
+				Description: "Get a single task by ID, including all fields such as status, planned/actual executor, planned and actual dates, iteration, and references.",
+				Parameters:  json.RawMessage(`{"type":"object","properties":{"task_id":{"type":"string","description":"UUID of the task"}},"required":["task_id"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			var p struct {
+				TaskID string `json:"task_id"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("read_task: parse args: %w", err)
+			}
+			if p.TaskID == "" {
+				return "", fmt.Errorf("read_task: task_id required")
+			}
+			data, status, err := rest("GET", "/v1/tasks/"+p.TaskID, nil)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("read_task: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
+func createTaskTool(injectProjectID string) toolDef {
+	return toolDef{
+		IsWrite: true,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name: "create_task",
+				Description: "Create a new task in the current project. The planned executor is set via assignee_user_id. " +
+					"Actual executor, actual start, and actual end are set automatically by the system (on take/done) and must not be provided.",
+				Parameters: json.RawMessage(`{
+"type":"object",
+"properties":{
+  "title":{"type":"string","description":"Task title (required)"},
+  "description":{"type":"string","description":"Detailed task description"},
+  "iteration_id":{"type":"string","description":"UUID of the iteration to scope this task to"},
+  "assignee_user_id":{"type":"string","description":"UUID of the user planned to execute this task"},
+  "planned_start_at":{"type":"string","description":"Planned start date/time in RFC3339 format"},
+  "estimated_finish_at":{"type":"string","description":"Planned end date/time in RFC3339 format"}
+},
+"required":["title"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			var p struct {
+				Title             string `json:"title"`
+				Description       string `json:"description"`
+				IterationID       string `json:"iteration_id"`
+				AssigneeUserID    string `json:"assignee_user_id"`
+				PlannedStartAt    string `json:"planned_start_at"`
+				EstimatedFinishAt string `json:"estimated_finish_at"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("create_task: parse args: %w", err)
+			}
+			if p.Title == "" {
+				return "", fmt.Errorf("create_task: title required")
+			}
+			body := map[string]any{"title": p.Title}
+			if p.Description != "" {
+				body["description"] = p.Description
+			}
+			if p.IterationID != "" {
+				body["iteration_id"] = p.IterationID
+			}
+			if p.AssigneeUserID != "" {
+				body["assignee_user_id"] = p.AssigneeUserID
+			}
+			if p.PlannedStartAt != "" {
+				body["planned_start_at"] = p.PlannedStartAt
+			}
+			if p.EstimatedFinishAt != "" {
+				body["estimated_finish_at"] = p.EstimatedFinishAt
+			}
+			data, status, err := rest("POST", "/v1/projects/"+injectProjectID+"/tasks", body)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("create_task: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
+func takeTaskTool() toolDef {
+	return toolDef{
+		IsWrite: true,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name: "take_task",
+				Description: "Mark a task as in-progress. Records the actual start time and sets the actual executor to the caller. " +
+					"Requires an estimated finish date.",
+				Parameters: json.RawMessage(`{
+"type":"object",
+"properties":{
+  "task_id":{"type":"string","description":"UUID of the task"},
+  "estimated_finish_at":{"type":"string","description":"Updated estimated finish date/time in RFC3339 format (required)"}
+},
+"required":["task_id","estimated_finish_at"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			var p struct {
+				TaskID            string `json:"task_id"`
+				EstimatedFinishAt string `json:"estimated_finish_at"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("take_task: parse args: %w", err)
+			}
+			if p.TaskID == "" {
+				return "", fmt.Errorf("take_task: task_id required")
+			}
+			if p.EstimatedFinishAt == "" {
+				return "", fmt.Errorf("take_task: estimated_finish_at required")
+			}
+			body := map[string]any{"estimated_finish_at": p.EstimatedFinishAt}
+			data, status, err := rest("POST", "/v1/tasks/"+p.TaskID+"/take", body)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("take_task: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
+func markTaskDoneTool() toolDef {
+	return toolDef{
+		IsWrite: true,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name: "mark_task_done",
+				Description: "Mark a task as done. Records the actual end time. " +
+					"Requires the task to have at least one reference of type sample, experiment, or page — use add_task_reference first if needed.",
+				Parameters: json.RawMessage(`{
+"type":"object",
+"properties":{
+  "task_id":{"type":"string","description":"UUID of the task to mark done"}
+},
+"required":["task_id"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			var p struct {
+				TaskID string `json:"task_id"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("mark_task_done: parse args: %w", err)
+			}
+			if p.TaskID == "" {
+				return "", fmt.Errorf("mark_task_done: task_id required")
+			}
+			data, status, err := rest("POST", "/v1/tasks/"+p.TaskID+"/done", nil)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("mark_task_done: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
+func cancelTaskTool() toolDef {
+	return toolDef{
+		IsWrite: true,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        "cancel_task",
+				Description: "Cancel a task. Cancelled tasks have no actual end date. A reason is required.",
+				Parameters: json.RawMessage(`{
+"type":"object",
+"properties":{
+  "task_id":{"type":"string","description":"UUID of the task to cancel"},
+  "reason":{"type":"string","description":"Reason for cancellation (required)"}
+},
+"required":["task_id","reason"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			var p struct {
+				TaskID string `json:"task_id"`
+				Reason string `json:"reason"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("cancel_task: parse args: %w", err)
+			}
+			if p.TaskID == "" {
+				return "", fmt.Errorf("cancel_task: task_id required")
+			}
+			if p.Reason == "" {
+				return "", fmt.Errorf("cancel_task: reason required")
+			}
+			body := map[string]any{"reason": p.Reason}
+			data, status, err := rest("POST", "/v1/tasks/"+p.TaskID+"/cancel", body)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("cancel_task: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
+func addTaskReferenceTool() toolDef {
+	return toolDef{
+		IsWrite: true,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        "add_task_reference",
+				Description: "Add a reference (link) to a task, associating it with a sample, experiment, page, user, or project.",
+				Parameters: json.RawMessage(`{
+"type":"object",
+"properties":{
+  "task_id":{"type":"string","description":"UUID of the task"},
+  "ref_type":{"type":"string","enum":["sample","experiment","page","user","project"],"description":"Type of the referenced entity"},
+  "ref_id":{"type":"string","description":"UUID of the referenced entity"},
+  "label":{"type":"string","description":"Optional display label for the reference"}
+},
+"required":["task_id","ref_type","ref_id"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			var p struct {
+				TaskID  string `json:"task_id"`
+				RefType string `json:"ref_type"`
+				RefID   string `json:"ref_id"`
+				Label   string `json:"label"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("add_task_reference: parse args: %w", err)
+			}
+			if p.TaskID == "" {
+				return "", fmt.Errorf("add_task_reference: task_id required")
+			}
+			if p.RefType == "" {
+				return "", fmt.Errorf("add_task_reference: ref_type required")
+			}
+			if p.RefID == "" {
+				return "", fmt.Errorf("add_task_reference: ref_id required")
+			}
+			body := map[string]any{
+				"ref_type": p.RefType,
+				"ref_id":   p.RefID,
+			}
+			if p.Label != "" {
+				body["label"] = p.Label
+			}
+			data, status, err := rest("POST", "/v1/tasks/"+p.TaskID+"/references", body)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("add_task_reference: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
+// ─── Wiki tools ───────────────────────────────────────────────────────────────
+
+func listWikiPagesTool() toolDef {
+	return toolDef{
+		IsWrite: false,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        "list_wiki_pages",
+				Description: "List site-global wiki pages (e.g. Site Guide, SOPs, lab-wide references). These pages have no project scope. Use read_page or update_page with the returned IDs to view or edit them.",
+				Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			data, status, err := rest("GET", "/v1/wiki/pages", nil)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("list_wiki_pages: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
+func createWikiPageTool() toolDef {
+	return toolDef{
+		IsWrite: true,
+		Tool: Tool{
+			Type: "function",
+			Function: FunctionDef{
+				Name:        "create_wiki_page",
+				Description: "Create a new site-global wiki page (parent_type='wiki'). Content is converted to BlockNote blocks automatically.",
+				Parameters: json.RawMessage(`{
+"type":"object",
+"properties":{
+  "title":{"type":"string","description":"Page title (required)"},
+  "content":{"type":"string","description":"Plain text content; each line becomes a paragraph block"}
+},
+"required":["title"]}`),
+			},
+		},
+		Handler: func(ctx context.Context, args json.RawMessage, rest restCallFn) (string, error) {
+			var p struct {
+				Title   string `json:"title"`
+				Content string `json:"content"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", fmt.Errorf("create_wiki_page: parse args: %w", err)
+			}
+			if p.Title == "" {
+				return "", fmt.Errorf("create_wiki_page: title required")
+			}
+
+			// Build BlockNote blocks: heading block for title + one paragraph per content line.
+			type textContent struct {
+				Type   string   `json:"type"`
+				Text   string   `json:"text"`
+				Styles struct{} `json:"styles"`
+			}
+			type headingProps struct {
+				Level int `json:"level"`
+			}
+			type headingBlock struct {
+				Type    string        `json:"type"`
+				Props   headingProps  `json:"props"`
+				Content []textContent `json:"content"`
+			}
+			type paragraphBlock struct {
+				Type    string        `json:"type"`
+				Content []textContent `json:"content"`
+			}
+
+			blocks := make([]any, 0)
+			blocks = append(blocks, headingBlock{
+				Type:  "heading",
+				Props: headingProps{Level: 1},
+				Content: []textContent{
+					{Type: "text", Text: p.Title},
+				},
+			})
+			for _, line := range strings.Split(p.Content, "\n") {
+				blocks = append(blocks, paragraphBlock{
+					Type: "paragraph",
+					Content: []textContent{
+						{Type: "text", Text: line},
+					},
+				})
+			}
+
+			blocksJSON, err := json.Marshal(blocks)
+			if err != nil {
+				return "", fmt.Errorf("create_wiki_page: marshal blocks: %w", err)
+			}
+
+			body := map[string]any{
+				"title":  p.Title,
+				"blocks": json.RawMessage(blocksJSON),
+			}
+			data, status, err := rest("POST", "/v1/wiki/pages", body)
+			if err != nil {
+				return "", err
+			}
+			if status < 200 || status >= 300 {
+				return "", fmt.Errorf("create_wiki_page: status %d: %s", status, string(data))
+			}
+			return string(data), nil
+		},
+	}
+}
+
 // updatePageTool writes a new revision for a page.
 //
 // The page endpoint (PUT /v1/pages/{id}) uses optimistic concurrency via
@@ -2061,7 +2491,7 @@ func updatePageTool(restHdrs restCallWithHeadersFn) toolDef {
 			Type: "function",
 			Function: FunctionDef{
 				Name:        "update_page",
-				Description: "Write a new revision to an existing page. Automatically fetches the current ETag and sends it as If-Match. Provide blocks as a JSON array in BlockNote format.",
+				Description: "Write a new revision to an existing page. Automatically fetches the current ETag and sends it as If-Match. Provide blocks as a JSON array in BlockNote format. Also works on wiki page IDs returned by list_wiki_pages.",
 				Parameters: json.RawMessage(`{
 "type":"object",
 "properties":{

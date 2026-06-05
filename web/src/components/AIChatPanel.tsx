@@ -571,7 +571,7 @@ export function AIChatPanel({ projectId, onClose, workspaceId, seed }: AIChatPan
       // the server-side Risk Assessment finalize that runs save_risk_assessment),
       // so we can refresh the risk register / page lists when the turn ends.
       let sawProjectWrite = false;
-      const PROJECT_WRITE_TOOLS = new Set(['save_risk_assessment', 'create_risk', 'update_risk', 'draft_page', 'update_page']);
+      const PROJECT_WRITE_TOOLS = new Set(['save_risk_assessment', 'create_risk', 'update_risk', 'draft_page', 'update_page', 'create_task', 'take_task', 'mark_task_done', 'cancel_task', 'add_task_reference', 'create_wiki_page']);
 
       await readSSEStream(response, (ev: SSEEvent) => {
         setStreaming(prev => {

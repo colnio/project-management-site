@@ -248,6 +248,9 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(s.toolListExperimentTags())
 	s.mcp.AddTool(s.toolListSampleTags())
 	s.mcp.AddTool(s.toolListArtifacts())
+	s.mcp.AddTool(s.toolListTasks())
+	s.mcp.AddTool(s.toolReadTask())
+	s.mcp.AddTool(s.toolListWikiPages())
 
 	// ── Write tools ──────────────────────────────────────────────────────────
 	s.mcp.AddTool(s.toolCreateIteration())
@@ -268,6 +271,12 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(s.toolCreatePage())
 	s.mcp.AddTool(s.toolUpdatePage())
 	s.mcp.AddTool(s.toolUploadArtifact())
+	s.mcp.AddTool(s.toolCreateTask())
+	s.mcp.AddTool(s.toolTakeTask())
+	s.mcp.AddTool(s.toolMarkTaskDone())
+	s.mcp.AddTool(s.toolCancelTask())
+	s.mcp.AddTool(s.toolAddTaskReference())
+	s.mcp.AddTool(s.toolCreateWikiPage())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -680,9 +689,9 @@ func (s *Server) toolListPages() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 
 func (s *Server) toolReadPage() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 	tool := mcplib.NewTool("read_page",
-		mcplib.WithDescription("Get a page (structured document) by ID, including its current content blocks."),
+		mcplib.WithDescription("Get a page (structured document) by ID, including its current content blocks. Also accepts wiki page IDs returned by list_wiki_pages."),
 		mcplib.WithString("page_id",
-			mcplib.Description("UUID of the page."),
+			mcplib.Description("UUID of the page (project page or wiki page)."),
 			mcplib.Required()),
 	)
 	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
@@ -1800,7 +1809,7 @@ func (s *Server) toolCreatePage() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 // `"<revision_id>"`, and pass it as if_match to override the auto-fetch.
 func (s *Server) toolUpdatePage() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 	tool := mcplib.NewTool("update_page",
-		mcplib.WithDescription("Write a new revision for a page. The handler auto-fetches the current ETag via GET before issuing the PUT with If-Match. Pass if_match explicitly (as a quoted revision UUID, e.g. `\"abc...\"`) to override the auto-fetch and use strict optimistic concurrency. Requires editor role on the project."),
+		mcplib.WithDescription("Write a new revision for a page. The handler auto-fetches the current ETag via GET before issuing the PUT with If-Match. Pass if_match explicitly (as a quoted revision UUID, e.g. `\"abc...\"`) to override the auto-fetch and use strict optimistic concurrency. Requires editor role on the project. Also accepts wiki page IDs returned by list_wiki_pages — the server authorizes wiki pages for any authenticated user."),
 		mcplib.WithString("page_id",
 			mcplib.Description("UUID of the page to update."),
 			mcplib.Required()),
@@ -1856,6 +1865,344 @@ func (s *Server) toolUpdatePage() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 			return toolErr(err), nil
 		}
 		return toolText(respBody), nil
+	}
+	return tool, handler
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// READ TOOLS — TASKS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── list_tasks ──────────────────────────────────────────────────────────────
+
+func (s *Server) toolListTasks() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("list_tasks",
+		mcplib.WithDescription("List tasks in a project. Returns tasks with status, planned executor (assignee), actual executor, planned dates (planned_start_at, estimated_finish_at), actual dates (actual_start_at, actual_end_at), and associated iteration."),
+		mcplib.WithString("project_id",
+			mcplib.Description("UUID of the project."),
+			mcplib.Required()),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		projectID := stringArg(req, "project_id")
+		if projectID == "" {
+			return toolErr(fmt.Errorf("project_id is required")), nil
+		}
+		body, err := s.get(ctx, "/v1/projects/"+projectID+"/tasks")
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ─── read_task ───────────────────────────────────────────────────────────────
+
+func (s *Server) toolReadTask() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("read_task",
+		mcplib.WithDescription("Get a single task by ID, including status, assignees, dates, references, and associated iteration."),
+		mcplib.WithString("task_id",
+			mcplib.Description("UUID of the task."),
+			mcplib.Required()),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		id := stringArg(req, "task_id")
+		if id == "" {
+			return toolErr(fmt.Errorf("task_id is required")), nil
+		}
+		body, err := s.get(ctx, "/v1/tasks/"+id)
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WRITE TOOLS — TASKS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── create_task ─────────────────────────────────────────────────────────────
+
+func (s *Server) toolCreateTask() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("create_task",
+		mcplib.WithDescription("Create a new task within a project. Requires editor role on the project. "+
+			"Actual executor, actual start, and actual end are inferred by the server on take/done — do not pass them here."),
+		mcplib.WithString("project_id",
+			mcplib.Description("UUID of the project."),
+			mcplib.Required()),
+		mcplib.WithString("title",
+			mcplib.Description("Title of the task (required, non-empty)."),
+			mcplib.Required()),
+		mcplib.WithString("description",
+			mcplib.Description("Optional free-text description.")),
+		mcplib.WithString("iteration_id",
+			mcplib.Description("Optional UUID of an iteration to associate this task with.")),
+		mcplib.WithString("assignee_user_id",
+			mcplib.Description("Optional UUID of the planned executor (assigned user).")),
+		mcplib.WithString("planned_start_at",
+			mcplib.Description("Optional planned start date/time in RFC 3339 format.")),
+		mcplib.WithString("estimated_finish_at",
+			mcplib.Description("Optional planned end date/time in RFC 3339 format.")),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		projectID := stringArg(req, "project_id")
+		if projectID == "" {
+			return toolErr(fmt.Errorf("project_id is required")), nil
+		}
+		title := stringArg(req, "title")
+		if title == "" {
+			return toolErr(fmt.Errorf("title is required")), nil
+		}
+
+		payload := map[string]any{
+			"title": title,
+		}
+		if v := stringArg(req, "description"); v != "" {
+			payload["description"] = v
+		}
+		if v := stringArg(req, "iteration_id"); v != "" {
+			payload["iteration_id"] = v
+		}
+		if v := stringArg(req, "assignee_user_id"); v != "" {
+			payload["assignee_user_id"] = v
+		}
+		if v := stringArg(req, "planned_start_at"); v != "" {
+			payload["planned_start_at"] = v
+		}
+		if v := stringArg(req, "estimated_finish_at"); v != "" {
+			payload["estimated_finish_at"] = v
+		}
+
+		body, err := s.do(ctx, http.MethodPost, "/v1/projects/"+projectID+"/tasks", payload)
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ─── take_task ───────────────────────────────────────────────────────────────
+
+func (s *Server) toolTakeTask() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("take_task",
+		mcplib.WithDescription("Take a task — records the actual start timestamp and sets the actual executor to the calling user. "+
+			"Transitions the task status to in_progress."),
+		mcplib.WithString("task_id",
+			mcplib.Description("UUID of the task to take."),
+			mcplib.Required()),
+		mcplib.WithString("estimated_finish_at",
+			mcplib.Description("Revised estimated finish date/time in RFC 3339 format."),
+			mcplib.Required()),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		id := stringArg(req, "task_id")
+		if id == "" {
+			return toolErr(fmt.Errorf("task_id is required")), nil
+		}
+		estimatedFinish := stringArg(req, "estimated_finish_at")
+		if estimatedFinish == "" {
+			return toolErr(fmt.Errorf("estimated_finish_at is required")), nil
+		}
+
+		payload := map[string]any{
+			"estimated_finish_at": estimatedFinish,
+		}
+		body, err := s.do(ctx, http.MethodPost, "/v1/tasks/"+id+"/take", payload)
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ─── mark_task_done ───────────────────────────────────────────────────────────
+
+func (s *Server) toolMarkTaskDone() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("mark_task_done",
+		mcplib.WithDescription("Mark a task as done. Requires at least one reference of type sample, experiment, or page to be attached first — use add_task_reference before calling this. "+
+			"Records the actual end timestamp. Cancelled tasks cannot be marked done."),
+		mcplib.WithString("task_id",
+			mcplib.Description("UUID of the task to mark as done."),
+			mcplib.Required()),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		id := stringArg(req, "task_id")
+		if id == "" {
+			return toolErr(fmt.Errorf("task_id is required")), nil
+		}
+		body, err := s.do(ctx, http.MethodPost, "/v1/tasks/"+id+"/done", nil)
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ─── cancel_task ─────────────────────────────────────────────────────────────
+
+func (s *Server) toolCancelTask() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("cancel_task",
+		mcplib.WithDescription("Cancel a task with a reason. Cancelled tasks have no actual end timestamp recorded."),
+		mcplib.WithString("task_id",
+			mcplib.Description("UUID of the task to cancel."),
+			mcplib.Required()),
+		mcplib.WithString("reason",
+			mcplib.Description("Reason for cancellation (required, non-empty)."),
+			mcplib.Required()),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		id := stringArg(req, "task_id")
+		if id == "" {
+			return toolErr(fmt.Errorf("task_id is required")), nil
+		}
+		reason := stringArg(req, "reason")
+		if reason == "" {
+			return toolErr(fmt.Errorf("reason is required")), nil
+		}
+
+		payload := map[string]any{
+			"reason": reason,
+		}
+		body, err := s.do(ctx, http.MethodPost, "/v1/tasks/"+id+"/cancel", payload)
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ─── add_task_reference ───────────────────────────────────────────────────────
+
+func (s *Server) toolAddTaskReference() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("add_task_reference",
+		mcplib.WithDescription("Attach a reference to a task. At least one reference of type sample, experiment, or page is required before a task can be marked done."),
+		mcplib.WithString("task_id",
+			mcplib.Description("UUID of the task."),
+			mcplib.Required()),
+		mcplib.WithString("ref_type",
+			mcplib.Description("Type of the referenced entity: sample, experiment, page, user, or project."),
+			mcplib.Required()),
+		mcplib.WithString("ref_id",
+			mcplib.Description("UUID of the referenced entity."),
+			mcplib.Required()),
+		mcplib.WithString("label",
+			mcplib.Description("Optional human-readable label for the reference.")),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		id := stringArg(req, "task_id")
+		if id == "" {
+			return toolErr(fmt.Errorf("task_id is required")), nil
+		}
+		refType := stringArg(req, "ref_type")
+		if refType == "" {
+			return toolErr(fmt.Errorf("ref_type is required")), nil
+		}
+		refID := stringArg(req, "ref_id")
+		if refID == "" {
+			return toolErr(fmt.Errorf("ref_id is required")), nil
+		}
+
+		payload := map[string]any{
+			"ref_type": refType,
+			"ref_id":   refID,
+		}
+		if v := stringArg(req, "label"); v != "" {
+			payload["label"] = v
+		}
+
+		body, err := s.do(ctx, http.MethodPost, "/v1/tasks/"+id+"/references", payload)
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WIKI TOOLS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── list_wiki_pages ─────────────────────────────────────────────────────────
+
+func (s *Server) toolListWikiPages() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("list_wiki_pages",
+		mcplib.WithDescription("List site-global wiki pages (project_id is null, parent_type is 'wiki'). "+
+			"Any authenticated user can read wiki pages. Use read_page or update_page with the returned page IDs to read or edit individual wiki pages."),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		body, err := s.get(ctx, "/v1/wiki/pages")
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
+	}
+	return tool, handler
+}
+
+// ─── create_wiki_page ────────────────────────────────────────────────────────
+
+func (s *Server) toolCreateWikiPage() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
+	tool := mcplib.NewTool("create_wiki_page",
+		mcplib.WithDescription("Create a new site-global wiki page. Content is converted to BlockNote blocks: "+
+			"a heading block for the title followed by a paragraph block per line of content. "+
+			"Any authenticated user can create wiki pages."),
+		mcplib.WithString("title",
+			mcplib.Description("Title of the wiki page (required, non-empty)."),
+			mcplib.Required()),
+		mcplib.WithString("content",
+			mcplib.Description("Optional plain-text content. Each line becomes a separate paragraph block.")),
+	)
+	handler := func(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+		title := stringArg(req, "title")
+		if title == "" {
+			return toolErr(fmt.Errorf("title is required")), nil
+		}
+
+		// Build BlockNote blocks: heading for the title, then a paragraph per line.
+		type blockContent struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		type block struct {
+			Type    string         `json:"type"`
+			Props   map[string]any `json:"props,omitempty"`
+			Content []blockContent `json:"content"`
+		}
+
+		blocks := []block{
+			{
+				Type:    "heading",
+				Props:   map[string]any{"level": 1},
+				Content: []blockContent{{Type: "text", Text: title}},
+			},
+		}
+
+		if content := stringArg(req, "content"); content != "" {
+			for _, line := range strings.Split(content, "\n") {
+				blocks = append(blocks, block{
+					Type:    "paragraph",
+					Content: []blockContent{{Type: "text", Text: line}},
+				})
+			}
+		}
+
+		payload := map[string]any{
+			"title":  title,
+			"blocks": blocks,
+		}
+
+		body, err := s.do(ctx, http.MethodPost, "/v1/wiki/pages", payload)
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return toolText(body), nil
 	}
 	return tool, handler
 }
