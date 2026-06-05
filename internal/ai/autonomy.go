@@ -26,6 +26,7 @@ var internalAIScopes = []string{
 	platform.ScopeReadRisks,
 	platform.ScopeReadCalendar,
 	platform.ScopeReadApprovals,
+	platform.ScopeReadTasks,
 	platform.ScopeWritePages,
 	platform.ScopeWriteIterations,
 	platform.ScopeWriteCalendar,
@@ -33,6 +34,7 @@ var internalAIScopes = []string{
 	platform.ScopeWriteExperiments,
 	platform.ScopeWriteRisks,
 	platform.ScopeWriteApprovals,
+	platform.ScopeWriteTasks,
 }
 
 // Autonomy modes.

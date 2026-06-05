@@ -493,6 +493,9 @@ var toolScopeMap = map[string][]string{
 	"list_approvals":         {platform.ScopeReadApprovals},
 	"list_experiment_tags":   {platform.ScopeReadExperiments},
 	"list_sample_tags":       {platform.ScopeReadSamples},
+	"list_tasks":             {platform.ScopeReadTasks},
+	"read_task":              {platform.ScopeReadTasks},
+	"list_wiki_pages":        {platform.ScopeReadPages},
 	// ── write tools ───────────────────────────────────────────────────────
 	"draft_page":               {platform.ScopeWritePages},
 	"update_iteration_status":  {platform.ScopeWriteIterations},
@@ -513,6 +516,12 @@ var toolScopeMap = map[string][]string{
 	"save_risk_assessment":     {platform.ScopeWritePages, platform.ScopeWriteRisks},
 	"create_approval_request":  {platform.ScopeWriteApprovals},
 	"update_page":              {platform.ScopeReadPages, platform.ScopeWritePages},
+	"create_task":              {platform.ScopeWriteTasks},
+	"take_task":                {platform.ScopeWriteTasks},
+	"mark_task_done":           {platform.ScopeWriteTasks},
+	"cancel_task":              {platform.ScopeWriteTasks},
+	"add_task_reference":       {platform.ScopeWriteTasks},
+	"create_wiki_page":         {platform.ScopeWritePages},
 }
 
 // TestScopeCoverageGuard asserts that every scope required by any tool is
