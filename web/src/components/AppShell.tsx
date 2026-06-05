@@ -183,6 +183,13 @@ interface ProjectNotesTreeProps {
 function ProjectNotesTree({ projectId }: ProjectNotesTreeProps) {
   const router = useRouter();
   const { data: pages = [], isLoading } = useProjectPages(projectId);
+  // Only standalone project notes belong in this dropdown. Slot pages
+  // (description/notes) and pages attached to iterations/samples/experiments
+  // are managed inside their own entity views, so exclude them here — this
+  // mirrors the filter PagesPanel applies for the project's Notes tab.
+  const notes = pages.filter(
+    p => p.parent_type === 'project' && p.parent_id === projectId && !p.slot
+  );
 
   if (isLoading) {
     return (
@@ -192,7 +199,7 @@ function ProjectNotesTree({ projectId }: ProjectNotesTreeProps) {
     );
   }
 
-  if (pages.length === 0) {
+  if (notes.length === 0) {
     return (
       <div className="tree-item" style={{ paddingLeft: 28, color: 'var(--muted-2)', fontStyle: 'italic', fontSize: 11 }}>
         No notes yet
@@ -202,7 +209,7 @@ function ProjectNotesTree({ projectId }: ProjectNotesTreeProps) {
 
   return (
     <>
-      {pages.map(page => (
+      {notes.map(page => (
         <button
           key={page.id}
           className="tree-item"
