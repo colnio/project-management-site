@@ -293,6 +293,64 @@ func (s *Service) listByProject(ctx context.Context, projectID uuid.UUID, f list
 	return collectTasks(rows)
 }
 
+// ─── listAssignedToUser ──────────────────────────────────────────────────────
+
+// AssignedTask is a task enriched with its project and workspace context, used
+// by the cross-project "My Tasks" view.
+type AssignedTask struct {
+	Task
+	ProjectName   string    `json:"project_name"`
+	WorkspaceID   uuid.UUID `json:"workspace_id"`
+	WorkspaceName string    `json:"workspace_name"`
+}
+
+// ListAssignedToUser returns the caller's active (backlog/todo/in_progress)
+// tasks across every workspace, enriched with project + workspace names and
+// ordered for the My Tasks page: grouped by workspace then project, with
+// in-progress tasks first and the soonest deadline on top.
+func (s *Service) ListAssignedToUser(ctx context.Context, userID uuid.UUID) ([]*AssignedTask, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT t.id, t.project_id, t.iteration_id, t.seq, t.title, t.description, t.status,
+		        t.assignee_user_id, t.actual_executor_id, t.planned_start_at, t.estimated_finish_at,
+		        t.started_at, t.finished_at, t.created_by, t.created_at, t.updated_at,
+		        p.name, w.id, w.name
+		 FROM tasks t
+		 JOIN projects p ON p.id = t.project_id
+		 JOIN workspaces w ON w.id = p.workspace_id
+		 WHERE t.assignee_user_id = $1
+		   AND t.status IN ('backlog', 'todo', 'in_progress')
+		   AND p.archived_at IS NULL
+		 ORDER BY w.name ASC, p.name ASC,
+		          CASE t.status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 ELSE 3 END,
+		          t.estimated_finish_at ASC NULLS LAST,
+		          t.seq ASC`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("task: list assigned to user: %w", err)
+	}
+	defer rows.Close()
+
+	var result []*AssignedTask
+	for rows.Next() {
+		var a AssignedTask
+		t := &a.Task
+		if err := rows.Scan(
+			&t.ID, &t.ProjectID, &t.IterationID, &t.Seq, &t.Title, &t.Description, &t.Status,
+			&t.AssigneeUserID, &t.ActualExecutorID, &t.PlannedStartAt, &t.EstimatedFinishAt, &t.StartedAt, &t.FinishedAt,
+			&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
+			&a.ProjectName, &a.WorkspaceID, &a.WorkspaceName,
+		); err != nil {
+			return nil, fmt.Errorf("task: scan assigned task: %w", err)
+		}
+		result = append(result, &a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("task: list assigned to user rows: %w", err)
+	}
+	return result, nil
+}
+
 // ─── listByIteration ─────────────────────────────────────────────────────────
 
 func (s *Service) listByIteration(ctx context.Context, iterationID uuid.UUID) ([]*Task, error) {

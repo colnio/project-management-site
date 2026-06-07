@@ -115,6 +115,16 @@ function InboxIcon({ size = 13 }: { size?: number }) {
   );
 }
 
+function MyTasksIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5 5.5H11M5 8H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M4.5 11L5.5 12L7.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function PeopleIcon({ size = 13 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
@@ -443,6 +453,16 @@ function Sidebar({
           {inboxCount > 0 && (
             <span className="count">{inboxCount > 99 ? '99+' : inboxCount}</span>
           )}
+        </Link>
+        <Link
+          to="/my-tasks"
+          className="side-item"
+          activeProps={{ className: 'side-item active' }}
+        >
+          <span className="ic">
+            <MyTasksIcon size={13} />
+          </span>
+          My Tasks
         </Link>
         <Link
           to="/meetings"

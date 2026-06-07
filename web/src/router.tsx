@@ -24,6 +24,7 @@ import { MeetingsPage } from './pages/MeetingsPage';
 import { MeetingDetailPage } from './pages/MeetingDetailPage';
 import { AdminPage } from './pages/AdminPage';
 import { WikiPage } from './pages/WikiPage';
+import { MyTasksPage } from './pages/MyTasksPage';
 
 // Token accessor injected at auth setup — used by guards
 let isAuthenticated: () => boolean = () => false;
@@ -244,6 +245,12 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
+const myTasksRoute = createRoute({
+  getParentRoute: () => authGuardRoute,
+  path: '/my-tasks',
+  component: MyTasksPage,
+});
+
 // Profile setup route — inside auth guard but bypasses the profile-complete redirect
 // (the guard allows /profile/setup through explicitly).
 const profileSetupRoute = createRoute({
@@ -276,6 +283,7 @@ const routeTree = rootRoute.addChildren([
     profileSetupRoute,
     wikiRoute,
     wikiPageRoute,
+    myTasksRoute,
   ]),
 ]);
 

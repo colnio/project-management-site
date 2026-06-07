@@ -66,6 +66,14 @@ export function isDelayed(t: Task): boolean {
   return new Date(t.estimated_finish_at) < new Date();
 }
 
+// ─── AssignedTask (for /v1/me/tasks) ─────────────────────────────────────────
+
+export interface AssignedTask extends Task {
+  project_name: string;
+  workspace_id: string;
+  workspace_name: string;
+}
+
 // ─── Query Keys ──────────────────────────────────────────────────────────────
 
 export interface TaskFilters {
@@ -140,6 +148,14 @@ export function useTaskProgress(taskId?: string) {
     queryFn: () =>
       api.get<TaskProgress[] | null>(`/v1/tasks/${taskId}/progress`).then(r => r ?? []),
     enabled: !!taskId,
+  });
+}
+
+export function useMyTasks() {
+  return useQuery({
+    queryKey: ['me', 'tasks'] as const,
+    queryFn: () =>
+      api.get<AssignedTask[] | null>('/v1/me/tasks').then(r => r ?? []),
   });
 }
 

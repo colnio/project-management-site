@@ -34,6 +34,16 @@ func Register(api huma.API, svc *Service) {
 		Tags:        []string{"tasks"},
 	}, svc.handleListByProject)
 
+	// Cross-project: the caller's own assigned tasks.
+	huma.Register(api, huma.Operation{
+		OperationID: "task-list-mine",
+		Method:      http.MethodGet,
+		Path:        "/v1/me/tasks",
+		Summary:     "List my assigned tasks",
+		Description: "Returns the caller's active (backlog/todo/in_progress) tasks across all workspaces, enriched with project and workspace names. Grouped by project with active tasks first.",
+		Tags:        []string{"tasks"},
+	}, svc.handleListMyTasks)
+
 	// Iteration-scoped.
 	huma.Register(api, huma.Operation{
 		OperationID: "task-list-by-iteration",
@@ -327,6 +337,33 @@ func (s *Service) handleListByProject(ctx context.Context, in *listTasksByProjec
 		list = []*Task{}
 	}
 	return &listTasksOutput{Body: list}, nil
+}
+
+// ─── List my tasks ───────────────────────────────────────────────────────────
+
+type listMyTasksInput struct{}
+
+type listMyTasksOutput struct {
+	Body []*AssignedTask
+}
+
+func (s *Service) handleListMyTasks(ctx context.Context, _ *listMyTasksInput) (*listMyTasksOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeReadTasks); err != nil {
+		return nil, err
+	}
+
+	list, err := s.ListAssignedToUser(ctx, p.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if list == nil {
+		list = []*AssignedTask{}
+	}
+	return &listMyTasksOutput{Body: list}, nil
 }
 
 // ─── List by iteration ───────────────────────────────────────────────────────
