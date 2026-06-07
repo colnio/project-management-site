@@ -185,6 +185,34 @@ export function ExperimentDashboard({ experimentId }: { experimentId: string }) 
         </div>
       )}
 
+      {/* Orphan tags: assigned but no longer defined for the project — give an
+          explicit remove control so they can never get stuck. */}
+      {(() => {
+        const orphans = assignedTags.filter(label => !tags.some(t => t.label === label));
+        if (orphans.length === 0) return null;
+        return (
+          <div style={{ marginBottom: 20 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--muted)' }}>
+              Tags no longer defined for this project — click to remove:
+            </p>
+            <div className="choice-row">
+              {orphans.map(label => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggleTag(label)}
+                  className="status-opt sel"
+                  disabled={updateExp.isPending}
+                  title="Remove this tag"
+                >
+                  <span className="pill">{label} ✕</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Artifact embeds */}
       <ExperimentArtifactEmbeds experimentId={experimentId} method={experiment.method as string} />
 

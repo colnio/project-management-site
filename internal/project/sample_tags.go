@@ -126,14 +126,22 @@ func (s *Service) UpdateSampleTag(ctx context.Context, projectID, tagID uuid.UUI
 	return &t, nil
 }
 
-// DeleteSampleTag removes a tag definition (does not rewrite samples already using the label).
+// DeleteSampleTag removes a tag definition and strips the label from every
+// sample in the project that still carries it, so no orphan/unremovable tag
+// lingers on a sample once its definition is gone.
 func (s *Service) DeleteSampleTag(ctx context.Context, projectID, tagID uuid.UUID, actorID uuid.UUID) error {
 	tag, err := s.getSampleTag(ctx, projectID, tagID)
 	if err != nil {
 		return err
 	}
 
-	ct, err := s.pool.Exec(ctx,
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("project: delete sample tag: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	ct, err := tx.Exec(ctx,
 		`DELETE FROM project_sample_tags WHERE id = $1 AND project_id = $2`,
 		tagID, projectID,
 	)
@@ -142,6 +150,18 @@ func (s *Service) DeleteSampleTag(ctx context.Context, projectID, tagID uuid.UUI
 	}
 	if ct.RowsAffected() == 0 {
 		return platform.NotFound("sample_tag.not_found", "tag not found")
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE samples SET tags = tags - $2, updated_at = now()
+		 WHERE project_id = $1 AND tags ? $2`,
+		projectID, tag.Label,
+	); err != nil {
+		return fmt.Errorf("project: delete sample tag: strip from samples: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("project: delete sample tag: commit: %w", err)
 	}
 
 	_ = s.rec.Record(ctx, audit.Entry{
