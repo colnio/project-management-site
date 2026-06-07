@@ -552,6 +552,13 @@ function SamplesTab({ projectId }: { projectId: string }) {
   if (isError) return <ErrorState message="Failed to load samples." />;
 
   const KINDS = ['precursor', 'electrode', 'cell', 'module', 'derivative', 'other'];
+  // Faceted filters: only surface a kind/tag that at least one sample actually
+  // uses, so the fixed `kind` enum and unused tag definitions don't clutter the
+  // view as undeletable chips.
+  const usedKinds = new Set(samples.map((s: Sample) => s.kind).filter(Boolean));
+  const kindOptions = KINDS.filter(k => usedKinds.has(k));
+  const usedTagLabels = new Set(samples.flatMap((s: Sample) => s.tags ?? []));
+  const tagOptions = sampleTags.filter(t => usedTagLabels.has(t.label));
   let filtered = filterKind ? samples.filter((s: Sample) => s.kind === filterKind) : samples;
   if (filterTag) {
     filtered = filtered.filter((s: Sample) => (s.tags ?? []).includes(filterTag));
@@ -569,20 +576,22 @@ function SamplesTab({ projectId }: { projectId: string }) {
           <button className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New sample</button>
         </div>
       </div>
-      {/* Kind filter */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: sampleTags.length > 0 ? 8 : 16 }}>
-        <button onClick={() => setFilterKind('')} className={`status-opt${filterKind === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
-        {KINDS.map(k => (
-          <button key={k} onClick={() => setFilterKind(filterKind === k ? '' : k)} className={`status-opt${filterKind === k ? ' sel' : ''}`}>
-            <span className={`pill k-${k}`}>{k}</span>
-          </button>
-        ))}
-      </div>
-      {/* Tag filter */}
-      {sampleTags.length > 0 && (
+      {/* Kind filter — only kinds in use */}
+      {kindOptions.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: tagOptions.length > 0 ? 8 : 16 }}>
+          <button onClick={() => setFilterKind('')} className={`status-opt${filterKind === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
+          {kindOptions.map(k => (
+            <button key={k} onClick={() => setFilterKind(filterKind === k ? '' : k)} className={`status-opt${filterKind === k ? ' sel' : ''}`}>
+              <span className={`pill k-${k}`}>{k}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Tag filter — only tags in use */}
+      {tagOptions.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
           <button type="button" onClick={() => setFilterTag('')} className={`status-opt${filterTag === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All tags</button>
-          {sampleTags.map(t => (
+          {tagOptions.map(t => (
             <button key={t.id} type="button" onClick={() => setFilterTag(filterTag === t.label ? '' : t.label)} className={`status-opt${filterTag === t.label ? ' sel' : ''}`}>
               <span className="pill">{t.label}</span>
             </button>
@@ -727,6 +736,9 @@ function ExperimentsTab({ projectId }: { projectId: string }) {
   const filtered = filterMethod
     ? experiments.filter((e: Experiment) => experimentDisplayTags(e).includes(filterMethod))
     : experiments;
+  // Faceted: only show tags actually used by an experiment.
+  const usedTagLabels = new Set(experiments.flatMap((e: Experiment) => experimentDisplayTags(e)));
+  const tagOptions = tags.filter(t => usedTagLabels.has(t.label));
 
   return (
     <div className="page-wrap wide">
@@ -740,10 +752,10 @@ function ExperimentsTab({ projectId }: { projectId: string }) {
           <button type="button" className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New experiment</button>
         </div>
       </div>
-      {tags.length > 0 && (
+      {tagOptions.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
           <button type="button" onClick={() => setFilterMethod('')} className={`status-opt${filterMethod === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
-          {tags.map(t => (
+          {tagOptions.map(t => (
             <button key={t.id} type="button" onClick={() => setFilterMethod(filterMethod === t.label ? '' : t.label)} className={`status-opt${filterMethod === t.label ? ' sel' : ''}`}>
               <span className="pill">{t.label}</span>
             </button>
