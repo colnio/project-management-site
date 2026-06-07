@@ -8,9 +8,11 @@
  */
 import { useState } from 'react';
 import {
+  useProject,
   useProjectCollaborators,
   useAddCollaborator,
   useRemoveCollaborator,
+  useTransferOwnership,
 } from '@/hooks/useQueries';
 import type { Collaborator } from '@/hooks/useQueries';
 import { useResolvedProjectRole } from '@/hooks/useProjectAccess';
@@ -201,6 +203,112 @@ function CollaboratorRow({
   );
 }
 
+// ─── Transfer ownership ───────────────────────────────────────────────────────
+
+function TransferOwnershipSection({
+  projectId,
+  ownerId,
+  collaborators,
+}: {
+  projectId: string;
+  ownerId: string | undefined;
+  collaborators: Collaborator[];
+}) {
+  const transfer = useTransferOwnership(projectId);
+  const [target, setTarget] = useState('');
+  const [confirm, setConfirm] = useState(false);
+
+  // Candidates: collaborators who aren't already the owner.
+  const candidates = collaborators.filter(c => c.user_id !== ownerId);
+  const ownerCollab = collaborators.find(c => c.user_id === ownerId);
+  const ownerLabel = ownerCollab
+    ? (ownerCollab.display_name || ownerCollab.email || `${ownerId?.slice(0, 8)}…`)
+    : ownerId
+      ? `${ownerId.slice(0, 8)}…`
+      : 'unknown';
+
+  const doTransfer = () => {
+    if (!target) return;
+    transfer.mutate(target, {
+      onSuccess: () => { setTarget(''); setConfirm(false); },
+    });
+  };
+
+  return (
+    <div>
+      <FieldLabel>Ownership</FieldLabel>
+      <div style={{ fontSize: 12, color: 'var(--ink)', padding: '4px 0 10px' }}>
+        Current owner:{' '}
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5 }}>{ownerLabel}</span>
+      </div>
+      {candidates.length === 0 ? (
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted-2)' }}>
+          Add a collaborator below, then transfer ownership to them.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select
+            value={target}
+            onChange={e => { setTarget(e.target.value); setConfirm(false); }}
+            disabled={transfer.isPending}
+            style={{
+              flex: 1,
+              fontFamily: 'var(--mono)',
+              fontSize: 12,
+              background: 'var(--paper-2)',
+              border: '1px solid var(--line)',
+              borderRadius: 5,
+              color: 'var(--ink)',
+              padding: '5px 8px',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="">Transfer to…</option>
+            {candidates.map(c => (
+              <option key={c.user_id} value={c.user_id}>
+                {c.display_name || c.email || `${c.user_id.slice(0, 8)}…`}
+              </option>
+            ))}
+          </select>
+          {confirm ? (
+            <>
+              <button
+                className="top-btn"
+                style={{ fontSize: 11, color: 'var(--bad)', flexShrink: 0 }}
+                onClick={doTransfer}
+                disabled={transfer.isPending}
+              >
+                {transfer.isPending ? 'Transferring…' : 'Confirm transfer'}
+              </button>
+              <button
+                className="top-btn"
+                style={{ fontSize: 11, flexShrink: 0 }}
+                onClick={() => setConfirm(false)}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              className="top-btn"
+              style={{ flexShrink: 0 }}
+              onClick={() => setConfirm(true)}
+              disabled={!target || transfer.isPending}
+            >
+              Transfer
+            </button>
+          )}
+        </div>
+      )}
+      {transfer.isError && (
+        <div style={{ marginTop: 8, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--bad)' }}>
+          {(transfer.error as Error).message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ShareDialog ──────────────────────────────────────────────────────────────
 
 interface ShareDialogProps {
@@ -210,6 +318,7 @@ interface ShareDialogProps {
 
 export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
   const { data: collaborators = [], isLoading, isError } = useProjectCollaborators(projectId);
+  const { data: project } = useProject(projectId);
   const { canManageCollaborators } = useResolvedProjectRole(projectId);
   const add = useAddCollaborator(projectId);
 
@@ -303,6 +412,15 @@ export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
             />
           ))}
         </div>
+
+        {/* Transfer ownership — owners only */}
+        {canManageCollaborators && (
+          <TransferOwnershipSection
+            projectId={projectId}
+            ownerId={project?.owner_id}
+            collaborators={collaborators}
+          />
+        )}
 
         {/* Add collaborator — owners only */}
         {canManageCollaborators && (

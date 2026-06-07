@@ -63,6 +63,15 @@ func Register(api huma.API, svc *Service) {
 
 	// Collaborators.
 	huma.Register(api, huma.Operation{
+		OperationID: "project-transfer-ownership",
+		Method:      http.MethodPost,
+		Path:        "/v1/projects/{id}/transfer-ownership",
+		Summary:     "Transfer project ownership",
+		Description: "Reassigns the project owner to another user (a workspace member or existing collaborator), demoting the previous owner to editor. Requires owner role on the project.",
+		Tags:        []string{"projects"},
+	}, svc.handleTransferOwnership)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "project-collaborators-list",
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/collaborators",
@@ -352,6 +361,48 @@ func (s *Service) handleArchiveProject(ctx context.Context, in *archiveProjectIn
 		return nil, err
 	}
 	return &archiveProjectOutput{Body: proj}, nil
+}
+
+// ─── Transfer ownership ────────────────────────────────────────────────────────
+
+type transferOwnershipInput struct {
+	ID   string `path:"id"`
+	Body struct {
+		NewOwnerUserID string `json:"new_owner_user_id" required:"true" format:"uuid"`
+	}
+}
+
+type transferOwnershipOutput struct {
+	Body *Project
+}
+
+func (s *Service) handleTransferOwnership(ctx context.Context, in *transferOwnershipInput) (*transferOwnershipOutput, error) {
+	p, ok := platform.PrincipalFrom(ctx)
+	if !ok {
+		return nil, platform.Unauthorized("not authenticated")
+	}
+	if err := platform.RequireScope(p, platform.ScopeWriteProjects); err != nil {
+		return nil, err
+	}
+
+	projectID, err := uuid.Parse(in.ID)
+	if err != nil {
+		return nil, platform.BadRequest("project.invalid_id", "invalid project ID")
+	}
+	newOwnerID, err := uuid.Parse(in.Body.NewOwnerUserID)
+	if err != nil {
+		return nil, platform.BadRequest("user.invalid_id", "invalid user ID")
+	}
+
+	if _, _, err := s.Authorize(ctx, p, projectID, org.RoleOwner); err != nil {
+		return nil, err
+	}
+
+	proj, err := s.TransferOwnership(ctx, projectID, newOwnerID, p.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &transferOwnershipOutput{Body: proj}, nil
 }
 
 // ─── List collaborators ────────────────────────────────────────────────────────

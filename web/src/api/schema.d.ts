@@ -3003,6 +3003,7 @@ export interface components {
             description: string;
             id: string;
             name: string;
+            owner_id: string;
             summary_page_id?: string;
             /** Format: date-time */
             updated_at: string;

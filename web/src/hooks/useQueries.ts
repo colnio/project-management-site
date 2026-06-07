@@ -295,6 +295,20 @@ export function useRemoveCollaborator(projectId: string) {
   });
 }
 
+export function useTransferOwnership(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (newOwnerUserId: string) =>
+      api.post<Project>(`/v1/projects/${projectId}/transfer-ownership`, {
+        new_owner_user_id: newOwnerUserId,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projectCollaborators(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.project(projectId) });
+    },
+  });
+}
+
 // ─── Project sub-resources ───────────────────────────────────────────────────
 
 export function useProjectSamples(projectId: string | undefined) {

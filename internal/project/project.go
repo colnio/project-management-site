@@ -30,6 +30,7 @@ type Project struct {
 	Visibility     string     `json:"visibility"`
 	SummaryPageID  *uuid.UUID `json:"summary_page_id,omitempty"`
 	CreatedBy      uuid.UUID  `json:"created_by"`
+	OwnerID        uuid.UUID  `json:"owner_id"`
 	ArchivedAt     *time.Time `json:"archived_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
@@ -74,12 +75,12 @@ func (s *Service) GetProject(ctx context.Context, id uuid.UUID) (*Project, error
 	var p Project
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, name, description, visibility,
-		        summary_page_id, created_by, archived_at, created_at, updated_at
+		        summary_page_id, created_by, owner_id, archived_at, created_at, updated_at
 		 FROM projects WHERE id = $1`,
 		id,
 	).Scan(
 		&p.ID, &p.WorkspaceID, &p.Name, &p.Description, &p.Visibility,
-		&p.SummaryPageID, &p.CreatedBy, &p.ArchivedAt, &p.CreatedAt, &p.UpdatedAt,
+		&p.SummaryPageID, &p.CreatedBy, &p.OwnerID, &p.ArchivedAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, platform.NotFound("project.not_found", "project not found")
@@ -108,6 +109,12 @@ func (s *Service) Authorize(
 	role, err := s.org.ResolveAccessForPrincipal(ctx, p, proj.WorkspaceID, proj.Visibility, &proj.ID)
 	if err != nil {
 		return nil, org.RoleNone, fmt.Errorf("project: resolve access: %w", err)
+	}
+
+	// The project owner of record always has full manage rights, regardless of
+	// visibility or collaborator rows.
+	if p != nil && p.UserID == proj.OwnerID {
+		role = org.RoleOwner
 	}
 
 	// Check whether the resolved role satisfies the requirement.
@@ -152,14 +159,14 @@ func (s *Service) CreateProject(
 
 	var proj Project
 	err = tx.QueryRow(ctx,
-		`INSERT INTO projects (workspace_id, name, description, visibility, created_by)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO projects (workspace_id, name, description, visibility, created_by, owner_id)
+		 VALUES ($1, $2, $3, $4, $5, $5)
 		 RETURNING id, workspace_id, name, description, visibility,
-		           summary_page_id, created_by, archived_at, created_at, updated_at`,
+		           summary_page_id, created_by, owner_id, archived_at, created_at, updated_at`,
 		workspaceID, name, description, visibility, creatorID,
 	).Scan(
 		&proj.ID, &proj.WorkspaceID, &proj.Name, &proj.Description, &proj.Visibility,
-		&proj.SummaryPageID, &proj.CreatedBy, &proj.ArchivedAt, &proj.CreatedAt, &proj.UpdatedAt,
+		&proj.SummaryPageID, &proj.CreatedBy, &proj.OwnerID, &proj.ArchivedAt, &proj.CreatedAt, &proj.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("project: create project: %w", err)
@@ -201,7 +208,7 @@ func (s *Service) ListProjectsForWorkspace(
 	includeArchived bool,
 ) ([]*Project, error) {
 	query := `SELECT id, workspace_id, name, description, visibility,
-	                 summary_page_id, created_by, archived_at, created_at, updated_at
+	                 summary_page_id, created_by, owner_id, archived_at, created_at, updated_at
 	          FROM projects
 	          WHERE workspace_id = $1`
 	args := []any{workspaceID}
@@ -223,7 +230,7 @@ func (s *Service) ListProjectsForWorkspace(
 		var proj Project
 		if err := rows.Scan(
 			&proj.ID, &proj.WorkspaceID, &proj.Name, &proj.Description, &proj.Visibility,
-			&proj.SummaryPageID, &proj.CreatedBy, &proj.ArchivedAt, &proj.CreatedAt, &proj.UpdatedAt,
+			&proj.SummaryPageID, &proj.CreatedBy, &proj.OwnerID, &proj.ArchivedAt, &proj.CreatedAt, &proj.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("project: scan project: %w", err)
 		}
@@ -315,11 +322,11 @@ func (s *Service) UpdateProject(
 		     updated_at  = now()
 		 WHERE id = $1
 		 RETURNING id, workspace_id, name, description, visibility,
-		           summary_page_id, created_by, archived_at, created_at, updated_at`,
+		           summary_page_id, created_by, owner_id, archived_at, created_at, updated_at`,
 		id, name, description, visibility,
 	).Scan(
 		&proj.ID, &proj.WorkspaceID, &proj.Name, &proj.Description, &proj.Visibility,
-		&proj.SummaryPageID, &proj.CreatedBy, &proj.ArchivedAt, &proj.CreatedAt, &proj.UpdatedAt,
+		&proj.SummaryPageID, &proj.CreatedBy, &proj.OwnerID, &proj.ArchivedAt, &proj.CreatedAt, &proj.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, platform.NotFound("project.not_found", "project not found")
@@ -403,11 +410,11 @@ func (s *Service) ArchiveProject(ctx context.Context, id uuid.UUID, actorID uuid
 		 SET archived_at = now(), updated_at = now()
 		 WHERE id = $1 AND archived_at IS NULL
 		 RETURNING id, workspace_id, name, description, visibility,
-		           summary_page_id, created_by, archived_at, created_at, updated_at`,
+		           summary_page_id, created_by, owner_id, archived_at, created_at, updated_at`,
 		id,
 	).Scan(
 		&proj.ID, &proj.WorkspaceID, &proj.Name, &proj.Description, &proj.Visibility,
-		&proj.SummaryPageID, &proj.CreatedBy, &proj.ArchivedAt, &proj.CreatedAt, &proj.UpdatedAt,
+		&proj.SummaryPageID, &proj.CreatedBy, &proj.OwnerID, &proj.ArchivedAt, &proj.CreatedAt, &proj.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		// Either not found or already archived — load to distinguish.
@@ -430,4 +437,90 @@ func (s *Service) ArchiveProject(ctx context.Context, id uuid.UUID, actorID uuid
 	})
 
 	return &proj, nil
+}
+
+// ─── TransferOwnership ─────────────────────────────────────────────────────────
+
+// TransferOwnership reassigns the project owner of record to newOwnerID. The new
+// owner is granted the owner collaborator role and the previous owner is demoted
+// to editor. The new owner must already have a path to the project (be a member
+// of its workspace or an existing collaborator).
+func (s *Service) TransferOwnership(ctx context.Context, projectID, newOwnerID, actorID uuid.UUID) (*Project, error) {
+	proj, err := s.GetProject(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if proj.OwnerID == newOwnerID {
+		return proj, nil // already the owner — no-op
+	}
+
+	// The new owner must be able to access this project.
+	_, isMember, err := s.org.WorkspaceRole(ctx, proj.WorkspaceID, newOwnerID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		_, isCollab, cerr := s.org.CollaboratorRole(ctx, projectID, newOwnerID)
+		if cerr != nil {
+			return nil, cerr
+		}
+		if !isCollab {
+			return nil, platform.BadRequest("project.owner_not_member",
+				"the new owner must be a member of the workspace or a project collaborator")
+		}
+	}
+
+	prevOwnerID := proj.OwnerID
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("project: transfer ownership: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var updated Project
+	err = tx.QueryRow(ctx,
+		`UPDATE projects SET owner_id = $2, updated_at = now()
+		 WHERE id = $1
+		 RETURNING id, workspace_id, name, description, visibility,
+		           summary_page_id, created_by, owner_id, archived_at, created_at, updated_at`,
+		projectID, newOwnerID,
+	).Scan(
+		&updated.ID, &updated.WorkspaceID, &updated.Name, &updated.Description, &updated.Visibility,
+		&updated.SummaryPageID, &updated.CreatedBy, &updated.OwnerID, &updated.ArchivedAt, &updated.CreatedAt, &updated.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("project: transfer ownership: update: %w", err)
+	}
+
+	// Grant the new owner the owner collaborator role.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO project_collaborations (project_id, user_id, role) VALUES ($1, $2, $3)
+		 ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+		projectID, newOwnerID, string(org.RoleOwner),
+	); err != nil {
+		return nil, fmt.Errorf("project: transfer ownership: grant owner: %w", err)
+	}
+
+	// Demote the previous owner to editor.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO project_collaborations (project_id, user_id, role) VALUES ($1, $2, $3)
+		 ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+		projectID, prevOwnerID, string(org.RoleEditor),
+	); err != nil {
+		return nil, fmt.Errorf("project: transfer ownership: demote previous owner: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("project: transfer ownership: commit: %w", err)
+	}
+
+	_ = s.rec.Record(ctx, audit.Entry{
+		Actor:        actorID,
+		Action:       "project.transfer_ownership",
+		ResourceType: "project",
+		ResourceID:   projectID.String(),
+	})
+
+	return &updated, nil
 }
