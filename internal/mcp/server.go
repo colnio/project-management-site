@@ -43,10 +43,17 @@ type Server struct {
 }
 
 // NewServer constructs the MCP server. restBaseURL must be the full base URL
-// of the local REST API (e.g. "http://127.0.0.1:8080"). The SSE context
-// function extracts the Authorization header from each incoming HTTP request
-// and stores the bearer token in the context so tool handlers can forward it.
-func NewServer(restBaseURL string, log *slog.Logger) *Server {
+// of the local REST API (e.g. "http://127.0.0.1:8080") used for backend calls.
+// publicBaseURL is the externally-reachable base URL (e.g.
+// "https://projects.colnio.net") advertised in the SSE endpoint event so MCP
+// clients accept the message endpoint; pass restBaseURL if there is no public
+// URL. The SSE context function extracts the Authorization header from each
+// incoming HTTP request and stores the bearer token in the context so tool
+// handlers can forward it.
+func NewServer(restBaseURL, publicBaseURL string, log *slog.Logger) *Server {
+	if publicBaseURL == "" {
+		publicBaseURL = restBaseURL
+	}
 	s := &Server{
 		restBase:   strings.TrimSuffix(restBaseURL, "/"),
 		log:        log,
@@ -65,7 +72,7 @@ func NewServer(restBaseURL string, log *slog.Logger) *Server {
 	// to the /mcp endpoint and injects the caller's bearer into the context.
 	s.sse = mcpserver.NewSSEServer(
 		s.mcp,
-		mcpserver.WithBaseURL(restBaseURL),
+		mcpserver.WithBaseURL(strings.TrimSuffix(publicBaseURL, "/")),
 		mcpserver.WithStaticBasePath("/mcp"),
 		mcpserver.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			auth := r.Header.Get("Authorization")

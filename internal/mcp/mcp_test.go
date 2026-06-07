@@ -243,7 +243,7 @@ func TestToolBearerForwarding(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	// Verify that the /mcp SSE endpoint responds with text/event-stream.
 	// SSE connections block, so we cancel the request after a short time.
@@ -308,7 +308,7 @@ func TestToolListSamples(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -337,7 +337,7 @@ func TestToolUploadArtifactBase64(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -371,7 +371,7 @@ func TestToolUploadArtifactInfersContentType(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -401,7 +401,7 @@ func TestToolUploadArtifactRequiresSource(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -421,7 +421,7 @@ func TestToolReadSample(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -445,7 +445,7 @@ func TestToolRead401MapsToError(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -465,7 +465,7 @@ func TestToolGetSampleLineage(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -489,7 +489,7 @@ func TestToolListExperiments(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -513,7 +513,7 @@ func TestToolReadExperiment(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -533,7 +533,7 @@ func TestToolReadPage(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -557,7 +557,7 @@ func TestToolListArtifacts(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -577,7 +577,7 @@ func TestToolListProjectsWithWorkspaceID(t *testing.T) {
 	fake := fakeRESTBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),

@@ -147,7 +147,7 @@ func TestMCPToolListIterations(t *testing.T) {
 	}))
 	defer proxy.Close()
 
-	srv := labmcp.NewServer(proxy.URL, newTestLogger())
+	srv := labmcp.NewServer(proxy.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -193,7 +193,7 @@ func TestMCPToolCreateIteration(t *testing.T) {
 	}))
 	defer captureSrv.Close()
 
-	srv := labmcp.NewServer(captureSrv.URL, newTestLogger())
+	srv := labmcp.NewServer(captureSrv.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -261,7 +261,7 @@ func TestMCPToolUpdatePageETag(t *testing.T) {
 	}))
 	defer captureSrv.Close()
 
-	srv := labmcp.NewServer(captureSrv.URL, newTestLogger())
+	srv := labmcp.NewServer(captureSrv.URL, "", newTestLogger())
 
 	result, err := srv.DoCallTool(
 		context.Background(),
@@ -313,7 +313,7 @@ func TestMCPNewToolsRegistered(t *testing.T) {
 	fake := fakeNewToolsBackend(t)
 	defer fake.Close()
 
-	srv := labmcp.NewServer(fake.URL, newTestLogger())
+	srv := labmcp.NewServer(fake.URL, "", newTestLogger())
 
 	// Tools that must be registered. We call them with a missing required arg
 	// so the handler returns an IsError result (tool found, validation inside

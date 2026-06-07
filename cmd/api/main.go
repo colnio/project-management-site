@@ -261,8 +261,15 @@ func run() error {
 	srv.MountLLMSTxt(labmcp.LLMSText(srv.API.OpenAPI()))
 
 	// F3: MCP server over SSE at /mcp — wraps the REST API, same PAT auth.
+	// The REST calls go to the local bind address, but the SSE transport must
+	// advertise the public base URL (PUBLIC_BASE_URL) so MCP clients don't
+	// reject the message endpoint on an origin mismatch.
 	restBase := "http://127.0.0.1:" + cfg.Port
-	mcpSrv := labmcp.NewServer(restBase, logger)
+	publicBase := cfg.PublicBaseURL
+	if publicBase == "" {
+		publicBase = restBase
+	}
+	mcpSrv := labmcp.NewServer(restBase, publicBase, logger)
 	srv.Router.Mount("/mcp", mcpSrv.Handler())
 
 	httpSrv := &http.Server{

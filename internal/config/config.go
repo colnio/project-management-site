@@ -57,6 +57,11 @@ type Config struct {
 	// Frontend origin for CORS / redirects.
 	WebOrigin string
 
+	// Public base URL the outside world uses to reach this API (e.g.
+	// "https://projects.colnio.net"). Used to advertise the correct MCP SSE
+	// message endpoint. Empty falls back to the local bind address.
+	PublicBaseURL string
+
 	// nbconvert sidecar.
 	NBConvertURL string
 
@@ -100,6 +105,7 @@ func Load() (*Config, error) {
 		CookieDomain:      getenv("COOKIE_DOMAIN", "localhost"),
 		CookieSecure:      getbool("COOKIE_SECURE", false),
 		WebOrigin:         getenv("WEB_ORIGIN", "http://localhost:5173"),
+		PublicBaseURL:     getenv("PUBLIC_BASE_URL", ""),
 		NBConvertURL:      getenv("NBCONVERT_URL", "http://localhost:8090"),
 		SearxNGURL:        getenv("SEARXNG_URL", "http://localhost:8888"),
 		BraveSearchAPIKey: getenv("BRAVE_SEARCH_API_KEY", ""),
