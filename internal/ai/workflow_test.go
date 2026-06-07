@@ -144,7 +144,7 @@ func newWorkflowTestSetup(t *testing.T) (*Service, *setupData, *httptest.Server)
 	}
 	projID := uuid.New()
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "WF Test Project", "", "workspace", user.ID,
 	); err != nil {
 		t.Fatalf("create project: %v", err)
@@ -326,7 +326,7 @@ func TestRunWorkflow_UsageWritten(t *testing.T) {
 	ws, _ := orgSvc.CreateWorkspace(ctx, "wfusagews"+user.ID.String()[:8], user.ID)
 	projID := uuid.New()
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "WF Usage Proj", "", "workspace", user.ID,
 	)
 
@@ -408,7 +408,7 @@ func TestRunWorkflow_PIFlag_Flagged(t *testing.T) {
 	ws, _ := orgSvc.CreateWorkspace(ctx, "wfpiws"+user.ID.String()[:8], user.ID)
 	projID := uuid.New()
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "WF PI Proj", "", "workspace", user.ID,
 	)
 	p := &platform.Principal{UserID: user.ID, Email: email}
@@ -503,7 +503,7 @@ func TestRunWorkflow_PIFlag_NotFlagged(t *testing.T) {
 	ws, _ := orgSvc.CreateWorkspace(ctx, "wfnfws"+user.ID.String()[:8], user.ID)
 	projID := uuid.New()
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "WF NoFlag Proj", "", "workspace", user.ID,
 	)
 	_ = ws
@@ -593,7 +593,7 @@ func TestRunWorkflow_MalformedSynthesisJSON(t *testing.T) {
 	ws, _ := orgSvc.CreateWorkspace(ctx, "wfbadws"+user.ID.String()[:8], user.ID)
 	projID := uuid.New()
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "WF Bad Proj", "", "workspace", user.ID,
 	)
 	_ = ws
@@ -693,7 +693,7 @@ func TestRunWorkflow_SynthesisError_Returns502(t *testing.T) {
 	ws, _ := orgSvc.CreateWorkspace(ctx, "wf502ws"+user.ID.String()[:8], user.ID)
 	projID := uuid.New()
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "WF 502 Proj", "", "workspace", user.ID,
 	)
 	p := &platform.Principal{UserID: user.ID, Email: email}

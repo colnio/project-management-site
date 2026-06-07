@@ -356,8 +356,8 @@ func TestResolveAccessForProjects_MatchesSingular(t *testing.T) {
 
 	projectID := uuid.New()
 	_, err = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, visibility, created_by)
-		 VALUES ($1, $2, 'Private', 'private', $3)`,
+		`INSERT INTO projects (id, workspace_id, name, visibility, created_by, owner_id)
+		 VALUES ($1, $2, 'Private', 'private', $3, $3)`,
 		projectID, ws.ID, owner.ID,
 	)
 	if err != nil {

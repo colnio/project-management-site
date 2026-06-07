@@ -84,7 +84,7 @@ func createTestSetup(t *testing.T, ctx context.Context, pool *pgxpool.Pool, auth
 	// Create project via direct DB insert (faster for tests).
 	projID := uuid.New()
 	_, err = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "AI Test Project", "", "workspace", user.ID,
 	)
 	if err != nil {
@@ -223,7 +223,7 @@ func TestChatLoop_ReadToolThenText(t *testing.T) {
 	ws, _ := orgSvc.CreateWorkspace(ctx, "loopws"+user.ID.String()[:8], user.ID)
 	projID := uuid.New()
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "LoopProj", "", "workspace", user.ID,
 	)
 
@@ -297,7 +297,7 @@ func TestChatLoop_SpendCapRefusal(t *testing.T) {
 	ws, _ := orgSvc.CreateWorkspace(ctx, "capws"+user.ID.String()[:8], user.ID)
 	projID := uuid.New()
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "CapProj", "", "workspace", user.ID,
 	)
 
@@ -505,7 +505,7 @@ func TestReviewRisks_ReturnsContent(t *testing.T) {
 	ws, _ := orgSvc.CreateWorkspace(ctx, "reviewws"+user.ID.String()[:8], user.ID)
 	projID := uuid.New()
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projID, ws.ID, "Review Proj", "", "workspace", user.ID,
 	)
 
@@ -565,7 +565,7 @@ func TestApproveToolCall_RejectsForeignConversation(t *testing.T) {
 
 	projB := uuid.New()
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projB, sd.WorkspaceID, "Proj B", "", "workspace", sd.UserID,
 	); err != nil {
 		t.Fatalf("insert project B: %v", err)
@@ -606,7 +606,7 @@ func TestRejectToolCall_RejectsForeignConversation(t *testing.T) {
 
 	projB := uuid.New()
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by) VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO projects (id, workspace_id, name, description, visibility, created_by, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
 		projB, sd.WorkspaceID, "Proj B", "", "workspace", sd.UserID,
 	); err != nil {
 		t.Fatalf("insert project B: %v", err)

@@ -115,10 +115,10 @@ func seedDemo(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) erro
 	// ── 5. Projects ───────────────────────────────────────────────────────────
 	var proj1ID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO projects (workspace_id, name, description, visibility, created_by)
+		INSERT INTO projects (workspace_id, name, description, visibility, created_by, owner_id)
 		VALUES ($1, 'CVD Graphene Growth',
 		        'LPCVD graphene growth on copper-foil substrates for all-carbon device fabrication.',
-		        'workspace', $2)
+		        'workspace', $2, $2)
 		RETURNING id`, wsID, devUserID).Scan(&proj1ID)
 	if err != nil {
 		return fmt.Errorf("insert project 1: %w", err)
@@ -126,10 +126,10 @@ func seedDemo(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) erro
 
 	var proj2ID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO projects (workspace_id, name, description, visibility, created_by)
+		INSERT INTO projects (workspace_id, name, description, visibility, created_by, owner_id)
 		VALUES ($1, 'All-Carbon Resistive Switches',
 		        'Two-terminal MIM resistive switching devices with graphene electrodes.',
-		        'workspace', $2)
+		        'workspace', $2, $2)
 		RETURNING id`, wsID, devUserID).Scan(&proj2ID)
 	if err != nil {
 		return fmt.Errorf("insert project 2: %w", err)

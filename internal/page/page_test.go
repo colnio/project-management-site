@@ -98,8 +98,8 @@ func seedProject(t *testing.T, pool *pgxpool.Pool, wsID, creatorID uuid.UUID, vi
 	t.Helper()
 	id := uuid.New()
 	_, err := pool.Exec(context.Background(),
-		`INSERT INTO projects (id, workspace_id, name, visibility, created_by)
-		 VALUES ($1, $2, $3, $4, $5)`,
+		`INSERT INTO projects (id, workspace_id, name, visibility, created_by, owner_id)
+		 VALUES ($1, $2, $3, $4, $5, $5)`,
 		id, wsID, "Proj "+id.String()[:8], visibility, creatorID,
 	)
 	if err != nil {
