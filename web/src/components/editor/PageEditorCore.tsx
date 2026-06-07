@@ -719,7 +719,7 @@ export function PageEditorCore({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insertOrUpdateBlock(editor as unknown as Parameters<typeof insertOrUpdateBlock>[0], {
       type: 'sampleRef',
-      props: { refId: sample.id, identifier: sample.identifier ?? '', name: sample.name ?? '', kind: sample.kind ?? '', status: sample.status ?? '' },
+      props: { refId: sample.id, identifier: sample.identifier ?? '', name: sample.name ?? '', status: sample.status ?? '' },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
     setRefPickerOpen(null);
@@ -818,7 +818,7 @@ export function PageEditorCore({
         const sampleItems: DefaultReactSuggestionItem[] = samples.slice(0, 8).map(s => ({
           title: `${s.identifier ?? ''}${s.name ? ' — ' + s.name : ''}`,
           group: 'Samples',
-          subtext: s.kind ?? undefined,
+          subtext: s.status ?? undefined,
           icon: <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ref-sample-fg)' }}>s</span>,
           onItemClick: () => insertSampleRef(s),
         }));
@@ -865,7 +865,6 @@ export function PageEditorCore({
                 refId: result.id,
                 identifier: result.label,
                 name: result.sublabel ?? '',
-                kind: result.kind ?? '',
                 status: result.status ?? '',
               },
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1015,7 +1014,6 @@ export function PageEditorCore({
                 <span className="ref-glyph" style={{ color: 'var(--ref-sample-fg)' }}>s</span>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ember)' }}>{s.identifier}</span>
                 <span style={{ flex: 1 }}>{s.name}</span>
-                <span className={`pill k-${s.kind}`} style={{ fontSize: 10 }}>{s.kind}</span>
                 <StatusPill status={s.status} />
               </button>
             ))

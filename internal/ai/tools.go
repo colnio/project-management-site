@@ -1561,7 +1561,6 @@ func createSampleTool(injectProjectID string) toolDef {
   "identifier":{"type":"string","description":"Unique identifier for the sample (e.g. EL-2024-042). Required."},
   "name":{"type":"string","description":"Human-readable name (e.g. LLZO Pellet A)"},
   "description":{"type":"string","description":"Optional description"},
-  "kind":{"type":"string","enum":["precursor","electrode","cell","module","derivative","other"]},
   "status":{"type":"string","enum":["active","consumed","archived","failed"]},
   "tags":{"type":"array","items":{"type":"string"},"description":"Tag labels to assign"}
 },
@@ -1573,7 +1572,6 @@ func createSampleTool(injectProjectID string) toolDef {
 				Identifier  string   `json:"identifier"`
 				Name        string   `json:"name"`
 				Description string   `json:"description"`
-				Kind        string   `json:"kind"`
 				Status      string   `json:"status"`
 				Tags        []string `json:"tags"`
 			}
@@ -1589,9 +1587,6 @@ func createSampleTool(injectProjectID string) toolDef {
 			}
 			if p.Description != "" {
 				body["description"] = p.Description
-			}
-			if p.Kind != "" {
-				body["kind"] = p.Kind
 			}
 			if p.Status != "" {
 				body["status"] = p.Status
@@ -1625,7 +1620,6 @@ func updateSampleTool() toolDef {
   "sample_id":{"type":"string","description":"UUID of the sample to update"},
   "name":{"type":"string","description":"New name"},
   "description":{"type":"string","description":"New description"},
-  "kind":{"type":"string","enum":["precursor","electrode","cell","module","derivative","other"]},
   "status":{"type":"string","enum":["active","consumed","archived","failed"]},
   "identifier":{"type":"string","description":"New identifier"},
   "tags":{"type":"array","items":{"type":"string"},"description":"Replaces all tags when provided (send full selection)"}
@@ -1638,7 +1632,6 @@ func updateSampleTool() toolDef {
 				SampleID    string   `json:"sample_id"`
 				Name        *string  `json:"name"`
 				Description *string  `json:"description"`
-				Kind        *string  `json:"kind"`
 				Status      *string  `json:"status"`
 				Identifier  *string  `json:"identifier"`
 				Tags        []string `json:"tags"`
@@ -1655,9 +1648,6 @@ func updateSampleTool() toolDef {
 			}
 			if p.Description != nil {
 				body["description"] = *p.Description
-			}
-			if p.Kind != nil {
-				body["kind"] = *p.Kind
 			}
 			if p.Status != nil {
 				body["status"] = *p.Status

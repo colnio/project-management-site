@@ -20,7 +20,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { LoadingState, ErrorState, EmptyState } from '@/components/LoadingState';
-import { StatusPill, KindPill } from '@/components/StatusPill';
+import { StatusPill } from '@/components/StatusPill';
 import {
   useSample,
   useSampleLineage,
@@ -58,7 +58,6 @@ function IdentifierStrip({ sample }: { sample: Sample }) {
         {sample.identifier}
       </span>
       <span style={{ color: 'var(--line-2)' }}>·</span>
-      <KindPill kind={sample.kind} />
       <StatusPill status={sample.status} />
       <span style={{ color: 'var(--line-2)' }}>·</span>
       <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)' }}>
@@ -148,15 +147,6 @@ function lineageToFlow(graph: LineageGraph, focusId: string): { nodes: Node[]; e
   const sampleNodes = graph.nodes ?? [];
   const graphEdges = graph.edges ?? [];
 
-  const kindColor: Record<string, string> = {
-    precursor: '#f0eadc',
-    electrode: '#e6eef0',
-    cell: '#f2dccf',
-    module: '#e1ebde',
-    derivative: '#eae2ef',
-    other: '#f3f1eb',
-  };
-
   const childrenOf = new Map<string, string[]>();
   const parentOf = new Map<string, string[]>();
   for (const e of graphEdges) {
@@ -197,9 +187,9 @@ function lineageToFlow(graph: LineageGraph, focusId: string): { nodes: Node[]; e
       id: s.id,
       type: 'default',
       position: { x: col * 220, y: row * 120 },
-      data: { label: `${s.identifier}\n${s.name || s.kind}` },
+      data: { label: `${s.identifier}\n${s.name}` },
       style: {
-        background: kindColor[s.kind] ?? '#f3f1eb',
+        background: '#f3f1eb',
         border: s.id === focusId ? '2px solid var(--ember)' : '1px solid var(--line-2)',
         borderRadius: 8,
         fontSize: 12,

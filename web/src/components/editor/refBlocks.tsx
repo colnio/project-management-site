@@ -32,14 +32,13 @@ export const sampleRef = createReactBlockSpec(
       refId:      { default: '' },
       identifier: { default: '' },
       name:       { default: '' },
-      kind:       { default: '' },
       status:     { default: '' },
     },
     content: 'none',
   },
   {
     render: ({ block }) => {
-      const { refId, identifier, name, kind, status } = block.props;
+      const { refId, identifier, name, status } = block.props;
       const href = refId ? `/samples/${refId}` : '#';
       return (
         <a
@@ -86,21 +85,6 @@ export const sampleRef = createReactBlockSpec(
           {name && (
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {name}
-            </span>
-          )}
-          {kind && (
-            <span
-              style={{
-                fontSize: 10,
-                padding: '1px 5px',
-                borderRadius: 4,
-                background: 'var(--ref-sample-bd)',
-                color: 'var(--ref-sample-fg)',
-                fontFamily: 'var(--mono)',
-                flexShrink: 0,
-              }}
-            >
-              {kind}
             </span>
           )}
           {status && (

@@ -1365,8 +1365,6 @@ func (s *Server) toolCreateSample() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 			mcplib.Description("Optional human-readable name.")),
 		mcplib.WithString("description",
 			mcplib.Description("Optional description.")),
-		mcplib.WithString("kind",
-			mcplib.Description("Optional kind: precursor, electrode, cell, module, derivative, or other.")),
 		mcplib.WithString("status",
 			mcplib.Description("Optional status: active, consumed, archived, or failed.")),
 		mcplib.WithString("properties",
@@ -1392,9 +1390,6 @@ func (s *Server) toolCreateSample() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 		}
 		if v := stringArg(req, "description"); v != "" {
 			payload["description"] = v
-		}
-		if v := stringArg(req, "kind"); v != "" {
-			payload["kind"] = v
 		}
 		if v := stringArg(req, "status"); v != "" {
 			payload["status"] = v
@@ -1440,8 +1435,6 @@ func (s *Server) toolUpdateSample() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 			mcplib.Description("New description.")),
 		mcplib.WithString("identifier",
 			mcplib.Description("New identifier.")),
-		mcplib.WithString("kind",
-			mcplib.Description("New kind: precursor, electrode, cell, module, derivative, or other.")),
 		mcplib.WithString("status",
 			mcplib.Description("New status: active, consumed, archived, or failed.")),
 		mcplib.WithString("properties",
@@ -1464,9 +1457,6 @@ func (s *Server) toolUpdateSample() (mcplib.Tool, mcpserver.ToolHandlerFunc) {
 		}
 		if v := stringArg(req, "identifier"); v != "" {
 			payload["identifier"] = v
-		}
-		if v := stringArg(req, "kind"); v != "" {
-			payload["kind"] = v
 		}
 		if v := stringArg(req, "status"); v != "" {
 			payload["status"] = v

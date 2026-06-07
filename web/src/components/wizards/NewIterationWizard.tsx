@@ -420,7 +420,6 @@ function SamplesPickerStep({
                     </span>
                   )}
                 </div>
-                <span className={`pill k-${s.kind}`} style={{ flexShrink: 0 }}>{s.kind}</span>
               </button>
             );
           })}

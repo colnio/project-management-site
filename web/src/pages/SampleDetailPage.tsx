@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { AppShell } from '@/components/AppShell';
 import { LoadingState, ErrorState } from '@/components/LoadingState';
-import { StatusPill, KindPill } from '@/components/StatusPill';
+import { StatusPill } from '@/components/StatusPill';
 import {
   useSample,
   useUpdateSample,
@@ -143,7 +143,6 @@ export function PropertyEditor({ properties, onChange }: PropertyEditorProps) {
 
 // ─── Sample edit inline panel ─────────────────────────────────────────────────
 
-const KIND_OPTIONS = ['precursor', 'electrode', 'cell', 'module', 'derivative', 'other'] as const;
 const SAMPLE_STATUS_OPTIONS = ['active', 'consumed', 'archived', 'failed'] as const;
 
 type SampleUpdateBody = Parameters<ReturnType<typeof useUpdateSample>['mutateAsync']>[0];
@@ -158,7 +157,6 @@ function EditPanel({ sample, onSave, saving }: EditPanelProps) {
   const [identifier, setIdentifier] = useState(sample.identifier);
   const [name, setName] = useState(sample.name);
   const [description, setDescription] = useState(sample.description);
-  const [kind, setKind] = useState(sample.kind);
   const [status, setStatus] = useState(sample.status);
   const [properties, setProperties] = useState<Record<string, unknown>>(
     (sample.properties && typeof sample.properties === 'object' && !Array.isArray(sample.properties))
@@ -170,7 +168,7 @@ function EditPanel({ sample, onSave, saving }: EditPanelProps) {
   const markDirty = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
 
   const handleSave = () => {
-    void onSave({ identifier, name, description, kind, status, properties: properties as unknown as Record<string, unknown> });
+    void onSave({ identifier, name, description, status, properties: properties as unknown as Record<string, unknown> });
     setDirty(false);
   };
 
@@ -196,26 +194,14 @@ function EditPanel({ sample, onSave, saving }: EditPanelProps) {
         <textarea className="field-textarea" value={description} onChange={e => markDirty(setDescription)(e.target.value)} rows={3} />
       </FieldGroup>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        <div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Kind</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {KIND_OPTIONS.map(k => (
-              <button key={k} onClick={() => { markDirty(setKind)(k); }} className={`status-opt${kind === k ? ' sel' : ''}`}>
-                <KindPill kind={k} />
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Status</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {SAMPLE_STATUS_OPTIONS.map(s => (
-              <button key={s} onClick={() => { markDirty(setStatus)(s); }} className={`status-opt${status === s ? ' sel' : ''}`}>
-                <StatusPill status={s} />
-              </button>
-            ))}
-          </div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Status</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {SAMPLE_STATUS_OPTIONS.map(s => (
+            <button key={s} onClick={() => { markDirty(setStatus)(s); }} className={`status-opt${status === s ? ' sel' : ''}`}>
+              <StatusPill status={s} />
+            </button>
+          ))}
         </div>
       </div>
 

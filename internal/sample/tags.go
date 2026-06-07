@@ -75,7 +75,7 @@ func (s *Service) canonicalizeTagLabels(ctx context.Context, projectID uuid.UUID
 	return out, nil
 }
 
-const sampleSelectCols = `id, project_id, identifier, name, description, kind,
+const sampleSelectCols = `id, project_id, identifier, name, description,
 	        properties, status, description_page_id, tags, created_by, created_at, updated_at`
 
 func scanSample(scanner interface {
@@ -83,7 +83,7 @@ func scanSample(scanner interface {
 }, sm *Sample) error {
 	var tagsRaw []byte
 	err := scanner.Scan(
-		&sm.ID, &sm.ProjectID, &sm.Identifier, &sm.Name, &sm.Description, &sm.Kind,
+		&sm.ID, &sm.ProjectID, &sm.Identifier, &sm.Name, &sm.Description,
 		&sm.Properties, &sm.Status, &sm.DescriptionPageID, &tagsRaw,
 		&sm.CreatedBy, &sm.CreatedAt, &sm.UpdatedAt,
 	)

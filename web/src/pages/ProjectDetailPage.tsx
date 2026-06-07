@@ -415,7 +415,6 @@ function OverviewTab({ projectId, onToggleAI }: OverviewTabProps) {
 function CreateSampleDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const [identifier, setIdentifier] = useState('');
   const [name, setName] = useState('');
-  const [kind, setKind] = useState('other');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const createSample = useCreateSample(projectId);
   const { data: tags = [] } = useProjectSampleTags(projectId);
@@ -428,11 +427,9 @@ function CreateSampleDialog({ projectId, onClose }: { projectId: string; onClose
 
   const handleCreate = async () => {
     if (!identifier.trim()) return;
-    await createSample.mutateAsync({ identifier: identifier.trim(), name, kind, tags: selectedTags });
+    await createSample.mutateAsync({ identifier: identifier.trim(), name, tags: selectedTags });
     onClose();
   };
-
-  const KINDS = ['precursor', 'electrode', 'cell', 'module', 'derivative', 'other'];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -449,16 +446,6 @@ function CreateSampleDialog({ projectId, onClose }: { projectId: string; onClose
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Name</div>
             <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="Descriptive name" />
-          </div>
-          <div style={{ marginBottom: tags.length > 0 ? 16 : 0 }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Kind</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {KINDS.map(k => (
-                <button key={k} onClick={() => setKind(k)} className={`status-opt${kind === k ? ' sel' : ''}`}>
-                  <span className={`pill k-${k}`}>{k}</span>
-                </button>
-              ))}
-            </div>
           </div>
           {tags.length > 0 && (
             <div>
@@ -502,9 +489,6 @@ function SampleCard({ sample: s }: { sample: Sample }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="id">{s.identifier}</span>
-        <span style={{ marginLeft: 'auto' }}>
-          <span className={`pill k-${s.kind}`}>{s.kind}</span>
-        </span>
       </div>
       <div className="name">{s.name}</div>
       {s.description && (
@@ -545,24 +529,15 @@ function SamplesTab({ projectId }: { projectId: string }) {
   const { data: sampleTags = [] } = useProjectSampleTags(projectId);
   const [createOpen, setCreateOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
-  const [filterKind, setFilterKind] = useState('');
   const [filterTag, setFilterTag] = useState('');
 
   if (isLoading) return <LoadingState message="Loading samples…" />;
   if (isError) return <ErrorState message="Failed to load samples." />;
 
-  const KINDS = ['precursor', 'electrode', 'cell', 'module', 'derivative', 'other'];
-  // Faceted filters: only surface a kind/tag that at least one sample actually
-  // uses, so the fixed `kind` enum and unused tag definitions don't clutter the
-  // view as undeletable chips.
-  const usedKinds = new Set(samples.map((s: Sample) => s.kind).filter(Boolean));
-  const kindOptions = KINDS.filter(k => usedKinds.has(k));
+  // Faceted tag filter: only surface tags that at least one sample actually uses.
   const usedTagLabels = new Set(samples.flatMap((s: Sample) => s.tags ?? []));
   const tagOptions = sampleTags.filter(t => usedTagLabels.has(t.label));
-  let filtered = filterKind ? samples.filter((s: Sample) => s.kind === filterKind) : samples;
-  if (filterTag) {
-    filtered = filtered.filter((s: Sample) => (s.tags ?? []).includes(filterTag));
-  }
+  const filtered = filterTag ? samples.filter((s: Sample) => (s.tags ?? []).includes(filterTag)) : samples;
 
   return (
     <div className="page-wrap wide">
@@ -576,17 +551,6 @@ function SamplesTab({ projectId }: { projectId: string }) {
           <button className="top-btn primary" onClick={() => setCreateOpen(true)}>+ New sample</button>
         </div>
       </div>
-      {/* Kind filter — only kinds in use */}
-      {kindOptions.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: tagOptions.length > 0 ? 8 : 16 }}>
-          <button onClick={() => setFilterKind('')} className={`status-opt${filterKind === '' ? ' sel' : ''}`} style={{ fontSize: 12 }}>All</button>
-          {kindOptions.map(k => (
-            <button key={k} onClick={() => setFilterKind(filterKind === k ? '' : k)} className={`status-opt${filterKind === k ? ' sel' : ''}`}>
-              <span className={`pill k-${k}`}>{k}</span>
-            </button>
-          ))}
-        </div>
-      )}
       {/* Tag filter — only tags in use */}
       {tagOptions.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
@@ -1002,7 +966,7 @@ function ProcessingOverlay({ status }: { status: string }) {
 }
 
 function ArtifactCard({ artifact: a, onOpen }: { artifact: Artifact; onOpen: () => void }) {
-  const deleteArtifact = useDeleteArtifact(a.project_id);
+  const deleteArtifact = useDeleteArtifact(a.project_id ?? '');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const typeColor = ARTIFACT_TYPE_COLOR[a.type] ?? ARTIFACT_TYPE_COLOR['other'];

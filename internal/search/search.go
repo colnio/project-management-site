@@ -143,7 +143,7 @@ func (s *Service) Search(
 	// ── Step 2a: samples ─────────────────────────────────────────────────────
 	if wants("sample") && len(readableIDs) > 0 {
 		rows, qerr := s.pool.Query(ctx,
-			`SELECT s.id, s.identifier, s.name, s.kind, s.status, s.project_id, p.workspace_id
+			`SELECT s.id, s.identifier, s.name, s.status, s.project_id, p.workspace_id
 			 FROM samples s
 			 JOIN projects p ON p.id = s.project_id
 			 WHERE s.project_id = ANY($1)
@@ -158,8 +158,8 @@ func (s *Service) Search(
 		defer rows.Close()
 		for rows.Next() {
 			var id, projectID, workspaceID uuid.UUID
-			var identifier, name, kind, status string
-			if serr := rows.Scan(&id, &identifier, &name, &kind, &status, &projectID, &workspaceID); serr != nil {
+			var identifier, name, status string
+			if serr := rows.Scan(&id, &identifier, &name, &status, &projectID, &workspaceID); serr != nil {
 				return nil, fmt.Errorf("search: samples scan: %w", serr)
 			}
 			label := identifier
@@ -171,11 +171,10 @@ func (s *Service) Search(
 				Type:          "sample",
 				ID:            id.String(),
 				Label:         label,
-				Sublabel:      kind,
+				Sublabel:      status,
 				ProjectID:     &projectID,
 				WorkspaceID:   &workspaceID,
 				WorkspaceName: wsName,
-				Kind:          kind,
 				Status:        status,
 				Tier:          tier(projectID, workspaceID, currentProjectID, currentWorkspaceID),
 			}

@@ -178,7 +178,7 @@ func setupProjectWithOwner(t *testing.T, env *testEnv, emailSuffix string) (*aut
 func insertSample(t *testing.T, env *testEnv, projID uuid.UUID, identifier string, createdBy uuid.UUID) *sample.Sample {
 	t.Helper()
 	sm, err := env.sampleSvc.CreateSampleForTest(
-		context.Background(), projID, identifier, "", "", "other",
+		context.Background(), projID, identifier, "", "",
 		json.RawMessage("{}"), "active", createdBy,
 	)
 	if err != nil {
@@ -198,7 +198,7 @@ func TestCreateSample_Success(t *testing.T) {
 
 	env.rec.entries = nil // clear project.create audit entries
 	sm, err := env.sampleSvc.CreateSampleAuthorized(ctx, p, proj.ID,
-		"S-001", "My Sample", "", "other", json.RawMessage("{}"), "active")
+		"S-001", "My Sample", "", json.RawMessage("{}"), "active")
 	if err != nil {
 		t.Fatalf("create sample: %v", err)
 	}
@@ -207,9 +207,6 @@ func TestCreateSample_Success(t *testing.T) {
 	}
 	if sm.Identifier != "S-001" {
 		t.Errorf("identifier mismatch: %s", sm.Identifier)
-	}
-	if sm.Kind != "other" {
-		t.Errorf("default kind should be 'other', got %s", sm.Kind)
 	}
 	if sm.Status != "active" {
 		t.Errorf("default status should be 'active', got %s", sm.Status)
@@ -227,12 +224,12 @@ func TestCreateSample_DuplicateIdentifier_Conflict(t *testing.T) {
 	p := principal(owner)
 
 	if _, err := env.sampleSvc.CreateSampleAuthorized(ctx, p, proj.ID,
-		"S-DUP", "", "", "other", nil, "active"); err != nil {
+		"S-DUP", "", "", nil, "active"); err != nil {
 		t.Fatalf("first create: %v", err)
 	}
 
 	_, err := env.sampleSvc.CreateSampleAuthorized(ctx, p, proj.ID,
-		"S-DUP", "", "", "other", nil, "active")
+		"S-DUP", "", "", nil, "active")
 	if err == nil {
 		t.Fatal("expected conflict error for duplicate identifier")
 	}
@@ -256,7 +253,7 @@ func TestCreateSample_NonEditor_Forbidden(t *testing.T) {
 	_ = env.orgSvc.AddCollaborator(ctx, proj.ID, viewer.ID, org.RoleViewer)
 
 	_, err := env.sampleSvc.CreateSampleAuthorized(ctx, principal(viewer), proj.ID,
-		"S-VIEWER", "", "", "other", nil, "active")
+		"S-VIEWER", "", "", nil, "active")
 	if err == nil {
 		t.Fatal("expected forbidden for viewer creating sample")
 	}
@@ -277,7 +274,7 @@ func TestCreateSample_ViewerCannotCreate(t *testing.T) {
 	_ = env.orgSvc.AddCollaborator(ctx, proj.ID, viewer.ID, org.RoleViewer)
 
 	_, err := env.sampleSvc.CreateSampleAuthorized(ctx, principal(viewer), proj.ID,
-		"S-NOPE", "", "", "other", nil, "active")
+		"S-NOPE", "", "", nil, "active")
 	if err == nil {
 		t.Fatal("viewer should not be allowed to create samples")
 	}
@@ -335,7 +332,7 @@ func TestPatchSample_UpdatesProperties(t *testing.T) {
 	newProps := json.RawMessage(`{"thickness_nm": 42, "substrate": "Si"}`)
 	name := "Updated Name"
 
-	updated, err := env.sampleSvc.PatchSampleForTest(ctx, sm.ID, &name, nil, nil, nil, nil, newProps)
+	updated, err := env.sampleSvc.PatchSampleForTest(ctx, sm.ID, &name, nil, nil, nil, newProps)
 	if err != nil {
 		t.Fatalf("patch: %v", err)
 	}
@@ -519,7 +516,7 @@ func TestAudit_CreateRecorded(t *testing.T) {
 
 	env.rec.entries = nil
 	if _, err := env.sampleSvc.CreateSampleAuthorized(ctx, p, proj.ID,
-		"S-AUDIT", "", "", "other", nil, "active"); err != nil {
+		"S-AUDIT", "", "", nil, "active"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if !env.rec.hasAction("sample.create") {

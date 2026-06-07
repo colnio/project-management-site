@@ -45,9 +45,6 @@ function SampleCard({ sample: s }: { sample: Sample }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="id">{s.identifier}</span>
-        <span style={{ marginLeft: 'auto' }}>
-          <span className={`pill k-${s.kind}`}>{s.kind}</span>
-        </span>
       </div>
       <div className="name">{s.name}</div>
       <div className="foot">

@@ -12,6 +12,3 @@ export function StatusPill({ status }: StatusPillProps) {
   );
 }
 
-export function KindPill({ kind }: { kind: string }) {
-  return <span className={`pill k-${kind}`}>{kind}</span>;
-}

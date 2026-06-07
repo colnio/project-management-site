@@ -30,7 +30,7 @@ func Register(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/v1/projects/{id}/samples",
 		Summary:     "List samples in a project",
-		Description: "Returns all samples in a project, optionally filtered by `kind`. Requires viewer role on the project.",
+		Description: "Returns all samples in a project. Requires viewer role on the project.",
 		Tags:        []string{"samples"},
 	}, svc.handleListSamples)
 
@@ -80,7 +80,6 @@ type createSampleInput struct {
 		Identifier  string          `json:"identifier" required:"true" minLength:"1" example:"EL-2024-042"`
 		Name        string          `json:"name,omitempty" example:"LLZO Pellet A"`
 		Description string          `json:"description,omitempty" example:"Sintered at 1150 °C for 12 h in O2 atmosphere."`
-		Kind        string          `json:"kind,omitempty" enum:"precursor,electrode,cell,module,derivative,other" example:"electrode"`
 		Properties  json.RawMessage `json:"properties,omitempty"`
 		Status      string          `json:"status,omitempty" enum:"active,consumed,archived,failed" example:"active"`
 		Tags        []string        `json:"tags,omitempty" doc:"Project-defined tag labels (multi-select)."`
@@ -118,7 +117,7 @@ func (s *Service) handleCreateSample(ctx context.Context, in *createSampleInput)
 
 	sm, err := s.createSample(ctx, projectID,
 		in.Body.Identifier, in.Body.Name, in.Body.Description,
-		in.Body.Kind, in.Body.Properties, in.Body.Status, in.Body.Tags, p.UserID)
+		in.Body.Properties, in.Body.Status, in.Body.Tags, p.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -137,8 +136,7 @@ func (s *Service) handleCreateSample(ctx context.Context, in *createSampleInput)
 // ─── List samples ──────────────────────────────────────────────────────────────
 
 type listSamplesInput struct {
-	ID   string `path:"id"`
-	Kind string `query:"kind"`
+	ID string `path:"id"`
 }
 
 type listSamplesOutput struct {
@@ -163,7 +161,7 @@ func (s *Service) handleListSamples(ctx context.Context, in *listSamplesInput) (
 		return nil, err
 	}
 
-	list, err := s.listSamples(ctx, projectID, in.Kind)
+	list, err := s.listSamples(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +214,6 @@ type patchSampleInput struct {
 	Body struct {
 		Name        *string         `json:"name,omitempty"`
 		Description *string         `json:"description,omitempty"`
-		Kind        *string         `json:"kind,omitempty"`
 		Status      *string         `json:"status,omitempty"`
 		Identifier  *string         `json:"identifier,omitempty"`
 		Properties  json.RawMessage `json:"properties,omitempty"`
@@ -264,7 +261,7 @@ func (s *Service) handlePatchSample(ctx context.Context, in *patchSampleInput) (
 	}
 
 	updated, err := s.patchSample(ctx, sampleID,
-		in.Body.Name, in.Body.Description, in.Body.Kind,
+		in.Body.Name, in.Body.Description,
 		in.Body.Status, in.Body.Identifier, in.Body.Properties, tagsUpdate)
 	if err != nil {
 		return nil, err

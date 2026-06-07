@@ -24,6 +24,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List submitted feedback
+         * @description Returns submitted feedback newest-first. Requires admin or PI global role.
+         */
+        get: operations["feedback-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/feedback/{id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge a feedback entry
+         * @description Marks feedback as acknowledged, hiding it from the default list while keeping it in the DB. Requires admin or PI global role.
+         */
+        post: operations["feedback-acknowledge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/users": {
         parameters: {
             query?: never;
@@ -75,7 +115,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get messages for an AI conversation */
+        /** Get messages for an LLM conversation */
         get: operations["ai-get-conversation-messages"];
         put?: never;
         post?: never;
@@ -94,7 +134,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve a proposed AI tool call */
+        /** Approve a proposed LLM tool call */
         post: operations["ai-approve-tool-call"];
         delete?: never;
         options?: never;
@@ -111,7 +151,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reject a proposed AI tool call */
+        /** Reject a proposed LLM tool call */
         post: operations["ai-reject-tool-call"];
         delete?: never;
         options?: never;
@@ -143,7 +183,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List available AI risk-assessment workflows */
+        /** List available LLM risk-assessment workflows */
         get: operations["ai-list-workflows"];
         put?: never;
         post?: never;
@@ -522,6 +562,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit feedback
+         * @description Any authenticated user may submit feedback.
+         */
+        post: operations["feedback-submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/invites/accept": {
         parameters: {
             query?: never;
@@ -634,6 +694,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/iterations/{id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tasks for an iteration
+         * @description Returns tasks scoped to an iteration. Authorizes via the iteration's project. Requires viewer role.
+         */
+        get: operations["task-list-by-iteration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -710,6 +790,26 @@ export interface paths {
         patch: operations["auth-me-profile"];
         trace?: never;
     };
+    "/v1/me/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my assigned tasks
+         * @description Returns the caller's active (backlog/todo/in_progress) tasks across all workspaces, enriched with project and workspace names. Grouped by project with active tasks first.
+         */
+        get: operations["task-list-mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/meetings/{id}": {
         parameters: {
             query?: never;
@@ -738,6 +838,26 @@ export interface paths {
         patch: operations["meeting-patch"];
         trace?: never;
     };
+    "/v1/mentions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a mention
+         * @description Records that the authenticated user @-mentioned another user within a task or page, and dispatches a notification email. Duplicate mentions (same mentioned user + source) are silently ignored.
+         */
+        post: operations["mention-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pages/{id}": {
         parameters: {
             query?: never;
@@ -752,7 +872,7 @@ export interface paths {
         get: operations["page-get"];
         /**
          * Update page blocks (requires If-Match)
-         * @description Writes a new revision for the page. Send the ETag from a prior GET as the `If-Match` header; a mismatch returns 412. Set `candidate=true` to stage an AI-generated draft for approval instead of advancing the current revision. Requires editor role on the project.
+         * @description Writes a new revision for the page. Send the ETag from a prior GET as the `If-Match` header; a mismatch returns 412. Set `candidate=true` to stage an LLM-generated draft for approval instead of advancing the current revision. Requires editor role on the project.
          */
         put: operations["page-update"];
         post?: never;
@@ -773,7 +893,7 @@ export interface paths {
         put?: never;
         /**
          * Approve a candidate revision
-         * @description Promotes a candidate revision to the current revision, superseding the previous current. Used in the AI-assisted editing workflow. Requires editor role on the project.
+         * @description Promotes a candidate revision to the current revision, superseding the previous current. Used in the LLM-assisted editing workflow. Requires editor role on the project.
          */
         post: operations["page-candidate-approve"];
         delete?: never;
@@ -913,10 +1033,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List AI conversations for a project */
+        /** List LLM conversations for a project */
         get: operations["ai-list-conversations"];
         put?: never;
-        /** Create an AI conversation */
+        /** Create an LLM conversation */
         post: operations["ai-create-conversation"];
         delete?: never;
         options?: never;
@@ -933,7 +1053,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** AI risk register review for a project */
+        /** LLM risk register review for a project */
         post: operations["ai-risk-review"];
         delete?: never;
         options?: never;
@@ -1009,6 +1129,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{id}/artifacts/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload an artifact's bytes server-side in one call
+         * @description Creates an artifact, stores the supplied base64-encoded bytes directly, and finalizes it (sets the download URL and enqueues thumbnail/render processing). Unlike the presigned-PUT flow this needs no client S3 round-trip, so non-browser clients (the MCP server) can attach files and embed images. Requires editor role on the project.
+         */
+        post: operations["artifact-upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{id}/autonomy": {
         parameters: {
             query?: never;
@@ -1016,9 +1156,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get project AI autonomy config */
+        /** Get project LLM autonomy config */
         get: operations["ai-get-project-autonomy"];
-        /** Set project AI autonomy config */
+        /** Set project LLM autonomy config */
         put: operations["ai-put-project-autonomy"];
         post?: never;
         delete?: never;
@@ -1215,6 +1355,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{id}/risk-assessment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Persist an interactive risk assessment
+         * @description Replaces the project's (or iteration's) interactive AI risk rows with the failure modes from a completed 6-phase Risk Assessment. Requires editor role.
+         */
+        post: operations["risk-save-assessment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{id}/risks": {
         parameters: {
             query?: never;
@@ -1296,7 +1456,7 @@ export interface paths {
         };
         /**
          * List samples in a project
-         * @description Returns all samples in a project, optionally filtered by `kind`. Requires viewer role on the project.
+         * @description Returns all samples in a project. Requires viewer role on the project.
          */
         get: operations["sample-list"];
         put?: never;
@@ -1305,6 +1465,50 @@ export interface paths {
          * @description Creates a new physical or virtual sample within a project. Supports freeform JSON properties for domain-specific metadata. Requires editor role on the project.
          */
         post: operations["sample-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tasks in a project
+         * @description Returns tasks for a project ordered by seq. Supports optional filters. Requires viewer role.
+         */
+        get: operations["task-list-by-project"];
+        put?: never;
+        /**
+         * Create a task
+         * @description Creates a new task within a project. Requires editor role.
+         */
+        post: operations["task-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/transfer-ownership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer project ownership
+         * @description Reassigns the project owner to another user (a workspace member or existing collaborator), demoting the previous owner to editor. Requires owner role on the project.
+         */
+        post: operations["project-transfer-ownership"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1483,6 +1687,254 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Global search
+         * @description Cross-workspace search over samples, experiments, projects, and people. Results are scoped to projects the caller can read. Supports an optional current-project context for relevance tiering.
+         */
+        get: operations["search-mentions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a task
+         * @description Returns a single task by ID. Requires viewer role on the task's project.
+         */
+        get: operations["task-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a task
+         * @description Applies a partial metadata update to a task (not status). Requires editor role.
+         */
+        patch: operations["task-patch"];
+        trace?: never;
+    };
+    "/v1/tasks/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a task
+         * @description Transitions a task to cancelled. A reason is required. Requires editor role.
+         */
+        post: operations["task-cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a comment to a task
+         * @description Appends a freeform comment to the task's progress trail. Requires editor role.
+         */
+        post: operations["task-comment-add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/delay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delay a task
+         * @description Pushes the estimated finish date of a task to a later date. Requires editor role.
+         */
+        post: operations["task-delay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a task done
+         * @description Transitions an in_progress task to done. At least one reference is required. Requires editor role.
+         */
+        post: operations["task-mark-done"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List task progress
+         * @description Returns the full progress trail for a task. Requires viewer role.
+         */
+        get: operations["task-progress-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reassign a task
+         * @description Changes the assignee of a task. A comment is required. Requires editor role.
+         */
+        post: operations["task-reassign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List task references
+         * @description Returns all references for a task. Requires viewer role.
+         */
+        get: operations["task-reference-list"];
+        put?: never;
+        /**
+         * Add a reference to a task
+         * @description Attaches a sample, experiment, or page reference to the task. Requires editor role.
+         */
+        post: operations["task-reference-add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/references/{ref_type}/{ref_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a reference from a task
+         * @description Removes a reference from the task. Requires editor role.
+         */
+        delete: operations["task-reference-remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen a task
+         * @description Transitions a done/cancelled task back to todo or in_progress. Requires editor role.
+         */
+        post: operations["task-reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{id}/take": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a task
+         * @description Assigns the task to the caller and transitions it to in_progress. Requires editor role.
+         */
+        post: operations["task-take"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tokens": {
         parameters: {
             query?: never;
@@ -1522,6 +1974,50 @@ export interface paths {
          * @description Permanently revokes a personal access token. The caller must own the token. Requires an authenticated session.
          */
         delete: operations["auth-token-revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wiki/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a global wiki artifact and get a presigned upload URL
+         * @description Registers a new site-global artifact (not tied to any project) and returns a presigned S3 PUT URL. Upload the file directly to the URL, then call POST /v1/artifacts/{id}/complete. Any authenticated user with write:artifacts scope may use this endpoint.
+         */
+        post: operations["wiki-artifact-create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wiki/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List wiki pages
+         * @description Returns a list of all site-global wiki pages ordered by updated_at descending. Any authenticated user may read.
+         */
+        get: operations["wiki-page-list"];
+        put?: never;
+        /**
+         * Create a wiki page
+         * @description Creates a new site-global wiki page. Any authenticated user may create. Provide an optional title and/or blocks; if blocks are omitted a heading+paragraph stub is generated.
+         */
+        post: operations["wiki-page-create"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1571,6 +2067,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workspace activity feed */
+        get: operations["activity-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{id}/ai/usage": {
         parameters: {
             query?: never;
@@ -1578,7 +2091,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get AI usage summary for a workspace */
+        /** Get LLM usage summary for a workspace */
         get: operations["ai-get-workspace-usage"];
         put?: never;
         post?: never;
@@ -1595,9 +2108,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get workspace AI autonomy config */
+        /** Get workspace LLM autonomy config */
         get: operations["ai-get-workspace-autonomy"];
-        /** Set workspace AI autonomy config */
+        /** Set workspace LLM autonomy config */
         put: operations["ai-put-workspace-autonomy"];
         post?: never;
         delete?: never;
@@ -1615,7 +2128,7 @@ export interface paths {
         };
         /**
          * Workspace inbox
-         * @description Returns an aggregated feed of actionable items for the workspace: PI-flagged risks, pending AI proposals, and recent audit activity. Capped at 50 items, ordered newest-first. Requires workspace membership.
+         * @description Returns an aggregated feed of actionable items for the workspace: PI-flagged risks, pending LLM proposals, and recent audit activity. Capped at 50 items, ordered newest-first. Requires workspace membership.
          */
         get: operations["inbox-list"];
         put?: never;
@@ -1763,6 +2276,30 @@ export interface components {
             user_id: string;
             workspace_id: string;
         };
+        AcknowledgeOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AcknowledgeOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        ActivityItem: {
+            action: string;
+            actor_id?: string;
+            actor_name: string;
+            /** Format: date-time */
+            created_at: string;
+            entity_id: string;
+            from_status?: string;
+            id: string;
+            project_id: string;
+            reason?: string;
+            title: string;
+            to_status?: string;
+            type: string;
+        };
         AddCollaboratorInputBody_f7c8063f: {
             /**
              * Format: uri
@@ -1783,6 +2320,15 @@ export interface components {
             readonly $schema?: string;
             ok: boolean;
         };
+        AddCommentInputBody_bf3fd92b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AddCommentInputBody_bf3fd92b.json
+             */
+            readonly $schema?: string;
+            body: string;
+        };
         AddMemberInputBody_aeeb055a: {
             /**
              * Format: uri
@@ -1793,6 +2339,18 @@ export interface components {
             email: string;
             /** @enum {string} */
             role: "owner" | "admin" | "member";
+        };
+        AddReferenceInputBody_fb9d125a: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/AddReferenceInputBody_fb9d125a.json
+             */
+            readonly $schema?: string;
+            label?: string;
+            ref_id: string;
+            /** @enum {string} */
+            ref_type: "sample" | "experiment" | "page" | "user" | "project";
         };
         AddRelationInputBody_954266bb: {
             /**
@@ -1911,7 +2469,7 @@ export interface components {
             metadata: unknown;
             original_url: string;
             processing_status: string;
-            project_id: string;
+            project_id?: string;
             rendered_url: string;
             /** Format: int64 */
             size_bytes: number;
@@ -1921,6 +2479,44 @@ export interface components {
             /** Format: date-time */
             uploaded_at: string;
             uploaded_by: string;
+        };
+        AssessmentRiskInput: {
+            flag_pi_review?: boolean;
+            impact_description?: string;
+            impact_headline?: string;
+            /** @enum {string} */
+            likelihood: "high" | "med" | "low";
+            mitigation?: string;
+            plan_b?: string;
+            title: string;
+        };
+        AssignedTask: {
+            actual_executor_id?: string;
+            assignee_user_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            description: string;
+            /** Format: date-time */
+            estimated_finish_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            id: string;
+            iteration_id?: string;
+            /** Format: date-time */
+            planned_start_at?: string;
+            project_id: string;
+            project_name: string;
+            /** Format: int64 */
+            seq: number;
+            /** Format: date-time */
+            started_at?: string;
+            status: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            workspace_id: string;
+            workspace_name: string;
         };
         AttachExperimentInputBody_e757ec62: {
             /**
@@ -1983,6 +2579,15 @@ export interface components {
             allowed_tools: string[] | null;
             mode: string;
         };
+        CancelTaskInputBody_2c2dfed7: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CancelTaskInputBody_2c2dfed7.json
+             */
+            readonly $schema?: string;
+            reason: string;
+        };
         CollaboratorView: {
             /** Format: date-time */
             created_at: string;
@@ -2026,6 +2631,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             id: string;
+            /** Format: date-time */
+            last_accessed_at: string;
             project_id: string;
             skill?: string;
             started_by: string;
@@ -2219,6 +2826,40 @@ export interface components {
             start_at: string;
             title: string;
         };
+        CreateMentionBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateMentionBody.json
+             */
+            readonly $schema?: string;
+            /** @description Deep link to the mention in the UI */
+            link?: string;
+            /** @description UUID of the user being mentioned */
+            mentioned_user_id: string;
+            /** @description Project context (optional) */
+            project_id?: string;
+            /** @description Short text excerpt surrounding the mention */
+            snippet?: string;
+            /** @description UUID of the task or page containing the mention */
+            source_id: string;
+            /**
+             * @description Whether the mention originates in a task or a page
+             * @enum {string}
+             */
+            source_type: "task" | "page";
+            /** @description Workspace context (optional) */
+            workspace_id?: string;
+        };
+        CreateMentionOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateMentionOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
         CreatePageInputBody_93c50bb6: {
             /**
              * Format: uri
@@ -2275,22 +2916,17 @@ export interface components {
             plan_b?: string;
             title: string;
         };
-        CreateSampleInputBody_941ec721: {
+        CreateSampleInputBody_e868ab52: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/CreateSampleInputBody_941ec721.json
+             * @example //schemas/CreateSampleInputBody_e868ab52.json
              */
             readonly $schema?: string;
             /** @example Sintered at 1150 °C for 12 h in O2 atmosphere. */
             description?: string;
             /** @example EL-2024-042 */
             identifier: string;
-            /**
-             * @example electrode
-             * @enum {string}
-             */
-            kind?: "precursor" | "electrode" | "cell" | "module" | "derivative" | "other";
             /** @example LLZO Pellet A */
             name?: string;
             properties?: unknown;
@@ -2310,6 +2946,20 @@ export interface components {
              */
             readonly $schema?: string;
             label: string;
+        };
+        CreateTaskInputBody_4804ef66: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateTaskInputBody_4804ef66.json
+             */
+            readonly $schema?: string;
+            assignee_user_id?: string;
+            description?: string;
+            estimated_finish_at?: string;
+            iteration_id?: string;
+            planned_start_at?: string;
+            title: string;
         };
         CreateTokenInputBody_3ff65732: {
             /**
@@ -2337,6 +2987,40 @@ export interface components {
             scopes: string[] | null;
             token: string;
         };
+        CreateWikiArtifactInputBody_fdd1aa6b: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateWikiArtifactInputBody_fdd1aa6b.json
+             */
+            readonly $schema?: string;
+            content_type: string;
+            filename: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** @enum {string} */
+            type?: "pdf" | "ipynb" | "image" | "other";
+        };
+        CreateWikiPageInputBody_167e49bf: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateWikiPageInputBody_167e49bf.json
+             */
+            readonly $schema?: string;
+            blocks?: unknown;
+            title?: string;
+        };
+        CreateWikiPageOutputBody_d29aa8ae: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/CreateWikiPageOutputBody_d29aa8ae.json
+             */
+            readonly $schema?: string;
+            blocks: unknown;
+            page: components["schemas"]["Page"];
+        };
         CreateWorkspaceInputBody_d2032703: {
             /**
              * Format: uri
@@ -2363,6 +3047,16 @@ export interface components {
              */
             readonly $schema?: string;
             status: string;
+        };
+        DelayTaskInputBody_1ca8029d: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/DelayTaskInputBody_1ca8029d.json
+             */
+            readonly $schema?: string;
+            new_estimated_finish_at: string;
+            reason: string;
         };
         DeleteEventOutputBody_ecbffc4e: {
             /**
@@ -2548,6 +3242,19 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        FeedbackJSON: {
+            /** Format: date-time */
+            acknowledged_at?: string;
+            category: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            message: string;
+            status: string;
+            submitter_email: string;
+            submitter_name: string;
+            user_id: string;
+        };
         FunctionCall: {
             arguments: string;
             name: string;
@@ -2571,11 +3278,11 @@ export interface components {
             readonly $schema?: string;
             prefs: unknown;
         };
-        GetPageOutputBody_566cf299: {
+        GetPageOutputBody_2757236d: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/GetPageOutputBody_566cf299.json
+             * @example //schemas/GetPageOutputBody_2757236d.json
              */
             readonly $schema?: string;
             blocks: unknown;
@@ -2584,7 +3291,7 @@ export interface components {
             markdown_export: string;
             parent_id: string;
             parent_type: string;
-            project_id: string;
+            project_id?: string;
             slot: string;
         };
         GetRevisionOutputBody_1ccb1704: {
@@ -2726,6 +3433,15 @@ export interface components {
             next_cursor?: string;
             revisions: components["schemas"]["Revision"][] | null;
         };
+        ListWikiPagesOutputBody_2694c9a1: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ListWikiPagesOutputBody_2694c9a1.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["PageListItem"][] | null;
+        };
         LoginInputBody_3b773aaf: {
             /**
              * Format: uri
@@ -2843,7 +3559,7 @@ export interface components {
             id: string;
             parent_id: string;
             parent_type: string;
-            project_id: string;
+            project_id?: string;
             slot: string;
             /** Format: date-time */
             updated_at: string;
@@ -2853,7 +3569,7 @@ export interface components {
             id: string;
             parent_id: string;
             parent_type: string;
-            project_id: string;
+            project_id?: string;
             slot: string;
             title: string;
             /** Format: date-time */
@@ -2931,21 +3647,33 @@ export interface components {
             status?: string;
             title?: string;
         };
-        PatchSampleInputBody_84a655ad: {
+        PatchSampleInputBody_746d2c5b: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/PatchSampleInputBody_84a655ad.json
+             * @example //schemas/PatchSampleInputBody_746d2c5b.json
              */
             readonly $schema?: string;
             description?: string;
             identifier?: string;
-            kind?: string;
             name?: string;
             properties?: unknown;
             status?: string;
             /** @description Replaces all tags when provided (send full selection). */
             tags?: string[] | null;
+        };
+        PatchTaskInputBody_f4438f12: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/PatchTaskInputBody_f4438f12.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            estimated_finish_at?: string;
+            iteration_id?: string;
+            planned_start_at?: string;
+            title?: string;
         };
         PreferenceItem: {
             category: string;
@@ -3010,6 +3738,16 @@ export interface components {
             visibility: string;
             workspace_id: string;
         };
+        ReassignTaskInputBody_7ed251ea: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ReassignTaskInputBody_7ed251ea.json
+             */
+            readonly $schema?: string;
+            assignee_user_id: string;
+            comment: string;
+        };
         RecipientSnapshot: {
             display_name: string;
             email: string;
@@ -3072,6 +3810,27 @@ export interface components {
             readonly $schema?: string;
             ok: boolean;
         };
+        RemoveReferenceOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/RemoveReferenceOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
+        };
+        ReopenTaskInputBody_cd662da5: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/ReopenTaskInputBody_cd662da5.json
+             */
+            readonly $schema?: string;
+            comment: string;
+            estimated_finish_at?: string;
+            /** @enum {string} */
+            target_status: "todo" | "in_progress";
+        };
         RestoreInputBody_2095b625: {
             /**
              * Format: uri
@@ -3090,6 +3849,21 @@ export interface components {
             readonly $schema?: string;
             page: components["schemas"]["Page"];
             revision: components["schemas"]["Revision"];
+        };
+        Result: {
+            email?: string;
+            id: string;
+            kind?: string;
+            label: string;
+            method?: string;
+            project_id?: string;
+            status?: string;
+            sublabel: string;
+            /** Format: int64 */
+            tier: number;
+            type: string;
+            workspace_id?: string;
+            workspace_name?: string;
         };
         Revision: {
             author?: string;
@@ -3142,14 +3916,15 @@ export interface components {
             updated_at: string;
             workflow_run_id?: string;
         };
-        RunWorkflowInputBody_8e690ab7: {
+        RunWorkflowInputBody_aa15aaba: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/RunWorkflowInputBody_8e690ab7.json
+             * @example //schemas/RunWorkflowInputBody_aa15aaba.json
              */
             readonly $schema?: string;
             experiment_id?: string;
+            iteration_id?: string;
             project_id: string;
             sample_id?: string;
         };
@@ -3167,7 +3942,6 @@ export interface components {
             description_page_id?: string;
             id: string;
             identifier: string;
-            kind: string;
             name: string;
             project_id: string;
             properties: unknown;
@@ -3220,6 +3994,25 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        SaveAssessmentInputBody_69ae1165: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/SaveAssessmentInputBody_69ae1165.json
+             */
+            readonly $schema?: string;
+            failure_modes: components["schemas"]["AssessmentRiskInput"][] | null;
+            iteration_id?: string;
+        };
+        SaveAssessmentOutputBody_2023dc1c: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/SaveAssessmentOutputBody_2023dc1c.json
+             */
+            readonly $schema?: string;
+            risks: components["schemas"]["Risk"][] | null;
+        };
         SetPIReviewInputBody_9f3da132: {
             /**
              * Format: uri
@@ -3228,6 +4021,25 @@ export interface components {
              */
             readonly $schema?: string;
             flagged: boolean;
+        };
+        SubmitInputBody_f6fea0ef: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/SubmitInputBody_f6fea0ef.json
+             */
+            readonly $schema?: string;
+            category: string;
+            message: string;
+        };
+        SubmitOutputBody_ecbffc4e: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/SubmitOutputBody_ecbffc4e.json
+             */
+            readonly $schema?: string;
+            ok: boolean;
         };
         SubscriptionResponse: {
             /**
@@ -3241,9 +4053,86 @@ export interface components {
             scope: string;
             token: string;
         };
+        TakeTaskInputBody_39fca452: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/TakeTaskInputBody_39fca452.json
+             */
+            readonly $schema?: string;
+            estimated_finish_at: string;
+        };
+        Task: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/Task.json
+             */
+            readonly $schema?: string;
+            actual_executor_id?: string;
+            assignee_user_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            description: string;
+            /** Format: date-time */
+            estimated_finish_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            id: string;
+            iteration_id?: string;
+            /** Format: date-time */
+            planned_start_at?: string;
+            project_id: string;
+            /** Format: int64 */
+            seq: number;
+            /** Format: date-time */
+            started_at?: string;
+            status: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TaskProgress: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/TaskProgress.json
+             */
+            readonly $schema?: string;
+            author_id: string;
+            author_name: string;
+            /** Format: date-time */
+            created_at: string;
+            event_type: string;
+            from_assignee?: string;
+            from_status?: string;
+            id: string;
+            reason: string;
+            task_id: string;
+            to_assignee?: string;
+            to_status?: string;
+        };
+        TaskReference: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/TaskReference.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            id: string;
+            label: string;
+            ref_id: string;
+            ref_type: string;
+            task_id: string;
+        };
         ToolCall: {
             function: components["schemas"]["FunctionCall"];
             id: string;
+            status?: string;
             type: string;
         };
         ToolCallRecord: {
@@ -3263,6 +4152,16 @@ export interface components {
             run_id?: string;
             status: string;
             tool: string;
+        };
+        TransferOwnershipInputBody_a6aa9c47: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/TransferOwnershipInputBody_a6aa9c47.json
+             */
+            readonly $schema?: string;
+            /** Format: uuid */
+            new_owner_user_id: string;
         };
         UnlinkSampleOutputBody_ecbffc4e: {
             /**
@@ -3426,6 +4325,20 @@ export interface components {
             readonly $schema?: string;
             ok: boolean;
         };
+        UploadArtifactInputBody_76162a27: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example //schemas/UploadArtifactInputBody_76162a27.json
+             */
+            readonly $schema?: string;
+            content_type: string;
+            /** @description Standard base64-encoded file bytes. */
+            data_base64: string;
+            filename: string;
+            /** @enum {string} */
+            type?: "pdf" | "ipynb" | "image" | "other";
+        };
         UsageSummary: {
             /**
              * Format: uri
@@ -3484,6 +4397,7 @@ export interface components {
             error?: string;
             experiment_id?: string;
             id: string;
+            iteration_id?: string;
             output?: unknown;
             project_id?: string;
             result_page_id?: string;
@@ -3560,6 +4474,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateBroadcastOutputBody_22c8f91d"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "feedback-list": {
+        parameters: {
+            query?: {
+                include_acknowledged?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackJSON"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "feedback-acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcknowledgeOutputBody_ecbffc4e"];
                 };
             };
             /** @description Error */
@@ -3834,7 +4810,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RunWorkflowInputBody_8e690ab7"];
+                "application/json": components["schemas"]["RunWorkflowInputBody_aa15aaba"];
             };
         };
         responses: {
@@ -4643,6 +5619,39 @@ export interface operations {
             };
         };
     };
+    "feedback-submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitInputBody_f6fea0ef"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmitOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "org-invite-accept": {
         parameters: {
             query?: never;
@@ -4902,6 +5911,37 @@ export interface operations {
             };
         };
     };
+    "task-list-by-iteration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "auth-me": {
         parameters: {
             query?: never;
@@ -5088,6 +6128,35 @@ export interface operations {
             };
         };
     };
+    "task-list-mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedTask"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "meeting-get": {
         parameters: {
             query?: never;
@@ -5185,6 +6254,39 @@ export interface operations {
             };
         };
     };
+    "mention-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMentionBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMentionOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "page-get": {
         parameters: {
             query?: never;
@@ -5203,7 +6305,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GetPageOutputBody_566cf299"];
+                    "application/json": components["schemas"]["GetPageOutputBody_2757236d"];
                 };
             };
             /** @description Error */
@@ -5774,6 +6876,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateArtifactOutputBody_9a5847a4"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "artifact-upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadArtifactInputBody_76162a27"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Artifact"];
                 };
             };
             /** @description Error */
@@ -6360,6 +7497,41 @@ export interface operations {
             };
         };
     };
+    "risk-save-assessment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAssessmentInputBody_69ae1165"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveAssessmentOutputBody_2023dc1c"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "risk-list-by-project": {
         parameters: {
             query?: never;
@@ -6562,9 +7734,7 @@ export interface operations {
     };
     "sample-list": {
         parameters: {
-            query?: {
-                kind?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 id: string;
@@ -6604,7 +7774,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateSampleInputBody_941ec721"];
+                "application/json": components["schemas"]["CreateSampleInputBody_e868ab52"];
             };
         };
         responses: {
@@ -6615,6 +7785,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Sample"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-list-by-project": {
+        parameters: {
+            query?: {
+                status?: string;
+                assignee_user_id?: string;
+                iteration_id?: string;
+                q?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskInputBody_4804ef66"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "project-transfer-ownership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferOwnershipInputBody_a6aa9c47"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
                 };
             };
             /** @description Error */
@@ -6835,7 +8111,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PatchSampleInputBody_84a655ad"];
+                "application/json": components["schemas"]["PatchSampleInputBody_746d2c5b"];
             };
         };
         responses: {
@@ -6991,6 +8267,477 @@ export interface operations {
             };
         };
     };
+    "search-mentions": {
+        parameters: {
+            query?: {
+                q?: string;
+                project_id?: string;
+                types?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchTaskInputBody_f4438f12"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelTaskInputBody_2c2dfed7"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-comment-add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddCommentInputBody_bf3fd92b"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskProgress"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-delay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelayTaskInputBody_1ca8029d"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-mark-done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-progress-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskProgress"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignTaskInputBody_7ed251ea"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-reference-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskReference"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-reference-add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddReferenceInputBody_fb9d125a"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskReference"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-reference-remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                ref_type: string;
+                ref_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoveReferenceOutputBody_ecbffc4e"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenTaskInputBody_cd662da5"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "task-take": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TakeTaskInputBody_39fca452"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "auth-token-list": {
         parameters: {
             query?: never;
@@ -7084,6 +8831,102 @@ export interface operations {
             };
         };
     };
+    "wiki-artifact-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWikiArtifactInputBody_fdd1aa6b"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateArtifactOutputBody_9a5847a4"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "wiki-page-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListWikiPagesOutputBody_2694c9a1"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "wiki-page-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWikiPageInputBody_167e49bf"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateWikiPageOutputBody_d29aa8ae"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "org-workspace-list": {
         parameters: {
             query?: never;
@@ -7164,6 +9007,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Workspace"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "activity-list": {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityItem"][] | null;
                 };
             };
             /** @description Error */

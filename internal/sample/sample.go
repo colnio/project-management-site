@@ -35,7 +35,6 @@ type Sample struct {
 	Identifier        string          `json:"identifier"`
 	Name              string          `json:"name"`
 	Description       string          `json:"description"`
-	Kind              string          `json:"kind"`
 	Properties        json.RawMessage `json:"properties"`
 	Status            string          `json:"status"`
 	DescriptionPageID *uuid.UUID      `json:"description_page_id,omitempty"`
@@ -89,15 +88,12 @@ func (s *Service) GetSample(ctx context.Context, id uuid.UUID) (*Sample, error) 
 func (s *Service) createSample(
 	ctx context.Context,
 	projectID uuid.UUID,
-	identifier, name, description, kind string,
+	identifier, name, description string,
 	properties json.RawMessage,
 	status string,
 	tagLabels []string,
 	createdBy uuid.UUID,
 ) (*Sample, error) {
-	if kind == "" {
-		kind = "other"
-	}
 	if status == "" {
 		status = "active"
 	}
@@ -121,10 +117,10 @@ func (s *Service) createSample(
 	var sm Sample
 	err = scanSample(s.pool.QueryRow(ctx,
 		`INSERT INTO samples
-		   (project_id, identifier, name, description, kind, properties, status, tags, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		   (project_id, identifier, name, description, properties, status, tags, created_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING `+sampleSelectCols,
-		projectID, identifier, name, description, kind, []byte(properties), status, tagsJSON, createdBy,
+		projectID, identifier, name, description, []byte(properties), status, tagsJSON, createdBy,
 	), &sm)
 	if err != nil {
 		// Detect unique constraint violation on (project_id, identifier).
@@ -136,14 +132,10 @@ func (s *Service) createSample(
 	return &sm, nil
 }
 
-// listSamples returns samples for a project, optionally filtered by kind.
-func (s *Service) listSamples(ctx context.Context, projectID uuid.UUID, kind string) ([]*Sample, error) {
+// listSamples returns samples for a project.
+func (s *Service) listSamples(ctx context.Context, projectID uuid.UUID) ([]*Sample, error) {
 	query := `SELECT ` + sampleSelectCols + ` FROM samples WHERE project_id = $1`
 	args := []any{projectID}
-	if kind != "" {
-		query += " AND kind = $2"
-		args = append(args, kind)
-	}
 	query += " ORDER BY created_at"
 
 	rows, err := s.pool.Query(ctx, query, args...)
@@ -172,7 +164,7 @@ func (s *Service) listSamples(ctx context.Context, projectID uuid.UUID, kind str
 func (s *Service) patchSample(
 	ctx context.Context,
 	id uuid.UUID,
-	name, description, kind, status, identifier *string,
+	name, description, status, identifier *string,
 	properties json.RawMessage,
 	tagLabels *[]string,
 ) (*Sample, error) {
@@ -192,9 +184,6 @@ func (s *Service) patchSample(
 	}
 	if description != nil {
 		appendArg("description", *description)
-	}
-	if kind != nil {
-		appendArg("kind", *kind)
 	}
 	if status != nil {
 		appendArg("status", *status)
