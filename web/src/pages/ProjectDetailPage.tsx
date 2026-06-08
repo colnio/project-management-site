@@ -35,7 +35,10 @@ import { ProjectDashboard } from '@/components/dashboards/ProjectDashboard';
 import type { Sample, Experiment, Iteration, Artifact } from '@/api/types';
 import { experimentDisplayTags } from '@/api/types';
 import { memberLabel } from '@/lib/userDisplay';
-import { fmtDate, fmtRelative } from '@/lib/formatDate';
+import { fmtDate, fmtRelative, fmtRange, datetimeLocalToIso } from '@/lib/formatDate';
+import { PropertyEditor } from '@/components/PropertyEditor';
+import { SampleSelectList } from '@/components/experiments/SampleSelectList';
+import { api } from '@/api/client';
 import { useResolvedProjectRole } from '@/hooks/useProjectAccess';
 import { TasksTab } from '@/components/tasks/TasksTab';
 import { useProjectTasks } from '@/hooks/useTaskQueries';
@@ -573,10 +576,23 @@ function SamplesTab({ projectId }: { projectId: string }) {
 
 // ─── Create Experiment Dialog ─────────────────────────────────────────────────
 
+const fieldLabelStyle: React.CSSProperties = {
+  fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)',
+  textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8,
+};
+
 function CreateExperimentDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const { data: tags = [] } = useProjectExperimentTags(projectId);
+  const [title, setTitle] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [status, setStatus] = useState('planned');
+  const [parameters, setParameters] = useState<Record<string, unknown>>({});
+  const [selectedSamples, setSelectedSamples] = useState<Set<string>>(new Set());
+  const [resultSummary, setResultSummary] = useState('');
+  const [startedAt, setStartedAt] = useState('');
+  const [endedAt, setEndedAt] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const createExp = useCreateExperiment(projectId);
 
   const toggleTag = (label: string) => {
@@ -585,12 +601,36 @@ function CreateExperimentDialog({ projectId, onClose }: { projectId: string; onC
     );
   };
 
-  const handleCreate = async () => {
-    await createExp.mutateAsync({
-      tags: selectedTags,
-      status,
+  const toggleSample = (id: string) => {
+    setSelectedSamples(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
-    onClose();
+  };
+
+  const handleCreate = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const created = await createExp.mutateAsync({
+        title: title.trim(),
+        tags: selectedTags,
+        status,
+        parameters,
+        result_summary: resultSummary.trim(),
+        started_at: datetimeLocalToIso(startedAt),
+        ended_at: datetimeLocalToIso(endedAt),
+      });
+      // Link selected samples to the freshly-created experiment.
+      for (const sampleId of selectedSamples) {
+        await api.post(`/v1/experiments/${created.id}/samples`, { sample_id: sampleId });
+      }
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create experiment.');
+      setBusy(false);
+    }
   };
 
   return (
@@ -601,9 +641,21 @@ function CreateExperimentDialog({ projectId, onClose }: { projectId: string; onC
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
+          <div style={{ marginBottom: 20 }}>
+            <div style={fieldLabelStyle}>Name</div>
+            <input
+              className="field-input"
+              autoFocus
+              placeholder="e.g. EIS sweep on cell A"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
           {tags.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Tags (optional)</div>
+              <div style={fieldLabelStyle}>Tags (optional)</div>
               <div className="choice-row">
                 {tags.map(t => (
                   <button
@@ -619,8 +671,9 @@ function CreateExperimentDialog({ projectId, onClose }: { projectId: string; onC
               </div>
             </div>
           )}
-          <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--muted-2)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Initial status</div>
+
+          <div style={{ marginBottom: 20 }}>
+            <div style={fieldLabelStyle}>Initial status</div>
             <div className="choice-row">
               {['planned', 'in_progress', 'completed', 'failed'].map(s => (
                 <button
@@ -635,11 +688,46 @@ function CreateExperimentDialog({ projectId, onClose }: { projectId: string; onC
               ))}
             </div>
           </div>
+
+          <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+            <div style={{ flex: 1 }}>
+              <div style={fieldLabelStyle}>Start</div>
+              <input type="datetime-local" className="field-input" value={startedAt} onChange={e => setStartedAt(e.target.value)} style={{ width: '100%' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={fieldLabelStyle}>End</div>
+              <input type="datetime-local" className="field-input" value={endedAt} onChange={e => setEndedAt(e.target.value)} style={{ width: '100%' }} />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <div style={fieldLabelStyle}>Parameters</div>
+            <PropertyEditor properties={parameters} onChange={setParameters} />
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <div style={fieldLabelStyle}>Samples ({selectedSamples.size} selected)</div>
+            <SampleSelectList projectId={projectId} selectedIds={selectedSamples} onToggle={toggleSample} maxHeight={180} />
+          </div>
+
+          <div>
+            <div style={fieldLabelStyle}>Result summary (optional)</div>
+            <textarea
+              className="field-input"
+              placeholder="What did this experiment show?"
+              value={resultSummary}
+              onChange={e => setResultSummary(e.target.value)}
+              rows={3}
+              style={{ width: '100%', resize: 'vertical' }}
+            />
+          </div>
+
+          {error && <div style={{ marginTop: 14, color: 'var(--bad)', fontSize: 12.5 }}>{error}</div>}
         </div>
         <div className="modal-foot">
           <button className="top-btn" onClick={onClose}>Cancel</button>
-          <button className="top-btn primary" onClick={handleCreate} disabled={createExp.isPending}>
-            {createExp.isPending ? 'Creating…' : 'Create experiment'}
+          <button className="top-btn primary" onClick={handleCreate} disabled={busy}>
+            {busy ? 'Creating…' : 'Create experiment'}
           </button>
         </div>
       </div>
@@ -667,21 +755,24 @@ function ExperimentCard({ experiment: e }: { experiment: Experiment }) {
           ))}
         </span>
       </div>
-      <div className="name">{e.result_summary || e.method}</div>
+      <div className="name">{e.title || e.result_summary || e.method}</div>
       <div className="foot">
         <StatusPill status={e.status} />
-        {e.performed_at && (
-          <span
-            style={{
-              marginLeft: 'auto',
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              color: 'var(--muted-2)',
-            }}
-          >
-            {fmtDate(e.performed_at)}
-          </span>
-        )}
+        {(() => {
+          const range = fmtRange(e.started_at, e.ended_at) || (e.performed_at ? fmtDate(e.performed_at) : '');
+          return range ? (
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontFamily: 'var(--mono)',
+                fontSize: 11,
+                color: 'var(--muted-2)',
+              }}
+            >
+              {range}
+            </span>
+          ) : null;
+        })()}
       </div>
     </div>
   );

@@ -22,7 +22,7 @@ export function ExperimentDetailPage() {
 
   const crumbs = [
     { label: 'Project', href: experiment ? `/projects/${experiment.project_id}?tab=experiments` : '/workspaces' },
-    { label: experiment ? `${experiment.method} experiment` : 'Experiment' },
+    { label: experiment ? (experiment.title || `${experiment.method} experiment`) : 'Experiment' },
   ];
 
   if (isLoading) return <AppShell topBarCrumbs={crumbs}><LoadingState /></AppShell>;
@@ -62,7 +62,7 @@ export function ExperimentDetailPage() {
               <StatusPill status={experiment.status} />
             </div>
             <h1 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 400, letterSpacing: '-0.01em', margin: '0 0 4px', lineHeight: 1.25 }}>
-              {experiment.result_summary || `${experiment.method} experiment`}
+              {experiment.title || experiment.result_summary || `${experiment.method} experiment`}
             </h1>
           </div>
         </div>

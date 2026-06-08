@@ -506,6 +506,7 @@ export function useCreateExperiment(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: {
+      title?: string;
       method?: string;
       tags?: string[];
       iteration_id?: string;
@@ -513,6 +514,8 @@ export function useCreateExperiment(projectId: string) {
       parameters?: Record<string, unknown>;
       result_summary?: string;
       performed_at?: string;
+      started_at?: string;
+      ended_at?: string;
     }) => api.post<Experiment>(`/v1/projects/${projectId}/experiments`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.projectExperiments(projectId) }),
   });
@@ -522,6 +525,7 @@ export function useUpdateExperiment(experimentId: string, projectId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: {
+      title?: string;
       method?: string;
       tags?: string[];
       iteration_id?: string;
@@ -529,6 +533,8 @@ export function useUpdateExperiment(experimentId: string, projectId: string) {
       parameters?: Record<string, unknown>;
       result_summary?: string;
       performed_at?: string;
+      started_at?: string;
+      ended_at?: string;
     }) => api.patch<Experiment>(`/v1/experiments/${experimentId}`, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.experiment(experimentId) });

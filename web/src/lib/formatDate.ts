@@ -10,6 +10,31 @@ export function fmtDate(iso: string | Date): string {
   }
 }
 
+/** ISO timestamp → value for an <input type="datetime-local"> (local time, no tz). */
+export function isoToDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** datetime-local input value → ISO string (or undefined when empty). */
+export function datetimeLocalToIso(val: string): string | undefined {
+  if (!val) return undefined;
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return undefined;
+  return d.toISOString();
+}
+
+/** Compact "start – end" range for display; falls back gracefully. */
+export function fmtRange(start?: string | null, end?: string | null): string {
+  const s = start ? fmtDate(start) : '';
+  const e = end ? fmtDate(end) : '';
+  if (s && e) return s === e ? s : `${s} – ${e}`;
+  return s || e || '';
+}
+
 export function fmtRelative(iso: string | Date): string {
   const str = typeof iso === 'string' ? iso : iso.toISOString();
   const diff = Date.now() - new Date(str).getTime();
