@@ -2732,13 +2732,15 @@ export interface components {
             start_at: string;
             title: string;
         };
-        CreateExperimentInputBody_7450777a: {
+        CreateExperimentInputBody_d426f9ad: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/CreateExperimentInputBody_7450777a.json
+             * @example //schemas/CreateExperimentInputBody_d426f9ad.json
              */
             readonly $schema?: string;
+            /** Format: date-time */
+            ended_at?: string;
             iteration_id?: string;
             /** @example EIS */
             method?: string;
@@ -2747,6 +2749,8 @@ export interface components {
             performed_at?: string;
             /** @example Impedance at 1 kHz: 42 Ω·cm² */
             result_summary?: string;
+            /** Format: date-time */
+            started_at?: string;
             /**
              * @example completed
              * @enum {string}
@@ -2754,6 +2758,8 @@ export interface components {
             status?: "planned" | "in_progress" | "completed" | "failed";
             /** @description Project-defined tag labels (multi-select). */
             tags?: string[] | null;
+            /** @example EIS sweep on cell A */
+            title?: string;
         };
         CreateExperimentTagInputBody_1e9d483b: {
             /**
@@ -3188,6 +3194,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             created_by: string;
+            /** Format: date-time */
+            ended_at?: string;
             id: string;
             iteration_id?: string;
             method: string;
@@ -3200,8 +3208,11 @@ export interface components {
             result_summary: string;
             /** Format: int64 */
             seq: number;
+            /** Format: date-time */
+            started_at?: string;
             status: string;
             tags?: string[] | null;
+            title: string;
             /** Format: date-time */
             updated_at: string;
         };
@@ -4193,23 +4204,28 @@ export interface components {
             start_at?: string;
             title?: string;
         };
-        UpdateExperimentInputBody_c4625564: {
+        UpdateExperimentInputBody_ead8fd58: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example //schemas/UpdateExperimentInputBody_c4625564.json
+             * @example //schemas/UpdateExperimentInputBody_ead8fd58.json
              */
             readonly $schema?: string;
+            /** Format: date-time */
+            ended_at?: string;
             iteration_id?: string;
             method?: string;
             parameters?: unknown;
             /** Format: date-time */
             performed_at?: string;
             result_summary?: string;
+            /** Format: date-time */
+            started_at?: string;
             /** @enum {string} */
             status?: "planned" | "in_progress" | "completed" | "failed";
             /** @description Replaces all tags when provided (send full selection). */
             tags?: string[] | null;
+            title?: string;
         };
         UpdateExperimentTagInputBody_1e9d483b: {
             /**
@@ -5497,7 +5513,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateExperimentInputBody_c4625564"];
+                "application/json": components["schemas"]["UpdateExperimentInputBody_ead8fd58"];
             };
         };
         responses: {
@@ -7337,7 +7353,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateExperimentInputBody_7450777a"];
+                "application/json": components["schemas"]["CreateExperimentInputBody_d426f9ad"];
             };
         };
         responses: {

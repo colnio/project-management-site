@@ -178,7 +178,7 @@ func TestCreateExperiment_Success(t *testing.T) {
 	owner, projID := env.seedProject(t, ctx)
 
 	params := json.RawMessage(`{"voltage": 1.5}`)
-	exp, err := env.expSvc.CreateExperiment(ctx, projID, "cycling", nil, params, "some result", nil, "planned", nil, owner.ID)
+	exp, err := env.expSvc.CreateExperiment(ctx, projID, "", "cycling", nil, params, "some result", nil, "planned", nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("create experiment: %v", err)
 	}
@@ -255,11 +255,11 @@ func TestListExperiments_MethodFilter(t *testing.T) {
 	owner, projID := env.seedProject(t, ctx)
 
 	// Create two experiments with different methods.
-	_, err := env.expSvc.CreateExperiment(ctx, projID, "SEM", nil, nil, "", nil, "planned", nil, owner.ID)
+	_, err := env.expSvc.CreateExperiment(ctx, projID, "", "SEM", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("create SEM experiment: %v", err)
 	}
-	_, err = env.expSvc.CreateExperiment(ctx, projID, "XRD", nil, nil, "", nil, "planned", nil, owner.ID)
+	_, err = env.expSvc.CreateExperiment(ctx, projID, "", "XRD", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("create XRD experiment: %v", err)
 	}
@@ -283,8 +283,8 @@ func TestListExperiments_SampleIDFilter(t *testing.T) {
 
 	owner, projID := env.seedProject(t, ctx)
 
-	exp1, _ := env.expSvc.CreateExperiment(ctx, projID, "custom", nil, nil, "", nil, "planned", nil, owner.ID)
-	exp2, _ := env.expSvc.CreateExperiment(ctx, projID, "custom", nil, nil, "", nil, "planned", nil, owner.ID)
+	exp1, _ := env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
+	exp2, _ := env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
 
 	sampleID := uuid.New()
 	_ = env.expSvc.LinkSample(ctx, exp1.ID, sampleID, nil, "", owner.ID)
@@ -309,8 +309,8 @@ func TestListExperiments_IterationFilter(t *testing.T) {
 	owner, projID := env.seedProject(t, ctx)
 
 	iterID := uuid.New()
-	_, _ = env.expSvc.CreateExperiment(ctx, projID, "custom", nil, nil, "", &iterID, "planned", nil, owner.ID)
-	_, _ = env.expSvc.CreateExperiment(ctx, projID, "custom", nil, nil, "", nil, "planned", nil, owner.ID)
+	_, _ = env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, nil, "", &iterID, "planned", nil, nil, nil, owner.ID)
+	_, _ = env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
 
 	list, err := env.expSvc.ListExperiments(ctx, projID, &iterID, "", nil)
 	if err != nil {
@@ -346,7 +346,7 @@ func TestGetExperiment_Success(t *testing.T) {
 
 	owner, projID := env.seedProject(t, ctx)
 
-	created, _ := env.expSvc.CreateExperiment(ctx, projID, "EIS", nil, nil, "result", nil, "completed", nil, owner.ID)
+	created, _ := env.expSvc.CreateExperiment(ctx, projID, "", "EIS", nil, nil, "result", nil, "completed", nil, nil, nil, owner.ID)
 
 	got, err := env.expSvc.GetExperiment(ctx, created.ID)
 	if err != nil {
@@ -368,11 +368,11 @@ func TestPatchExperiment_StatusAndParameters(t *testing.T) {
 
 	owner, projID := env.seedProject(t, ctx)
 
-	exp, _ := env.expSvc.CreateExperiment(ctx, projID, "custom", nil, json.RawMessage(`{}`), "", nil, "planned", nil, owner.ID)
+	exp, _ := env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, json.RawMessage(`{}`), "", nil, "planned", nil, nil, nil, owner.ID)
 
 	newParams := json.RawMessage(`{"temp": 25}`)
 	resultSummary := "updated result"
-	updated, err := env.expSvc.UpdateExperiment(ctx, exp.ID, "", nil, newParams, &resultSummary, nil, false, "completed", nil, owner.ID)
+	updated, err := env.expSvc.UpdateExperiment(ctx, exp.ID, nil, "", nil, newParams, &resultSummary, nil, false, "completed", nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("update experiment: %v", err)
 	}
@@ -405,7 +405,7 @@ func TestSampleLinkUnlinkList(t *testing.T) {
 
 	owner, projID := env.seedProject(t, ctx)
 
-	exp, _ := env.expSvc.CreateExperiment(ctx, projID, "custom", nil, nil, "", nil, "planned", nil, owner.ID)
+	exp, _ := env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
 
 	sampleID := uuid.New()
 	role := "subject"
@@ -459,7 +459,7 @@ func TestSampleUnlink_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	owner, projID := env.seedProject(t, ctx)
-	exp, _ := env.expSvc.CreateExperiment(ctx, projID, "custom", nil, nil, "", nil, "planned", nil, owner.ID)
+	exp, _ := env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
 
 	err := env.expSvc.UnlinkSample(ctx, exp.ID, uuid.New(), owner.ID)
 	if err == nil {
@@ -476,7 +476,7 @@ func TestSampleLink_Upsert(t *testing.T) {
 	ctx := context.Background()
 
 	owner, projID := env.seedProject(t, ctx)
-	exp, _ := env.expSvc.CreateExperiment(ctx, projID, "custom", nil, nil, "", nil, "planned", nil, owner.ID)
+	exp, _ := env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
 
 	sampleID := uuid.New()
 	role1 := "subject"
@@ -505,7 +505,7 @@ func TestAudit_ExperimentCreate(t *testing.T) {
 
 	env.rec.entries = nil // reset
 
-	_, err := env.expSvc.CreateExperiment(ctx, projID, "custom", nil, nil, "", nil, "planned", nil, owner.ID)
+	_, err := env.expSvc.CreateExperiment(ctx, projID, "", "custom", nil, nil, "", nil, "planned", nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("create experiment: %v", err)
 	}
@@ -534,7 +534,7 @@ func TestCreateExperiment_DefaultsApplied(t *testing.T) {
 	owner, projID := env.seedProject(t, ctx)
 
 	// Create with empty method and status — defaults should apply.
-	exp, err := env.expSvc.CreateExperiment(ctx, projID, "", nil, nil, "", nil, "", nil, owner.ID)
+	exp, err := env.expSvc.CreateExperiment(ctx, projID, "", "", nil, nil, "", nil, "", nil, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("create experiment: %v", err)
 	}
@@ -553,7 +553,7 @@ func TestGetExperiment_WithPerformedAt(t *testing.T) {
 	owner, projID := env.seedProject(t, ctx)
 
 	ts := time.Now().UTC().Truncate(time.Second)
-	exp, err := env.expSvc.CreateExperiment(ctx, projID, "weighing", nil, nil, "", nil, "in_progress", &ts, owner.ID)
+	exp, err := env.expSvc.CreateExperiment(ctx, projID, "", "weighing", nil, nil, "", nil, "in_progress", &ts, nil, nil, owner.ID)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

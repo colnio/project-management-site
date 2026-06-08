@@ -87,6 +87,7 @@ func Register(api huma.API, svc *Service) {
 type createExperimentInput struct {
 	ID   string `path:"id"`
 	Body struct {
+		Title         string          `json:"title,omitempty" maxLength:"200" example:"EIS sweep on cell A"`
 		Method        string          `json:"method,omitempty" maxLength:"64" example:"EIS"`
 		Tags          []string        `json:"tags,omitempty" doc:"Project-defined tag labels (multi-select)."`
 		Parameters    json.RawMessage `json:"parameters,omitempty"`
@@ -94,6 +95,8 @@ type createExperimentInput struct {
 		IterationID   *uuid.UUID      `json:"iteration_id,omitempty"`
 		Status        string          `json:"status,omitempty" enum:"planned,in_progress,completed,failed" example:"completed"`
 		PerformedAt   *time.Time      `json:"performed_at,omitempty"`
+		StartedAt     *time.Time      `json:"started_at,omitempty"`
+		EndedAt       *time.Time      `json:"ended_at,omitempty"`
 	}
 }
 
@@ -122,6 +125,7 @@ func (s *Service) handleCreateExperiment(ctx context.Context, in *createExperime
 
 	exp, err := s.CreateExperiment(ctx,
 		projectID,
+		in.Body.Title,
 		in.Body.Method,
 		in.Body.Tags,
 		in.Body.Parameters,
@@ -129,6 +133,8 @@ func (s *Service) handleCreateExperiment(ctx context.Context, in *createExperime
 		in.Body.IterationID,
 		in.Body.Status,
 		in.Body.PerformedAt,
+		in.Body.StartedAt,
+		in.Body.EndedAt,
 		p.UserID,
 	)
 	if err != nil {
@@ -237,6 +243,7 @@ func (s *Service) handleGetExperiment(ctx context.Context, in *getExperimentInpu
 type updateExperimentInput struct {
 	ID   string `path:"id"`
 	Body struct {
+		Title         *string         `json:"title,omitempty" maxLength:"200"`
 		Method        string          `json:"method,omitempty" maxLength:"64"`
 		Tags          []string        `json:"tags,omitempty" doc:"Replaces all tags when provided (send full selection)."`
 		Parameters    json.RawMessage `json:"parameters,omitempty"`
@@ -244,6 +251,8 @@ type updateExperimentInput struct {
 		IterationID   *uuid.UUID      `json:"iteration_id,omitempty"`
 		Status        string          `json:"status,omitempty" enum:"planned,in_progress,completed,failed"`
 		PerformedAt   *time.Time      `json:"performed_at,omitempty"`
+		StartedAt     *time.Time      `json:"started_at,omitempty"`
+		EndedAt       *time.Time      `json:"ended_at,omitempty"`
 	}
 }
 
@@ -281,6 +290,7 @@ func (s *Service) handleUpdateExperiment(ctx context.Context, in *updateExperime
 
 	updated, err := s.UpdateExperiment(ctx,
 		expID,
+		in.Body.Title,
 		in.Body.Method,
 		tagsUpdate,
 		in.Body.Parameters,
@@ -289,6 +299,8 @@ func (s *Service) handleUpdateExperiment(ctx context.Context, in *updateExperime
 		false,
 		in.Body.Status,
 		in.Body.PerformedAt,
+		in.Body.StartedAt,
+		in.Body.EndedAt,
 		p.UserID,
 	)
 	if err != nil {

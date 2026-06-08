@@ -27,6 +27,7 @@ type Experiment struct {
 	ID            uuid.UUID       `json:"id"`
 	ProjectID     uuid.UUID       `json:"project_id"`
 	IterationID   *uuid.UUID      `json:"iteration_id,omitempty"`
+	Title         string          `json:"title"`
 	Method        string          `json:"method"`
 	Tags          []string        `json:"tags,omitempty"`
 	Parameters    json.RawMessage `json:"parameters"`
@@ -34,6 +35,8 @@ type Experiment struct {
 	NotesPageID   *uuid.UUID      `json:"notes_page_id,omitempty"`
 	PerformedBy   *uuid.UUID      `json:"performed_by,omitempty"`
 	PerformedAt   *time.Time      `json:"performed_at,omitempty"`
+	StartedAt     *time.Time      `json:"started_at,omitempty"`
+	EndedAt       *time.Time      `json:"ended_at,omitempty"`
 	Status        string          `json:"status"`
 	Seq           int             `json:"seq"`
 	Code          string          `json:"code"`
@@ -92,6 +95,7 @@ func (s *Service) GetExperiment(ctx context.Context, id uuid.UUID) (*Experiment,
 func (s *Service) CreateExperiment(
 	ctx context.Context,
 	projectID uuid.UUID,
+	title string,
 	method string,
 	tagLabels []string,
 	parameters json.RawMessage,
@@ -99,6 +103,8 @@ func (s *Service) CreateExperiment(
 	iterationID *uuid.UUID,
 	status string,
 	performedAt *time.Time,
+	startedAt *time.Time,
+	endedAt *time.Time,
 	creatorID uuid.UUID,
 ) (*Experiment, error) {
 	tagLabels = normalizeTagLabels(tagLabels)
@@ -131,15 +137,15 @@ func (s *Service) CreateExperiment(
 	var e Experiment
 	err = scanExperiment(s.pool.QueryRow(ctx,
 		`INSERT INTO experiments
-		   (project_id, iteration_id, method, tags, parameters, result_summary,
-		    status, performed_at, created_by,
+		   (project_id, iteration_id, title, method, tags, parameters, result_summary,
+		    status, performed_at, started_at, ended_at, created_by,
 		    seq, code)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
 		         COALESCE((SELECT MAX(seq) FROM experiments WHERE project_id = $1), 0) + 1,
 		         'EX-' || (COALESCE((SELECT MAX(seq) FROM experiments WHERE project_id = $1), 0) + 1))
 		 RETURNING `+experimentSelectCols,
-		projectID, iterationID, method, tagsJSON, parameters, resultSummary,
-		status, performedAt, creatorID,
+		projectID, iterationID, title, method, tagsJSON, parameters, resultSummary,
+		status, performedAt, startedAt, endedAt, creatorID,
 	), &e)
 	if err != nil {
 		return nil, fmt.Errorf("experiment: create: %w", err)
@@ -163,8 +169,8 @@ func (s *Service) ListExperiments(
 	method string,
 	sampleID *uuid.UUID,
 ) ([]*Experiment, error) {
-	query := `SELECT DISTINCT e.id, e.project_id, e.iteration_id, e.method, e.tags, e.parameters,
-	                 e.result_summary, e.notes_page_id, e.performed_by, e.performed_at,
+	query := `SELECT DISTINCT e.id, e.project_id, e.iteration_id, e.title, e.method, e.tags, e.parameters,
+	                 e.result_summary, e.notes_page_id, e.performed_by, e.performed_at, e.started_at, e.ended_at,
 	                 e.status, COALESCE(e.seq, 0), COALESCE(e.code, ''),
 	                 e.created_by, e.created_at, e.updated_at
 	          FROM experiments e`
@@ -218,6 +224,7 @@ func (s *Service) ListExperiments(
 func (s *Service) UpdateExperiment(
 	ctx context.Context,
 	id uuid.UUID,
+	title *string,
 	method string,
 	tagLabels *[]string,
 	parameters json.RawMessage,
@@ -226,6 +233,8 @@ func (s *Service) UpdateExperiment(
 	clearIterationID bool,
 	status string,
 	performedAt *time.Time,
+	startedAt *time.Time,
+	endedAt *time.Time,
 	actorID uuid.UUID,
 ) (*Experiment, error) {
 	existing, err := s.GetExperiment(ctx, id)
@@ -238,6 +247,11 @@ func (s *Service) UpdateExperiment(
 	args := []any{}
 	argN := 1
 
+	if title != nil {
+		setClauses = append(setClauses, fmt.Sprintf("title = $%d", argN))
+		args = append(args, *title)
+		argN++
+	}
 	if tagLabels != nil {
 		labels := normalizeTagLabels(*tagLabels)
 		if len(labels) > 0 {
@@ -300,6 +314,16 @@ func (s *Service) UpdateExperiment(
 	if performedAt != nil {
 		setClauses = append(setClauses, fmt.Sprintf("performed_at = $%d", argN))
 		args = append(args, *performedAt)
+		argN++
+	}
+	if startedAt != nil {
+		setClauses = append(setClauses, fmt.Sprintf("started_at = $%d", argN))
+		args = append(args, *startedAt)
+		argN++
+	}
+	if endedAt != nil {
+		setClauses = append(setClauses, fmt.Sprintf("ended_at = $%d", argN))
+		args = append(args, *endedAt)
 		argN++
 	}
 

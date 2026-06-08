@@ -82,8 +82,8 @@ func (s *Service) canonicalizeTagLabels(ctx context.Context, projectID uuid.UUID
 	return out, nil
 }
 
-const experimentSelectCols = `id, project_id, iteration_id, method, tags, parameters, result_summary,
-		        notes_page_id, performed_by, performed_at, status,
+const experimentSelectCols = `id, project_id, iteration_id, title, method, tags, parameters, result_summary,
+		        notes_page_id, performed_by, performed_at, started_at, ended_at, status,
 		        COALESCE(seq, 0), COALESCE(code, ''),
 		        created_by, created_at, updated_at`
 
@@ -92,8 +92,8 @@ func scanExperiment(scanner interface {
 }, e *Experiment) error {
 	var tagsRaw []byte
 	err := scanner.Scan(
-		&e.ID, &e.ProjectID, &e.IterationID, &e.Method, &tagsRaw, &e.Parameters,
-		&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt,
+		&e.ID, &e.ProjectID, &e.IterationID, &e.Title, &e.Method, &tagsRaw, &e.Parameters,
+		&e.ResultSummary, &e.NotesPageID, &e.PerformedBy, &e.PerformedAt, &e.StartedAt, &e.EndedAt,
 		&e.Status, &e.Seq, &e.Code,
 		&e.CreatedBy, &e.CreatedAt, &e.UpdatedAt,
 	)
